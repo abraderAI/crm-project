@@ -10,6 +10,7 @@ import (
 
 	"github.com/abraderAI/crm-project/api/internal/audit"
 	"github.com/abraderAI/crm-project/api/internal/auth"
+	"github.com/abraderAI/crm-project/api/internal/billing"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
@@ -37,15 +38,16 @@ import (
 
 // Config holds server dependencies.
 type Config struct {
-	DB          *gorm.DB
-	Logger      *slog.Logger
-	CORSOrigins []string
-	RBACPolicy  *config.RBACPolicy
-	IssuerURL   string // Clerk issuer URL for JWT validation.
-	EventBus    *eventbus.Bus
-	WSHub       *ws.Hub
-	UploadDir   string // Directory for file uploads.
-	MaxUpload   int64  // Maximum upload size in bytes.
+	DB            *gorm.DB
+	Logger        *slog.Logger
+	CORSOrigins   []string
+	RBACPolicy    *config.RBACPolicy
+	IssuerURL     string // Clerk issuer URL for JWT validation.
+	WebhookSecret string // HMAC secret for billing webhook verification.
+	EventBus      *eventbus.Bus
+	WSHub         *ws.Hub
+	UploadDir     string // Directory for file uploads.
+	MaxUpload     int64  // Maximum upload size in bytes.
 }
 
 // NewRouter creates and configures the Chi router with all middleware and routes.
@@ -107,6 +109,11 @@ func NewRouter(cfg Config) http.Handler {
 	memberRepo := membership.NewRepository(cfg.DB)
 	memberHandler := membership.NewHandler(memberRepo)
 
+	// Initialize billing service.
+	billingProvider := billing.NewFlexPointProvider(cfg.WebhookSecret)
+	billingService := billing.NewService(billingProvider, cfg.DB)
+	billingHandler := billing.NewHandler(billingService, cfg.WebhookSecret)
+
 	voteRepo := vote.NewRepository(cfg.DB)
 	voteService := vote.NewService(voteRepo, nil)
 	voteHandler := vote.NewHandler(voteService)
@@ -160,6 +167,9 @@ func NewRouter(cfg Config) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"version":"v1","status":"ok"}`))
 		})
+
+		// Public billing webhook endpoint (HMAC-verified, no JWT).
+		v1.Post("/webhooks/billing", billingHandler.HandleWebhook)
 
 		// WebSocket endpoint (auth via query param).
 		v1.Get("/ws", wsHandler.Upgrade)
@@ -229,6 +239,13 @@ func NewRouter(cfg Config) http.Handler {
 				m.Get("/", memberHandler.ListOrgMembers)
 				m.Patch("/{userID}", memberHandler.UpdateOrgMember)
 				m.Delete("/{userID}", memberHandler.RemoveOrgMember)
+			})
+
+			// Billing routes.
+			authed.Route("/orgs/{org}/billing", func(bl chi.Router) {
+				bl.Get("/", billingHandler.GetBillingStatus)
+				bl.Post("/customers", billingHandler.CreateCustomer)
+				bl.Post("/invoices", billingHandler.CreateInvoice)
 			})
 
 			// Vote weight table.
