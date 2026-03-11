@@ -19,6 +19,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/membership"
 	"github.com/abraderAI/crm-project/api/internal/message"
 	"github.com/abraderAI/crm-project/api/internal/middleware"
+	"github.com/abraderAI/crm-project/api/internal/moderation"
 	"github.com/abraderAI/crm-project/api/internal/notification"
 	"github.com/abraderAI/crm-project/api/internal/org"
 	"github.com/abraderAI/crm-project/api/internal/revision"
@@ -29,6 +30,7 @@ import (
 	ws "github.com/abraderAI/crm-project/api/internal/websocket"
 	"github.com/abraderAI/crm-project/api/internal/upload"
 	"github.com/abraderAI/crm-project/api/internal/voice"
+	"github.com/abraderAI/crm-project/api/internal/vote"
 	"github.com/abraderAI/crm-project/api/internal/webhook"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
@@ -104,6 +106,14 @@ func NewRouter(cfg Config) http.Handler {
 
 	memberRepo := membership.NewRepository(cfg.DB)
 	memberHandler := membership.NewHandler(memberRepo)
+
+	voteRepo := vote.NewRepository(cfg.DB)
+	voteService := vote.NewService(voteRepo, nil)
+	voteHandler := vote.NewHandler(voteService)
+
+	modRepo := moderation.NewRepository(cfg.DB)
+	modService := moderation.NewService(modRepo)
+	modHandler := moderation.NewHandler(modService)
 
 	// Voice provider (stub).
 	voiceProvider := voice.NewStubProvider(cfg.DB)
@@ -221,6 +231,17 @@ func NewRouter(cfg Config) http.Handler {
 				m.Delete("/{userID}", memberHandler.RemoveOrgMember)
 			})
 
+			// Vote weight table.
+			authed.Get("/vote/weights", voteHandler.GetWeightTable)
+
+			// Moderation flag routes.
+			authed.Route("/orgs/{org}/flags", func(fl chi.Router) {
+				fl.Post("/", modHandler.CreateFlag)
+				fl.Get("/", modHandler.ListFlags)
+				fl.Post("/{flag}/resolve", modHandler.ResolveFlag)
+				fl.Post("/{flag}/dismiss", modHandler.DismissFlag)
+			})
+
 			// Space routes.
 			authed.Route("/orgs/{org}/spaces", func(sp chi.Router) {
 				sp.Post("/", spaceHandler.Create)
@@ -264,6 +285,11 @@ func NewRouter(cfg Config) http.Handler {
 						th.Post("/{thread}/unpin", threadHandler.Unpin)
 						th.Post("/{thread}/lock", threadHandler.Lock)
 						th.Post("/{thread}/unlock", threadHandler.Unlock)
+						th.Post("/{thread}/vote", voteHandler.Toggle)
+						th.Post("/{thread}/move", modHandler.MoveThread)
+						th.Post("/{thread}/merge", modHandler.MergeThread)
+						th.Post("/{thread}/hide", modHandler.HideThread)
+						th.Post("/{thread}/unhide", modHandler.UnhideThread)
 
 						// Message routes.
 						th.Route("/{thread}/messages", func(msg chi.Router) {
