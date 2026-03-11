@@ -1,0 +1,168 @@
+name: CRM Phase Implementation
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: 'Phase number to implement (1-16)'
+        required: true
+        type: string
+        default: '1'
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  # ── Manual dispatch: run a specific phase ──────────────────────────────────
+  implement:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure phase labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in $(seq 1 16); do
+            gh label create "phase:$i" \
+              --color "0075ca" \
+              --description "Phase $i implementation" 2>/dev/null || true
+          done
+
+      - name: Run Oz cloud agent for phase ${{ inputs.phase }}
+        uses: warpdotdev/oz-agent-action@main
+        with:
+          prompt: |
+            Read the oz-platform skill for instructions on using Claude Code to complete this task:
+
+            Implement Phase ${{ inputs.phase }} of the DEFT Evolution CRM project (abraderAI/crm-project).
+
+            CONTEXT:
+            - Read SPECIFICATION.md for full project details and Phase ${{ inputs.phase }} requirements
+            - Read deft/main.md, deft/core/project.md, and deft/core/user.md for framework standards
+            - Read deft/languages/go.md for Go standards (phases 1-10)
+            - Read deft/languages/typescript.md for TypeScript/Next.js standards (phases 11-16)
+            - Read deft/tools/taskfile.md for task runner usage
+            - Read deft/scm/git.md and deft/scm/github.md for git/PR conventions
+
+            REQUIREMENTS:
+            - Implement ALL tasks listed under Phase ${{ inputs.phase }} in SPECIFICATION.md
+            - Follow TDD: write tests first, watch fail, implement, refactor
+            - ≥85% test coverage (lines, functions, branches, statements)
+            - Backend phases (1-10): include live API tests as described in SPECIFICATION.md Testing Strategy
+            - Run `task check` and ensure ALL checks pass before creating the PR
+            - Use conventional commits format
+
+            DELIVERABLE:
+            - Branch: phase/${{ inputs.phase }}
+            - PR title: "feat(phase-${{ inputs.phase }}): <phase name from SPECIFICATION.md>"
+            - PR label: phase:${{ inputs.phase }}
+            - PR description: list every task implemented with test results summary
+          warp_api_key: ${{ secrets.WARP_API_KEY }}
+          profile: ${{ vars.WARP_AGENT_PROFILE || '' }}
+
+  # ── Auto-chain: when a phase PR is merged, trigger the next phase(s) ───────
+  auto-chain:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine next phases to trigger
+        id: next
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Which phase was just merged?
+          LABELS=$(gh pr view ${{ github.event.pull_request.number }} \
+            --json labels --jq '[.labels[].name]')
+          echo "Merged PR labels: $LABELS"
+
+          MERGED_PHASE=""
+          for i in $(seq 1 16); do
+            if echo "$LABELS" | grep -q "\"phase:$i\""; then
+              MERGED_PHASE=$i
+              break
+            fi
+          done
+
+          if [ -z "$MERGED_PHASE" ]; then
+            echo "No phase label found on merged PR — skipping auto-chain."
+            echo "next_phases=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "Merged phase: $MERGED_PHASE"
+
+          # Helper: count merged PRs with a given phase label
+          check_merged() {
+            local p=$1
+            COUNT=$(gh pr list --state merged --label "phase:$p" \
+              --json number --jq 'length' 2>/dev/null)
+            echo "${COUNT:-0}"
+          }
+
+          NEXT=""
+
+          case $MERGED_PHASE in
+            1)  NEXT="2" ;;
+            2)  NEXT="3" ;;
+            3)  NEXT="4" ;;
+            4)  NEXT="5 6 8 9 10" ;;
+
+            # Phase 7 needs both 5 and 6; Phase 11 needs all of 5-10
+            5|6)
+              P5=$(check_merged 5); P6=$(check_merged 6)
+              if [ "$P5" -gt 0 ] && [ "$P6" -gt 0 ]; then
+                NEXT="7"
+              fi
+              P7=$(check_merged 7); P8=$(check_merged 8)
+              P9=$(check_merged 9); P10=$(check_merged 10)
+              if [ "$P5" -gt 0 ] && [ "$P6" -gt 0 ] && [ "$P7" -gt 0 ] && \
+                 [ "$P8" -gt 0 ] && [ "$P9" -gt 0 ] && [ "$P10" -gt 0 ]; then
+                NEXT="$NEXT 11"
+              fi
+              ;;
+
+            # 7, 8, 9, 10: check if all of 5-10 are done → trigger 11
+            7|8|9|10)
+              ALL=true
+              for p in 5 6 7 8 9 10; do
+                [ "$(check_merged $p)" -eq 0 ] && ALL=false && break
+              done
+              [ "$ALL" = "true" ] && NEXT="11"
+              ;;
+
+            11) NEXT="12" ;;
+            12) NEXT="13 14 15" ;;
+
+            # 16 needs all of 13, 14, 15
+            13|14|15)
+              ALL=true
+              for p in 13 14 15; do
+                [ "$(check_merged $p)" -eq 0 ] && ALL=false && break
+              done
+              [ "$ALL" = "true" ] && NEXT="16"
+              ;;
+
+            16) echo "🎉 All phases complete!" ;;
+          esac
+
+          NEXT=$(echo $NEXT | xargs)  # trim whitespace
+          echo "next_phases=$NEXT" >> $GITHUB_OUTPUT
+          echo "Next phases to trigger: $NEXT"
+
+      - name: Trigger next phase(s)
+        if: steps.next.outputs.next_phases != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for phase in ${{ steps.next.outputs.next_phases }}; do
+            echo "→ Triggering phase $phase"
+            gh workflow run implement.yml -f phase=$phase
+          done
