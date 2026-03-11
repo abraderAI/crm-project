@@ -179,7 +179,7 @@ func (v *JWTValidator) fetchJWKS() error {
 	if err != nil {
 		return fmt.Errorf("HTTP request to JWKS endpoint: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("JWKS endpoint returned status %d", resp.StatusCode)

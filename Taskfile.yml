@@ -66,6 +66,8 @@ tasks:
       - go test -race -fuzz=. -fuzztime=5s ./internal/config/
       - go test -race -fuzz=FuzzJWTValidation -fuzztime=5s ./internal/auth/
       - go test -race -fuzz=FuzzAPIKeyValidation -fuzztime=5s ./internal/auth/
+      - go test -race -fuzz=FuzzOrgCreate -fuzztime=5s ./internal/org/
+      - go test -race -fuzz=FuzzOrgUpdate -fuzztime=5s ./internal/org/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)

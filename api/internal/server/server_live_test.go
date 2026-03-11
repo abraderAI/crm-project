@@ -71,15 +71,15 @@ func liveServer(t *testing.T) (string, func()) {
 	baseURL := fmt.Sprintf("http://%s", listener.Addr().String())
 	for i := 0; i < 50; i++ {
 		if resp, err := http.Get(baseURL + "/healthz"); err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
 	cleanup := func() {
-		srv.Close()
-		sqlDB.Close()
+		_ = srv.Close()
+		_ = sqlDB.Close()
 	}
 
 	return baseURL, cleanup
@@ -91,7 +91,7 @@ func TestLive_Healthz(t *testing.T) {
 
 	resp, err := http.Get(baseURL + "/healthz")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -108,7 +108,7 @@ func TestLive_Readyz(t *testing.T) {
 
 	resp, err := http.Get(baseURL + "/readyz")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.NotEmpty(t, resp.Header.Get("X-Request-ID"))
@@ -126,7 +126,7 @@ func TestLive_NotFound_RFC7807(t *testing.T) {
 
 	resp, err := http.Get(baseURL + "/nonexistent")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
@@ -144,7 +144,7 @@ func TestLive_V1Root(t *testing.T) {
 
 	resp, err := http.Get(baseURL + "/v1/")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -165,7 +165,7 @@ func TestLive_CORS_Preflight(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	assert.Equal(t, "http://localhost:3000", resp.Header.Get("Access-Control-Allow-Origin"))
@@ -183,7 +183,7 @@ func TestLive_CORS_DisallowedOrigin(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
 }
@@ -198,7 +198,7 @@ func TestLive_RequestID_CustomHeader(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, "my-test-id-123", resp.Header.Get("X-Request-ID"))
 }
@@ -213,7 +213,7 @@ func TestLive_ContentType_Rejection(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
@@ -225,7 +225,7 @@ func TestLive_V1_NonexistentEndpoint(t *testing.T) {
 
 	resp, err := http.Get(baseURL + "/v1/nonexistent")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
@@ -241,7 +241,7 @@ func TestLive_CORSHeaders_OnNormalRequest(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "http://localhost:3000", resp.Header.Get("Access-Control-Allow-Origin"))
@@ -254,11 +254,11 @@ func TestLive_RequestID_Generated(t *testing.T) {
 
 	resp1, err := http.Get(baseURL + "/healthz")
 	require.NoError(t, err)
-	defer resp1.Body.Close()
+	defer func() { _ = resp1.Body.Close() }()
 
 	resp2, err := http.Get(baseURL + "/healthz")
 	require.NoError(t, err)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	id1 := resp1.Header.Get("X-Request-ID")
 	id2 := resp2.Header.Get("X-Request-ID")
@@ -273,7 +273,7 @@ func TestLive_Healthz_ResponseBody(t *testing.T) {
 
 	resp, err := http.Get(baseURL + "/healthz")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestLive_Phase2_MigrationsRan(t *testing.T) {
 	// Readyz returns 200 with healthy database.
 	resp, err := http.Get(baseURL + "/readyz")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -310,7 +310,7 @@ func TestLive_Phase2_HealthAfterMigrations(t *testing.T) {
 
 	resp, err := http.Get(baseURL + "/healthz")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -325,7 +325,7 @@ func TestLive_Phase2_RFC7807StillWorks(t *testing.T) {
 
 	resp, err := http.Get(baseURL + "/v1/nonexistent-phase2-path")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
@@ -402,7 +402,7 @@ func liveAuthServer(t *testing.T) *liveAuthEnv {
 	baseURL := fmt.Sprintf("http://%s", listener.Addr().String())
 	for i := 0; i < 50; i++ {
 		if resp, err := http.Get(baseURL + "/healthz"); err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -426,9 +426,9 @@ func liveAuthServer(t *testing.T) *liveAuthEnv {
 		DB:        db,
 		SignToken: signToken,
 		Cleanup: func() {
-			srv.Close()
+			_ = srv.Close()
 			jwksSrv.Close()
-			sqlDB.Close()
+			_ = sqlDB.Close()
 		},
 	}
 }
@@ -445,7 +445,7 @@ func TestLive_Phase3_AuthRequired(t *testing.T) {
 
 	resp, err := http.Get(env.BaseURL + "/v1/orgs/" + org.ID + "/api-keys")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
@@ -475,7 +475,7 @@ func TestLive_Phase3_ValidJWT(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
@@ -500,7 +500,7 @@ func TestLive_Phase3_ExpiredJWT(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
@@ -520,7 +520,7 @@ func TestLive_Phase3_MalformedJWT(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
@@ -549,7 +549,7 @@ func TestLive_Phase3_APIKeyAuth(t *testing.T) {
 
 	createResp, err := http.DefaultClient.Do(createReq)
 	require.NoError(t, err)
-	defer createResp.Body.Close()
+	defer func() { _ = createResp.Body.Close() }()
 	assert.Equal(t, http.StatusCreated, createResp.StatusCode)
 
 	var keyResult struct {
@@ -567,7 +567,7 @@ func TestLive_Phase3_APIKeyAuth(t *testing.T) {
 
 	listResp, err := http.DefaultClient.Do(listReq)
 	require.NoError(t, err)
-	defer listResp.Body.Close()
+	defer func() { _ = listResp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, listResp.StatusCode)
 
 	var listBody map[string]interface{}
@@ -590,7 +590,7 @@ func TestLive_Phase3_InvalidAPIKey(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
@@ -618,7 +618,7 @@ func TestLive_Phase3_APIKeyRevoke(t *testing.T) {
 	createReq.Header.Set("Content-Type", "application/json")
 	createResp, err := http.DefaultClient.Do(createReq)
 	require.NoError(t, err)
-	defer createResp.Body.Close()
+	defer func() { _ = createResp.Body.Close() }()
 	assert.Equal(t, http.StatusCreated, createResp.StatusCode)
 
 	var keyResult struct {
@@ -633,7 +633,7 @@ func TestLive_Phase3_APIKeyRevoke(t *testing.T) {
 	delReq.Header.Set("Authorization", "Bearer "+token)
 	delResp, err := http.DefaultClient.Do(delReq)
 	require.NoError(t, err)
-	defer delResp.Body.Close()
+	defer func() { _ = delResp.Body.Close() }()
 	assert.Equal(t, http.StatusNoContent, delResp.StatusCode)
 
 	// Revoked key should not work.
@@ -642,7 +642,7 @@ func TestLive_Phase3_APIKeyRevoke(t *testing.T) {
 	useReq.Header.Set("X-API-Key", keyResult.Key)
 	useResp, err := http.DefaultClient.Do(useReq)
 	require.NoError(t, err)
-	defer useResp.Body.Close()
+	defer func() { _ = useResp.Body.Close() }()
 	assert.Equal(t, http.StatusUnauthorized, useResp.StatusCode)
 }
 
@@ -659,7 +659,7 @@ func TestLive_Phase3_CORSWithAuth(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	assert.Equal(t, "http://localhost:3000", resp.Header.Get("Access-Control-Allow-Origin"))
@@ -675,13 +675,13 @@ func TestLive_Phase3_HealthStillWorks(t *testing.T) {
 	// Health should work without auth.
 	resp, err := http.Get(env.BaseURL + "/healthz")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// V1 root should work without auth.
 	resp2, err := http.Get(env.BaseURL + "/v1/")
 	require.NoError(t, err)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 }
 
@@ -714,7 +714,7 @@ func TestLive_Phase3_RFC7807OnAuthFailure(t *testing.T) {
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 			assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))

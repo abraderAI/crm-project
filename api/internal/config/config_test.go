@@ -17,7 +17,7 @@ func clearConfigEnv(t *testing.T) {
 		"OTEL_ENABLED", "RBAC_POLICY_PATH",
 	}
 	for _, key := range envVars {
-		os.Unsetenv(key)
+		_ = os.Unsetenv(key)
 	}
 }
 
