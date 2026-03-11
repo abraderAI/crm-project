@@ -151,3 +151,64 @@ export interface SearchResult {
   snippet: string;
   score: number;
 }
+
+/** Digest frequency enum. */
+export type DigestFrequency = "none" | "daily" | "weekly";
+
+/** Notification type enum for preference channels. */
+export type NotificationType = "message" | "mention" | "stage_change" | "assignment";
+
+/** Notification channel enum. */
+export type NotificationChannel = "in_app" | "email";
+
+/** Per-type, per-channel notification preference. */
+export interface NotificationPreference extends BaseEntity {
+  user_id: string;
+  notification_type: NotificationType;
+  channel: NotificationChannel;
+  enabled: boolean;
+}
+
+/** Digest schedule preference. */
+export interface DigestSchedule extends BaseEntity {
+  user_id: string;
+  frequency: DigestFrequency;
+}
+
+/** WebSocket event types emitted by the server. */
+export type WSEventType =
+  | "message.created"
+  | "message.updated"
+  | "thread.updated"
+  | "typing"
+  | "notification";
+
+/** Base WebSocket message envelope. */
+export interface WSMessage<T = unknown> {
+  type: WSEventType;
+  channel: string;
+  payload: T;
+  timestamp: string;
+}
+
+/** Typing event payload. */
+export interface TypingPayload {
+  user_id: string;
+  user_name?: string;
+  thread_id: string;
+}
+
+/** Client-to-server subscription command. */
+export interface WSSubscribeCommand {
+  action: "subscribe" | "unsubscribe";
+  channel: string;
+}
+
+/** Client-to-server typing command. */
+export interface WSTypingCommand {
+  action: "typing";
+  thread_id: string;
+}
+
+/** Union of client-to-server WS commands. */
+export type WSClientCommand = WSSubscribeCommand | WSTypingCommand;
