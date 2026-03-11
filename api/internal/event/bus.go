@@ -27,6 +27,12 @@ const (
 	MessageDeleted Type = "message.deleted"
 	UploadCreated  Type = "upload.created"
 	UploadDeleted  Type = "upload.deleted"
+
+	// CRM pipeline events.
+	PipelineStageChanged Type = "pipeline.stage_changed"
+	LeadScoreUpdated     Type = "lead.score_updated"
+	LeadEnriched         Type = "lead.enriched"
+	CustomerProvisioned  Type = "customer.provisioned"
 )
 
 // Event represents a domain event published to the bus.

@@ -13,26 +13,30 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/billing"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/config"
-	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/event"
+	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/gdpr"
 	"github.com/abraderAI/crm-project/api/internal/health"
+	"github.com/abraderAI/crm-project/api/internal/llm"
 	"github.com/abraderAI/crm-project/api/internal/membership"
 	"github.com/abraderAI/crm-project/api/internal/message"
 	"github.com/abraderAI/crm-project/api/internal/middleware"
 	"github.com/abraderAI/crm-project/api/internal/moderation"
 	"github.com/abraderAI/crm-project/api/internal/notification"
 	"github.com/abraderAI/crm-project/api/internal/org"
+	"github.com/abraderAI/crm-project/api/internal/pipeline"
+	"github.com/abraderAI/crm-project/api/internal/provision"
 	"github.com/abraderAI/crm-project/api/internal/revision"
+	"github.com/abraderAI/crm-project/api/internal/scoring"
 	"github.com/abraderAI/crm-project/api/internal/search"
 	"github.com/abraderAI/crm-project/api/internal/space"
 	"github.com/abraderAI/crm-project/api/internal/telemetry"
 	"github.com/abraderAI/crm-project/api/internal/thread"
-	ws "github.com/abraderAI/crm-project/api/internal/websocket"
 	"github.com/abraderAI/crm-project/api/internal/upload"
 	"github.com/abraderAI/crm-project/api/internal/voice"
 	"github.com/abraderAI/crm-project/api/internal/vote"
 	"github.com/abraderAI/crm-project/api/internal/webhook"
+	ws "github.com/abraderAI/crm-project/api/internal/websocket"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
 
@@ -158,6 +162,22 @@ func NewRouter(cfg Config) http.Handler {
 
 	revisionRepo := revision.NewRepository(cfg.DB)
 	revisionHandler := revision.NewHandler(revisionRepo)
+
+	// Phase 7: CRM application layer.
+	pipelineService := pipeline.NewService(cfg.DB, eventBus)
+	pipelineHandler := pipeline.NewHandler(pipelineService)
+
+	scoringService := scoring.NewService(cfg.DB, eventBus)
+	// Subscribe scoring to pipeline stage changes.
+	eventBus.Subscribe(event.PipelineStageChanged, scoringService.HandleStageChanged)
+
+	llmProvider := llm.NewGrokProvider()
+	llmHandler := llm.NewHandler(llmProvider, cfg.DB, eventBus)
+
+	provisionService := provision.NewService(cfg.DB, billingProvider, eventBus)
+	provisionHandler := provision.NewHandler(provisionService)
+	// Subscribe provisioning to pipeline stage changes (auto-provision on closed_won).
+	eventBus.Subscribe(event.PipelineStageChanged, provisionService.HandleStageChanged)
 
 	// API v1 subrouter.
 	r.Route("/v1", func(v1 chi.Router) {
@@ -308,6 +328,11 @@ func NewRouter(cfg Config) http.Handler {
 						th.Post("/{thread}/hide", modHandler.HideThread)
 						th.Post("/{thread}/unhide", modHandler.UnhideThread)
 
+						// CRM pipeline routes.
+						th.Post("/{thread}/stage", pipelineHandler.TransitionStage)
+						th.Post("/{thread}/enrich", llmHandler.Enrich)
+						th.Post("/{thread}/provision", provisionHandler.Provision)
+
 						// Message routes.
 						th.Route("/{thread}/messages", func(msg chi.Router) {
 							msg.Post("/", msgHandler.Create)
@@ -319,6 +344,9 @@ func NewRouter(cfg Config) http.Handler {
 					})
 				})
 			})
+
+			// Pipeline stages route.
+			authed.Get("/orgs/{org}/pipeline/stages", pipelineHandler.GetStages)
 
 			// Notification routes.
 			authed.Route("/notifications", func(n chi.Router) {

@@ -72,6 +72,10 @@ tasks:
       - go test -race -fuzz=FuzzValidateContentType -fuzztime=5s ./internal/upload/
       - go test -race -fuzz=FuzzWebhookURL -fuzztime=5s ./internal/webhook/
       - go test -race -fuzz=FuzzMatchesFilter -fuzztime=5s ./internal/webhook/
+      - go test -race -fuzz=FuzzPipelineTransition -fuzztime=5s ./internal/pipeline/
+      - go test -race -fuzz=FuzzValidateTransition -fuzztime=5s ./internal/pipeline/
+      - go test -race -fuzz=FuzzScoringEvaluate -fuzztime=5s ./internal/scoring/
+      - go test -race -fuzz=FuzzScoringCustomRules -fuzztime=5s ./internal/scoring/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)
