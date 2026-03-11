@@ -68,6 +68,10 @@ tasks:
       - go test -race -fuzz=FuzzAPIKeyValidation -fuzztime=5s ./internal/auth/
       - go test -race -fuzz=FuzzOrgCreate -fuzztime=5s ./internal/org/
       - go test -race -fuzz=FuzzOrgUpdate -fuzztime=5s ./internal/org/
+      - go test -race -fuzz=FuzzSanitizeFTSQuery -fuzztime=5s ./internal/search/
+      - go test -race -fuzz=FuzzValidateContentType -fuzztime=5s ./internal/upload/
+      - go test -race -fuzz=FuzzWebhookURL -fuzztime=5s ./internal/webhook/
+      - go test -race -fuzz=FuzzMatchesFilter -fuzztime=5s ./internal/webhook/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)

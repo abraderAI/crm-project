@@ -8,16 +8,22 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	"github.com/abraderAI/crm-project/api/internal/audit"
 	"github.com/abraderAI/crm-project/api/internal/auth"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/config"
+	"github.com/abraderAI/crm-project/api/internal/event"
 	"github.com/abraderAI/crm-project/api/internal/health"
 	"github.com/abraderAI/crm-project/api/internal/membership"
 	"github.com/abraderAI/crm-project/api/internal/message"
 	"github.com/abraderAI/crm-project/api/internal/middleware"
 	"github.com/abraderAI/crm-project/api/internal/org"
+	"github.com/abraderAI/crm-project/api/internal/revision"
+	"github.com/abraderAI/crm-project/api/internal/search"
 	"github.com/abraderAI/crm-project/api/internal/space"
 	"github.com/abraderAI/crm-project/api/internal/thread"
+	"github.com/abraderAI/crm-project/api/internal/upload"
+	"github.com/abraderAI/crm-project/api/internal/webhook"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
 
@@ -28,6 +34,8 @@ type Config struct {
 	CORSOrigins []string
 	RBACPolicy  *config.RBACPolicy
 	IssuerURL   string // Clerk issuer URL for JWT validation.
+	UploadDir   string // Directory for file uploads.
+	MaxUpload   int64  // Maximum upload size in bytes.
 }
 
 // NewRouter creates and configures the Chi router with all middleware and routes.
@@ -50,6 +58,9 @@ func NewRouter(cfg Config) http.Handler {
 	jwtValidator := auth.NewJWTValidator(cfg.IssuerURL)
 	apiKeyService := auth.NewAPIKeyService(cfg.DB)
 	apiKeyHandler := auth.NewAPIKeyHandler(apiKeyService)
+
+	// Initialize event bus.
+	eventBus := event.NewBus()
 
 	// Initialize domain services.
 	orgRepo := org.NewRepository(cfg.DB)
@@ -75,6 +86,36 @@ func NewRouter(cfg Config) http.Handler {
 	memberRepo := membership.NewRepository(cfg.DB)
 	memberHandler := membership.NewHandler(memberRepo)
 
+	// Phase 5: Advanced API features.
+	searchRepo := search.NewRepository(cfg.DB)
+	searchHandler := search.NewHandler(searchRepo)
+
+	// Upload storage provider.
+	uploadDir := cfg.UploadDir
+	if uploadDir == "" {
+		uploadDir = "uploads"
+	}
+	maxUpload := cfg.MaxUpload
+	if maxUpload <= 0 {
+		maxUpload = 104857600 // 100MB default
+	}
+	var uploadHandler *upload.Handler
+	if storage, err := upload.NewLocalStorage(uploadDir); err == nil {
+		uploadService := upload.NewService(cfg.DB, storage, maxUpload)
+		uploadHandler = upload.NewHandler(uploadService, maxUpload)
+	}
+
+	webhookService := webhook.NewService(cfg.DB)
+	webhookHandler := webhook.NewHandler(webhookService)
+	// Subscribe webhook service to all events.
+	eventBus.SubscribeAll(webhookService.HandleEvent)
+
+	auditService := audit.NewService(cfg.DB)
+	auditHandler := audit.NewHandler(auditService)
+
+	revisionRepo := revision.NewRepository(cfg.DB)
+	revisionHandler := revision.NewHandler(revisionRepo)
+
 	// API v1 subrouter.
 	r.Route("/v1", func(v1 chi.Router) {
 		// Public v1 root (no auth).
@@ -87,6 +128,21 @@ func NewRouter(cfg Config) http.Handler {
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {
 			authed.Use(auth.DualAuth(jwtValidator, apiKeyService))
+
+			// Search endpoint.
+			authed.Get("/search", searchHandler.Search)
+
+			// Upload endpoints.
+			if uploadHandler != nil {
+				authed.Post("/uploads", uploadHandler.Create)
+				authed.Get("/uploads/{id}", uploadHandler.Get)
+				authed.Get("/uploads/{id}/download", uploadHandler.Download)
+				authed.Delete("/uploads/{id}", uploadHandler.Delete)
+			}
+
+			// Revision history endpoints.
+			authed.Get("/revisions/{entityType}/{entityID}", revisionHandler.List)
+			authed.Get("/revisions/{id}", revisionHandler.Get)
 
 			// Org routes.
 			authed.Post("/orgs", orgHandler.Create)
@@ -101,6 +157,19 @@ func NewRouter(cfg Config) http.Handler {
 				ak.Get("/", apiKeyHandler.List)
 				ak.Delete("/{id}", apiKeyHandler.Revoke)
 			})
+
+			// Webhook routes.
+			authed.Route("/orgs/{org}/webhooks", func(wh chi.Router) {
+				wh.Post("/", webhookHandler.Create)
+				wh.Get("/", webhookHandler.List)
+				wh.Get("/{id}", webhookHandler.Get)
+				wh.Delete("/{id}", webhookHandler.Delete)
+				wh.Get("/{id}/deliveries", webhookHandler.ListDeliveries)
+				wh.Post("/{id}/deliveries/{deliveryID}/replay", webhookHandler.Replay)
+			})
+
+			// Audit log route.
+			authed.Get("/orgs/{org}/audit-log", auditHandler.List)
 
 			// Org membership routes.
 			authed.Route("/orgs/{org}/members", func(m chi.Router) {
