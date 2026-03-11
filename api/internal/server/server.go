@@ -13,6 +13,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/event"
+	"github.com/abraderAI/crm-project/api/internal/gdpr"
 	"github.com/abraderAI/crm-project/api/internal/health"
 	"github.com/abraderAI/crm-project/api/internal/membership"
 	"github.com/abraderAI/crm-project/api/internal/message"
@@ -21,8 +22,10 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/revision"
 	"github.com/abraderAI/crm-project/api/internal/search"
 	"github.com/abraderAI/crm-project/api/internal/space"
+	"github.com/abraderAI/crm-project/api/internal/telemetry"
 	"github.com/abraderAI/crm-project/api/internal/thread"
 	"github.com/abraderAI/crm-project/api/internal/upload"
+	"github.com/abraderAI/crm-project/api/internal/voice"
 	"github.com/abraderAI/crm-project/api/internal/webhook"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
@@ -44,6 +47,7 @@ func NewRouter(cfg Config) http.Handler {
 
 	// Global middleware stack.
 	r.Use(middleware.RequestID)
+	r.Use(telemetry.HTTPTrace)
 	r.Use(middleware.Recovery(cfg.Logger))
 	r.Use(middleware.Logging(cfg.Logger))
 	r.Use(middleware.CORS(cfg.CORSOrigins))
@@ -86,6 +90,13 @@ func NewRouter(cfg Config) http.Handler {
 	memberRepo := membership.NewRepository(cfg.DB)
 	memberHandler := membership.NewHandler(memberRepo)
 
+	// Voice provider (stub).
+	voiceProvider := voice.NewStubProvider(cfg.DB)
+	voiceHandler := voice.NewHandler(voiceProvider)
+
+	// GDPR service.
+	gdprService := gdpr.NewService(cfg.DB)
+	gdprHandler := gdpr.NewHandler(gdprService)
 	// Phase 5: Advanced API features.
 	searchRepo := search.NewRepository(cfg.DB)
 	searchHandler := search.NewHandler(searchRepo)
@@ -158,6 +169,19 @@ func NewRouter(cfg Config) http.Handler {
 				ak.Delete("/{id}", apiKeyHandler.Revoke)
 			})
 
+			// Voice call routes.
+			authed.Route("/orgs/{org}/calls", func(call chi.Router) {
+				call.Post("/", voiceHandler.LogCall)
+				call.Get("/{call}", voiceHandler.GetTranscript)
+				call.Post("/{call}/escalate", voiceHandler.Escalate)
+			})
+
+			// Admin routes (GDPR).
+			authed.Route("/admin", func(admin chi.Router) {
+				admin.Get("/users/{user}/export", gdprHandler.ExportUserData)
+				admin.Delete("/users/{user}/purge", gdprHandler.PurgeUser)
+				admin.Delete("/orgs/{org}/purge", gdprHandler.PurgeOrg)
+			})
 			// Webhook routes.
 			authed.Route("/orgs/{org}/webhooks", func(wh chi.Router) {
 				wh.Post("/", webhookHandler.Create)
