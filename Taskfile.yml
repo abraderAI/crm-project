@@ -4,6 +4,7 @@ set: [errexit, nounset, pipefail]
 
 vars:
   API_DIR: ./api
+  WEB_DIR: ./web
   BUILD_DIR: ./api/bin
   COVERAGE_THRESHOLD: "85"
 
@@ -84,6 +85,10 @@ tasks:
       - task: lint
       - task: test
       - task: test:coverage
+      - task: web:fmt:check
+      - task: web:lint
+      - task: web:typecheck
+      - task: web:test:coverage
 
   dev:
     desc: Start development server
@@ -91,8 +96,51 @@ tasks:
     cmds:
       - go run ./cmd/server
 
+  web:fmt:
+    desc: Format frontend code
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx prettier --write 'src/**/*.{ts,tsx}'
+
+  web:fmt:check:
+    desc: Check frontend code formatting
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx prettier --check 'src/**/*.{ts,tsx}'
+
+  web:lint:
+    desc: Lint frontend code
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx eslint src/
+
+  web:typecheck:
+    desc: TypeScript type check
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx tsc --noEmit
+
+  web:test:
+    desc: Run frontend tests
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx vitest run
+
+  web:test:coverage:
+    desc: Run frontend tests with coverage (must be ≥85%)
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx vitest run --coverage
+
+  web:build:
+    desc: Build frontend
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx next build
+
   clean:
     desc: Remove build artifacts
     cmds:
       - rm -rf {{.BUILD_DIR}}
       - rm -f {{.API_DIR}}/coverage.out
+      - rm -rf {{.WEB_DIR}}/.next
