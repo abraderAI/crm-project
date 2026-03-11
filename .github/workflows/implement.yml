@@ -24,6 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install task CLI
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
       - name: Ensure phase labels exist
         env:
@@ -35,12 +44,10 @@ jobs:
               --description "Phase $i implementation" 2>/dev/null || true
           done
 
-      - name: Run Oz cloud agent for phase ${{ inputs.phase }}
+      - name: Run Oz agent for phase ${{ inputs.phase }}
         uses: warpdotdev/oz-agent-action@main
         with:
           prompt: |
-            Read the oz-platform skill for instructions on using Claude Code to complete this task:
-
             Implement Phase ${{ inputs.phase }} of the DEFT Evolution CRM project (abraderAI/crm-project).
 
             START BY reading AGENTS.md — it contains all required framework reading and coding standards.
@@ -60,7 +67,6 @@ jobs:
             - PR label: phase:${{ inputs.phase }}
             - PR description: list every subphase task implemented with test results summary
           warp_api_key: ${{ secrets.WARP_API_KEY }}
-          profile: ${{ vars.WARP_AGENT_PROFILE || '' }}
 
   # ── Auto-chain: when a phase PR is merged, trigger the next phase(s) ───────
   auto-chain:
