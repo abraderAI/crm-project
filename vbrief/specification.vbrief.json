@@ -1,0 +1,382 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.5",
+    "created": "2026-03-11T01:00:00Z",
+    "updated": "2026-03-11T01:28:00Z",
+    "metadata": {
+      "type": "specification",
+      "project": "deft-evolution",
+      "specOutput": "SPECIFICATION.md"
+    }
+  },
+  "plan": {
+    "id": "deft-evolution-spec",
+    "title": "DEFT Evolution — Unified CRM & Community Platform",
+    "status": "proposed",
+    "author": "interview-agent",
+    "narratives": {
+      "Overview": "DEFT Evolution is a unified CRM and community platform built on a hierarchical threaded content model (Org → Space → Board → Thread → Message). Pre-sales teams manage leads, pipelines, and opportunities in dedicated Spaces/Boards. Converted customers receive their own Org with Spaces for support, feature requests, and documentation. Developers and customers collaborate in community Spaces. The Spaces API is the foundational layer — built first — with all domain-specific behavior layered on top via metadata conventions and UI views.",
+      "Background": "The platform targets B2B technical sales cycles (lead qualification, nurturing, demos, trials, conversion) and extends into developer community engagement (forums, wikis, tickets, feature requests). Built on the STRONG architecture: SQLite, TypeScript, React, Opinionated Next.js, Go.",
+      "Constraint": "Backend MUST be complete with full test coverage (unit, fuzzing ≥50/input, integration, e2e, smoke, gate; ≥85% coverage) before any frontend work begins. All CRM entities modeled as Threads with domain-specific metadata. SQLite single-file for MVP; PostgreSQL migration path preserved. Voice integration deferred — stub interface only.",
+      "Risk": "SQLite single-file limits horizontal scaling. FTS5 + generated columns add schema complexity. Full webhook system with replay is significant scope. Tiptap + mermaid editor integration has frontend complexity.",
+      "Alternative": "Considered PostgreSQL (deferred for simplicity), Gin router (chose Chi for net/http compatibility), gorilla/websocket (chose nhooyr for context.Context support), Clerk Organizations (chose auth-only for RBAC flexibility)."
+    },
+    "metadata": {
+      "stack": {
+        "backend": "Go 1.22+, Chi, GORM, modernc.org/sqlite",
+        "frontend": "Next.js 14+ (App Router, RSC, TypeScript), shadcn/ui, Tailwind CSS",
+        "auth": "Clerk (auth only, JWTs)",
+        "database": "SQLite (WAL mode, FTS5, JSON + generated columns)",
+        "realtime": "nhooyr.io/websocket",
+        "email": "Resend + React Email",
+        "billing": "FlexPoint (behind abstraction)",
+        "observability": "slog + OpenTelemetry",
+        "testing_go": "testify + httptest",
+        "testing_frontend": "Vitest + Playwright",
+        "ci": "GitHub Actions",
+        "deploy_local": "Docker Compose",
+        "deploy_frontend": "Vercel",
+        "deploy_backend": "Fly.io (persistent volume for SQLite)"
+      },
+      "decisions": {
+        "go_router": "chi",
+        "orm": "gorm",
+        "sqlite_driver": "modernc.org/sqlite (pure Go, no CGo)",
+        "uuid_format": "UUIDv7 (time-ordered, RFC 9562)",
+        "error_format": "RFC 7807 Problem Details",
+        "metadata_storage": "JSON + generated columns for hot paths",
+        "pagination": "cursor-based (encoded UUIDv7)",
+        "slugs": "auto-generated, unique per parent, numeric suffix on collision",
+        "rbac_resolution": "explicit override with parent fallback (configurable via YAML policy file)",
+        "rbac_roles": ["viewer", "commenter", "contributor", "moderator", "admin", "owner"],
+        "deletion": "soft delete (deleted_at), GDPR hard-purge admin endpoint",
+        "file_storage": "local filesystem behind StorageProvider interface",
+        "file_limits": "100MB max; images, docs, text, archives, video, audio",
+        "webhooks": "full system: event filtering, HMAC-SHA256, delivery log, replay",
+        "search": "FTS5 all levels + combined metadata filtering",
+        "realtime": "nhooyr.io/websocket, RBAC-scoped channels",
+        "notifications": "provider abstraction: in-app (DB+WS), email (Resend), digests; extensible to Slack/Teams/SMS",
+        "api_keys": "per-org, hashed, prefixed (deft_live_xxx), scoped permissions",
+        "audit_log": "every mutation: who, what, when, before/after JSON diff, IP, request ID",
+        "edit_history": "full revision tracking per thread/message",
+        "lead_scoring": "hybrid: rule-based baseline + LLM enrichment (Grok default, provider-agnostic interface)",
+        "crm_pipeline": "new_lead → qualified → demo_scheduled → demo_completed → proposal_sent → negotiation → closed_won/closed_lost + nurturing; per-org configurable",
+        "provisioning": "fully automated on closed_won",
+        "billing": "FlexPoint behind BillingProvider interface",
+        "voting": "weighted by role/billing tier",
+        "moderation": "pin, lock, hide, move, merge; user flagging + moderator queue",
+        "theming": "system pref + toggle + per-org branding via CSS custom properties",
+        "markdown": "Tiptap WYSIWYG (GFM, mermaid, syntax highlight, raw toggle); stored as markdown; rendered via react-markdown",
+        "api_versioning": "URL path (/v1/, /v2/)",
+        "backup": "deferred; WAL mode enabled, Litestream-ready",
+        "voice": "deferred; Thread interface + VoiceProvider stub",
+        "rate_limiting": "deferred; rely on Fly.io"
+      }
+    },
+    "tags": ["crm", "community", "strong-stack", "go", "nextjs", "sqlite"],
+    "items": [
+      {
+        "id": "phase1",
+        "title": "Phase 1: Foundation & Infrastructure",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Establish monorepo, Go module, Docker Compose, Taskfile, CI skeleton, config system, HTTP server foundation with Chi, and core helpers (RFC 7807, cursor pagination, health checks)."
+        },
+        "subItems": [
+          {"id": "phase1.repo", "title": "Initialize monorepo structure (/api, /web, /docker, /docs, /api/internal/{domain}/, /api/config, /api/cmd/server)", "status": "pending", "priority": "high"},
+          {"id": "phase1.gomod", "title": "Initialize Go module with dependencies (chi, gorm, modernc sqlite, testify, nhooyr websocket, otel, google/uuid)", "status": "pending", "priority": "high"},
+          {"id": "phase1.docker", "title": "Docker Compose for local dev (Go API with hot reload, SQLite volume, web placeholder)", "status": "pending", "priority": "high"},
+          {"id": "phase1.taskfile", "title": "Taskfile with build, test, test:coverage, lint, fmt, check, dev tasks", "status": "pending", "priority": "high"},
+          {"id": "phase1.ci", "title": "GitHub Actions CI skeleton (run task check on push/PR, fail on coverage < 85%)", "status": "pending", "priority": "medium"},
+          {"id": "phase1.config", "title": "Environment config loading (server port, SQLite path, Clerk keys, log level, CORS, upload dir/max, OTel endpoint)", "status": "pending", "priority": "high"},
+          {"id": "phase1.rbac-policy", "title": "RBAC policy YAML config (/api/config/rbac-policy.yaml): resolution strategy, role hierarchy, defaults", "status": "pending", "priority": "high"},
+          {"id": "phase1.router", "title": "Chi router with middleware stack (slog logging, request ID, panic recovery, CORS, content-type enforcement, /v1 subrouter)", "status": "pending", "priority": "high"},
+          {"id": "phase1.errors", "title": "RFC 7807 error response helpers (not_found, unauthorized, forbidden, validation_error, conflict, internal_error)", "status": "pending", "priority": "high"},
+          {"id": "phase1.pagination", "title": "Cursor pagination helpers (encode/decode UUIDv7 cursor, parse ?cursor&limit, default 50 max 100)", "status": "pending", "priority": "high"},
+          {"id": "phase1.health", "title": "Health check endpoints (GET /healthz, GET /readyz with SQLite connectivity check)", "status": "pending", "priority": "medium"},
+          {"id": "phase1.tests", "title": "Phase 1 tests: unit tests for config, RBAC policy, RFC 7807, pagination, health. Fuzzing ≥50 per input (cursor decode, config). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase2",
+        "title": "Phase 2: Database & Models",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Define all GORM models, SQLite schema with JSON metadata, generated columns, FTS5 virtual tables, supporting models (memberships, audit, revisions, webhooks, notifications, votes, uploads, API keys)."
+        },
+        "subItems": [
+          {"id": "phase2.base-model", "title": "BaseModel: UUIDv7 PK, CreatedAt, UpdatedAt, DeletedAt (soft delete). GORM hooks for auto UUIDv7.", "status": "pending", "priority": "high"},
+          {"id": "phase2.org", "title": "Org model: Name, Slug (unique), Description, Metadata JSON, generated columns (billing_tier, payment_status)", "status": "pending", "priority": "high"},
+          {"id": "phase2.space", "title": "Space model: OrgID FK, Name, Slug (unique within org), Description, Metadata, Type enum (general/crm/support/community/knowledge_base)", "status": "pending", "priority": "high"},
+          {"id": "phase2.board", "title": "Board model: SpaceID FK, Name, Slug (unique within space), Description, Metadata, IsLocked", "status": "pending", "priority": "high"},
+          {"id": "phase2.thread", "title": "Thread model: BoardID FK, Title, Body (markdown), Slug, Metadata JSON, AuthorID, IsPinned, IsLocked, VoteScore. Generated columns: status, priority, stage, assigned_to.", "status": "pending", "priority": "high"},
+          {"id": "phase2.message", "title": "Message model: ThreadID FK, Body (markdown), AuthorID, Metadata JSON, Type enum (note/email/call_log/comment/system)", "status": "pending", "priority": "high"},
+          {"id": "phase2.memberships", "title": "Membership models: OrgMembership, SpaceMembership, BoardMembership. Role enum (viewer→owner). Composite unique (UserID, EntityID).", "status": "pending", "priority": "high"},
+          {"id": "phase2.api-key", "title": "API key model: OrgID FK, Name, KeyHash (SHA-256), KeyPrefix, Permissions JSON, LastUsedAt, ExpiresAt", "status": "pending", "priority": "medium"},
+          {"id": "phase2.audit", "title": "Audit log model: UserID, Action enum, EntityType, EntityID, BeforeState JSON, AfterState JSON, IPAddress, RequestID. Immutable.", "status": "pending", "priority": "high"},
+          {"id": "phase2.revision", "title": "Revision model: EntityType, EntityID, Version (auto-increment per entity), PreviousContent JSON, EditorID", "status": "pending", "priority": "medium"},
+          {"id": "phase2.webhook", "title": "Webhook models: Subscription (polymorphic scope, URL, Secret encrypted, EventFilter JSON). Delivery (SubscriptionID, EventType, Payload, StatusCode, Attempts, NextRetryAt).", "status": "pending", "priority": "medium"},
+          {"id": "phase2.notification", "title": "Notification models: Notification (UserID, Type, Title, Body, EntityRef, IsRead). NotificationPreference (per channel per event). DigestSchedule.", "status": "pending", "priority": "medium"},
+          {"id": "phase2.vote", "title": "Vote model: ThreadID, UserID, Weight (computed). Unique (ThreadID, UserID). Thread.VoteScore aggregated.", "status": "pending", "priority": "medium"},
+          {"id": "phase2.upload", "title": "Upload model: OrgID, EntityType, EntityID, Filename, ContentType, Size, StoragePath, UploaderID", "status": "pending", "priority": "medium"},
+          {"id": "phase2.fts5", "title": "FTS5 virtual tables for orgs, spaces, boards, threads, messages with sync triggers on insert/update/delete", "status": "pending", "priority": "high"},
+          {"id": "phase2.indexes", "title": "Database indexes: FKs, slugs, generated columns, membership composites, audit entity refs, webhook delivery, notifications", "status": "pending", "priority": "high"},
+          {"id": "phase2.tests", "title": "Phase 2 tests: all model CRUD, FTS5 sync, fuzzing ≥50 per (metadata JSON, slug generation, UUIDv7). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase3",
+        "title": "Phase 3: Authentication & Authorization",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Clerk JWT validation, RBAC engine with configurable policy-based resolution (explicit override + parent fallback), API key authentication, dual-auth middleware."
+        },
+        "subItems": [
+          {"id": "phase3.jwt", "title": "Clerk JWT validation middleware: JWKS fetch/cache, signature/expiry/issuer validation, user_id extraction to context", "status": "pending", "priority": "high"},
+          {"id": "phase3.rbac-engine", "title": "RBAC resolution engine: load policy from YAML, resolve effective role (board → space → org fallback), role hierarchy permissions", "status": "pending", "priority": "high"},
+          {"id": "phase3.permission-mw", "title": "Permission check middleware: extract entity IDs from URL, resolve role, check required permission, 403 RFC 7807 on denial", "status": "pending", "priority": "high"},
+          {"id": "phase3.api-key-auth", "title": "API key CRUD (create/list/revoke) and auth middleware (X-API-Key header, hash lookup, permission/expiry check)", "status": "pending", "priority": "high"},
+          {"id": "phase3.dual-auth", "title": "Dual-auth middleware: accept either Clerk JWT or API key, set unified user context", "status": "pending", "priority": "high"},
+          {"id": "phase3.tests", "title": "Phase 3 tests: JWT (valid/expired/wrong issuer/malformed), RBAC (all resolution paths), permissions (every endpoint × role), API keys. Fuzzing ≥50 per (JWT, API key). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase4",
+        "title": "Phase 4: Core Spaces API CRUD",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Full CRUD for the hierarchical model: Orgs, Spaces, Boards, Threads (with metadata filtering), Messages, and Memberships. Each domain: handler → service → repository in /api/internal/{domain}/."
+        },
+        "subItems": [
+          {"id": "phase4.org", "title": "Org repository/service/handlers: POST/GET/PATCH/DELETE /v1/orgs. Slug+ID URLs, metadata deep-merge PATCH, cursor pagination, RBAC.", "status": "pending", "priority": "high"},
+          {"id": "phase4.space", "title": "Space CRUD nested under org: /v1/orgs/{org}/spaces. Slug unique within org. Type enum.", "status": "pending", "priority": "high"},
+          {"id": "phase4.board", "title": "Board CRUD nested under space. Lock/unlock endpoints. Locked boards reject new threads.", "status": "pending", "priority": "high"},
+          {"id": "phase4.thread", "title": "Thread CRUD: metadata filtering (?metadata[status]=open&metadata[priority][gt]=3), deep-merge PATCH, pin/unpin, lock/unlock, revision on update.", "status": "pending", "priority": "high"},
+          {"id": "phase4.message", "title": "Message CRUD nested under thread. Author-only update (creates revision). Type enum. Locked threads reject create.", "status": "pending", "priority": "high"},
+          {"id": "phase4.membership", "title": "Membership CRUD at org/space/board levels. Add/remove/update role. List members. Invitation flow. Cannot remove last owner.", "status": "pending", "priority": "high"},
+          {"id": "phase4.tests", "title": "Phase 4 tests: full lifecycle integration (org→space→board→thread→message), RBAC every endpoint × role, metadata filtering, pagination, slug, soft delete. Fuzzing ≥50 per (request body, metadata filters). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase5",
+        "title": "Phase 5: Advanced API Features",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Full-text search with metadata combo, file uploads with storage abstraction, webhook system (subscriptions, event bus, delivery engine, replay), audit logging, revision history endpoints."
+        },
+        "subItems": [
+          {"id": "phase5.search", "title": "Search: GET /v1/search with FTS5 + metadata filters, RBAC filtering, scope/type filters, ranked results with snippets, cursor pagination.", "status": "pending", "priority": "high"},
+          {"id": "phase5.storage", "title": "StorageProvider interface (Store/Get/Delete) + LocalStorage implementation. File type + size (100MB) validation.", "status": "pending", "priority": "high"},
+          {"id": "phase5.upload-api", "title": "Upload endpoints: POST /v1/uploads (multipart), GET /v1/uploads/{id}, DELETE. RBAC on parent entity.", "status": "pending", "priority": "high"},
+          {"id": "phase5.event-bus", "title": "Internal event bus (in-process pub/sub). All mutations publish typed events. Webhook + notification engines subscribe.", "status": "pending", "priority": "high"},
+          {"id": "phase5.webhook-sub", "title": "Webhook subscription CRUD at org/space/board scope. URL + encrypted secret + event filter. HMAC-SHA256.", "status": "pending", "priority": "high"},
+          {"id": "phase5.webhook-delivery", "title": "Webhook delivery engine: match subs, sign HMAC, POST, retry 3x exponential backoff, log all attempts.", "status": "pending", "priority": "high"},
+          {"id": "phase5.webhook-dashboard", "title": "Webhook delivery dashboard API (GET deliveries) and manual replay endpoint.", "status": "pending", "priority": "medium"},
+          {"id": "phase5.audit", "title": "Audit middleware: capture before/after state on every mutation, async write. GET /v1/orgs/{org}/audit-log with filters.", "status": "pending", "priority": "high"},
+          {"id": "phase5.revisions", "title": "Revision history endpoints: GET revisions list and specific version for threads and messages.", "status": "pending", "priority": "medium"},
+          {"id": "phase5.tests", "title": "Phase 5 tests: search integration, upload lifecycle, webhook e2e (create sub → event → verify delivery), audit captures all mutations. Fuzzing ≥50 per (search query, webhook URL, file type). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase6",
+        "title": "Phase 6: Real-time & Notifications",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "WebSocket hub (nhooyr) with RBAC-scoped channels, notification provider abstraction with in-app (DB+WS) and email (Resend) implementations, digest scheduling, trigger engine."
+        },
+        "subItems": [
+          {"id": "phase6.ws-hub", "title": "WebSocket upgrade (GET /v1/ws), JWT auth, hub/channel manager (board:{id}, thread:{id}), RBAC on subscribe, ping/pong keepalive.", "status": "pending", "priority": "high"},
+          {"id": "phase6.ws-broadcast", "title": "Event broadcasting: subscribe to event bus, broadcast message.created/thread.updated/typing to scoped channels, permission filtered.", "status": "pending", "priority": "high"},
+          {"id": "phase6.notif-interface", "title": "NotificationProvider interface + InApp implementation: DB storage, WS push, CRUD endpoints (list/mark-read/mark-all-read).", "status": "pending", "priority": "high"},
+          {"id": "phase6.email", "title": "Email provider (Resend): transactional templates (React Email) for new message, @mention, stage change, assignment, invite. User preferences.", "status": "pending", "priority": "high"},
+          {"id": "phase6.digest", "title": "Digest email: background goroutine, aggregate unreads, render summary, send via Resend. Daily/weekly configurable.", "status": "pending", "priority": "medium"},
+          {"id": "phase6.trigger", "title": "Notification trigger engine: event bus → map to notification types → determine recipients (@mentions, thread participants) → route per preferences.", "status": "pending", "priority": "high"},
+          {"id": "phase6.tests", "title": "Phase 6 tests: WS lifecycle integration, notification routing all event types, digest generation, mock provider. Fuzzing ≥50 per (WS message, notification payload). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase7",
+        "title": "Phase 7: CRM Application Layer",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Sales pipeline with configurable stages and transition validation, hybrid lead scoring (rule-based + LLM via Grok), and fully automated lead-to-customer provisioning on Closed-Won."
+        },
+        "subItems": [
+          {"id": "phase7.pipeline", "title": "Pipeline config: default stages (new_lead→closed_won/closed_lost + nurturing), transition validation, per-org customization, stage change events.", "status": "pending", "priority": "high"},
+          {"id": "phase7.scoring", "title": "Rule-based scoring engine: config-driven rules (metadata conditions → points), score on metadata change, per-org rules.", "status": "pending", "priority": "high"},
+          {"id": "phase7.llm", "title": "LLM enrichment: LLMProvider interface (Summarize, SuggestNextAction), GrokProvider impl, POST .../threads/{thread}/enrich, results in metadata.", "status": "pending", "priority": "medium"},
+          {"id": "phase7.provision", "title": "Automated provisioning on closed_won: create Org, default Spaces/Boards, Clerk invite, CRM thread link, FlexPoint customer. Transaction with rollback. Confirmation message.", "status": "pending", "priority": "high"},
+          {"id": "phase7.tests", "title": "Phase 7 tests: full sales lifecycle integration (lead→score→enrich→close→provision), LLM mocked. Fuzzing ≥50 per (stage transitions, scoring). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase8",
+        "title": "Phase 8: Billing Module",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "BillingProvider interface with FlexPoint implementation. Customer CRUD, invoice management, payment status sync, FlexPoint webhook handler. Billing metadata on Org."
+        },
+        "subItems": [
+          {"id": "phase8.billing", "title": "BillingProvider interface (CreateCustomer, CreateInvoice, GetPaymentStatus, HandleWebhook) + FlexPoint implementation. Billing metadata on Org. Webhook endpoint for FlexPoint events.", "status": "pending", "priority": "medium"},
+          {"id": "phase8.tests", "title": "Phase 8 tests: billing lifecycle integration, FlexPoint mocked, webhook handling, metadata updates. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "phase9",
+        "title": "Phase 9: Community Features",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Weighted voting (role + billing tier weights, configurable) and role-based moderation (pin/lock/hide/move/merge, flagging with moderator queue)."
+        },
+        "subItems": [
+          {"id": "phase9.voting", "title": "Vote CRUD: POST toggle, weight from role+billing tier, atomic VoteScore update, sort by votes, configurable weight table.", "status": "pending", "priority": "medium"},
+          {"id": "phase9.moderation", "title": "Moderation actions: pin/lock/hide/move/merge threads. Flag system: any user flags, moderator queue (GET /v1/orgs/{org}/flags), resolve/dismiss. All audit logged.", "status": "pending", "priority": "medium"},
+          {"id": "phase9.tests", "title": "Phase 9 tests: voting lifecycle, moderation e2e, thread move/merge integrity, concurrent voting, flag workflow. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "phase10",
+        "title": "Phase 10: Voice Stubs & Operations",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Stubbed VoiceProvider interface, GDPR hard purge and data export endpoints, OpenTelemetry SDK instrumentation."
+        },
+        "subItems": [
+          {"id": "phase10.voice", "title": "VoiceProvider interface (LogCall, GetTranscript, Escalate) + stub. Call log model. Support thread creation/update on call events.", "status": "pending", "priority": "low"},
+          {"id": "phase10.gdpr", "title": "GDPR: DELETE /v1/admin/users/{user}/purge (remove PII, anonymize audit). GET /v1/admin/users/{user}/export (JSON archive). DELETE /v1/admin/orgs/{org}/purge (cascade). Owner-only.", "status": "pending", "priority": "high"},
+          {"id": "phase10.otel", "title": "OpenTelemetry: traces for HTTP requests + DB queries, custom metrics (request count, latency, WS connections, webhook success rate), configurable exporter.", "status": "pending", "priority": "medium"},
+          {"id": "phase10.tests", "title": "Phase 10 tests: GDPR purge across all tables, data export completeness, voice stub, OTel spans. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase11",
+        "title": "Phase 11: Frontend Foundation",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Initialize Next.js 14+ with TypeScript, Tailwind, shadcn/ui, Clerk frontend auth, typed API client, theming system (dark/light + per-org), and base layout (sidebar, top bar, breadcrumbs). MUST NOT begin until all backend phases (1-10) are complete and tested.",
+          "Constraint": "Blocked until Phases 1–10 all pass with ≥85% coverage."
+        },
+        "subItems": [
+          {"id": "phase11.nextjs", "title": "Initialize Next.js 14+ in /web: App Router, strict TypeScript, Tailwind, shadcn/ui, ESLint+Prettier, Vitest (≥85% threshold).", "status": "pending", "priority": "high"},
+          {"id": "phase11.clerk", "title": "Clerk frontend: @clerk/nextjs, ClerkProvider, middleware for protected routes, sign-in/sign-up pages, JWT forwarded to Go API.", "status": "pending", "priority": "high"},
+          {"id": "phase11.api-client", "title": "Typed API client: RSC direct fetch with JWT, Client Component fetch wrapper for mutations, types matching Go API responses.", "status": "pending", "priority": "high"},
+          {"id": "phase11.theming", "title": "Theming: CSS custom properties, dark/light via Tailwind dark: + system pref + manual toggle (localStorage), per-org overrides from org metadata.", "status": "pending", "priority": "medium"},
+          {"id": "phase11.layout", "title": "Base layout: sidebar (org/space/board nav), top bar (search, notification bell, user menu, theme toggle), responsive, breadcrumbs.", "status": "pending", "priority": "high"},
+          {"id": "phase11.tests", "title": "Phase 11 tests: layout, theme toggle, auth redirect components. Vitest + RTL. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase12",
+        "title": "Phase 12: Core UI Views",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "CRUD views for Org/Space/Board/Thread/Message, Tiptap editor with GFM+mermaid+syntax+raw toggle, file upload UI, real-time message updates via WebSocket."
+        },
+        "subItems": [
+          {"id": "phase12.entity-views", "title": "Org/Space/Board list, create, and settings pages with name/description/metadata forms.", "status": "pending", "priority": "high"},
+          {"id": "phase12.thread-views", "title": "Thread list (filtering, sorting, cursor pagination) and detail (title, body, metadata sidebar, message timeline).", "status": "pending", "priority": "high"},
+          {"id": "phase12.editor", "title": "Tiptap editor for messages: GFM, mermaid (live preview), syntax-highlighted code, image upload, raw markdown toggle. Edit creates revision. Revision history viewable.", "status": "pending", "priority": "high"},
+          {"id": "phase12.upload-ui", "title": "File upload UI: drag-drop, progress indicator, client-side type/size validation, image preview, download links.", "status": "pending", "priority": "medium"},
+          {"id": "phase12.tests", "title": "Phase 12 tests: component tests, Playwright E2E (sign in → org → space → board → thread → message → edit). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase13",
+        "title": "Phase 13: CRM UI Views",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Kanban pipeline (drag-drop stage transitions), lead detail with score breakdown and AI enrichment, scoring dashboard."
+        },
+        "subItems": [
+          {"id": "phase13.kanban", "title": "Kanban pipeline: columns = stages, cards = leads with metadata (company, value, assigned_to, score), drag-drop transitions, filters.", "status": "pending", "priority": "high"},
+          {"id": "phase13.lead-detail", "title": "Lead detail: metadata sidebar, activity timeline, score breakdown (contributing rules), AI enrichment section (summary, next action, Enrich button). Dashboard stats.", "status": "pending", "priority": "high"},
+          {"id": "phase13.tests", "title": "Phase 13 tests: Kanban drag-drop, Playwright E2E sales lifecycle (lead→pipeline→close→provision visible). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "phase14",
+        "title": "Phase 14: Community & Admin Views",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Voting UI, moderation dashboard (flag queue, mod actions), webhook management (CRUD, delivery log, replay), billing dashboard, audit log viewer, membership management."
+        },
+        "subItems": [
+          {"id": "phase14.community", "title": "Voting UI (toggle, weighted score, sort), moderation dashboard (flag queue, resolve/dismiss, pin/lock/hide/move/merge actions).", "status": "pending", "priority": "medium"},
+          {"id": "phase14.admin", "title": "Admin views: webhook CRUD + delivery log + replay, billing dashboard (tier, status, invoices), audit log viewer with diff, membership management.", "status": "pending", "priority": "medium"},
+          {"id": "phase14.tests", "title": "Phase 14 tests: component tests, Playwright E2E community flow (feature request → vote → flag → moderate). Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "phase15",
+        "title": "Phase 15: Real-time & Notifications UI",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "WebSocket client with auto-connect, real-time message updates, typing indicators, notification bell with unread count, feed dropdown, preferences page."
+        },
+        "subItems": [
+          {"id": "phase15.realtime", "title": "WS client (connect on auth, subscribe to channels), real-time messages in thread view, typing indicators, notification bell + unread badge, feed dropdown, preferences page, digest frequency.", "status": "pending", "priority": "medium"},
+          {"id": "phase15.tests", "title": "Phase 15 tests: notification components, Playwright E2E (post message → verify real-time in another session), preferences save/load. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "phase16",
+        "title": "Phase 16: Deployment & Final Integration",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Dockerfile (multi-stage), Docker Compose finalized, Fly.io config (persistent volume, health checks), Vercel config, CI/CD finalization, end-to-end smoke tests against all MVP acceptance criteria."
+        },
+        "subItems": [
+          {"id": "phase16.deploy", "title": "Dockerfile (multi-stage Go build), Docker Compose (full stack), fly.toml (persistent volume, health checks, scaling), Vercel config, env var documentation.", "status": "pending", "priority": "high"},
+          {"id": "phase16.cicd", "title": "GitHub Actions: PR → Go tests+lint+coverage + Next.js tests+lint+typecheck. Merge → deploy to Fly.io + Vercel. Coverage gates ≥85%. Rollback on failure.", "status": "pending", "priority": "high"},
+          {"id": "phase16.smoke", "title": "Playwright E2E smoke suite: all MVP acceptance criteria (org→thread→message, RBAC, sales flow, provisioning, billing, community). Run against local Docker + production. API/UI < 2s.", "status": "pending", "priority": "high"}
+        ]
+      }
+    ],
+    "edges": [
+      {"from": "phase1", "to": "phase2", "type": "blocks"},
+      {"from": "phase2", "to": "phase3", "type": "blocks"},
+      {"from": "phase3", "to": "phase4", "type": "blocks"},
+      {"from": "phase4", "to": "phase5", "type": "blocks"},
+      {"from": "phase4", "to": "phase6", "type": "blocks"},
+      {"from": "phase4", "to": "phase8", "type": "blocks"},
+      {"from": "phase4", "to": "phase10", "type": "blocks"},
+      {"from": "phase5", "to": "phase7", "type": "blocks"},
+      {"from": "phase6", "to": "phase7", "type": "blocks"},
+      {"from": "phase5", "to": "phase9", "type": "blocks"},
+      {"from": "phase5", "to": "phase11", "type": "blocks"},
+      {"from": "phase6", "to": "phase11", "type": "blocks"},
+      {"from": "phase7", "to": "phase11", "type": "blocks"},
+      {"from": "phase8", "to": "phase11", "type": "blocks"},
+      {"from": "phase9", "to": "phase11", "type": "blocks"},
+      {"from": "phase10", "to": "phase11", "type": "blocks"},
+      {"from": "phase11", "to": "phase12", "type": "blocks"},
+      {"from": "phase12", "to": "phase13", "type": "blocks"},
+      {"from": "phase12", "to": "phase14", "type": "blocks"},
+      {"from": "phase12", "to": "phase15", "type": "blocks"},
+      {"from": "phase13", "to": "phase16", "type": "blocks"},
+      {"from": "phase14", "to": "phase16", "type": "blocks"},
+      {"from": "phase15", "to": "phase16", "type": "blocks"},
+      {"from": "phase5", "to": "phase6", "type": "informs"},
+      {"from": "phase7", "to": "phase8", "type": "informs"},
+      {"from": "phase5", "to": "phase8", "type": "informs"}
+    ],
+    "created": "2026-03-11T01:00:00Z",
+    "updated": "2026-03-11T01:28:00Z"
+  }
+}
