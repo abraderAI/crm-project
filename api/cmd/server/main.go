@@ -46,6 +46,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := database.Migrate(db); err != nil {
+		logger.Error("failed to run migrations", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
 	router := server.NewRouter(server.Config{
 		DB:          db,
 		Logger:      logger,
