@@ -12,8 +12,8 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/auth"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/config"
-	"github.com/abraderAI/crm-project/api/internal/gdpr"
 	"github.com/abraderAI/crm-project/api/internal/event"
+	"github.com/abraderAI/crm-project/api/internal/gdpr"
 	"github.com/abraderAI/crm-project/api/internal/health"
 	"github.com/abraderAI/crm-project/api/internal/membership"
 	"github.com/abraderAI/crm-project/api/internal/message"
@@ -24,8 +24,8 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/space"
 	"github.com/abraderAI/crm-project/api/internal/telemetry"
 	"github.com/abraderAI/crm-project/api/internal/thread"
-	"github.com/abraderAI/crm-project/api/internal/voice"
 	"github.com/abraderAI/crm-project/api/internal/upload"
+	"github.com/abraderAI/crm-project/api/internal/voice"
 	"github.com/abraderAI/crm-project/api/internal/webhook"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
@@ -90,7 +90,6 @@ func NewRouter(cfg Config) http.Handler {
 	memberRepo := membership.NewRepository(cfg.DB)
 	memberHandler := membership.NewHandler(memberRepo)
 
-<<<<<<< HEAD
 	// Voice provider (stub).
 	voiceProvider := voice.NewStubProvider(cfg.DB)
 	voiceHandler := voice.NewHandler(voiceProvider)
