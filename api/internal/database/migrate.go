@@ -30,6 +30,7 @@ func allModels() []any {
 		&models.Vote{},
 		&models.Upload{},
 		&models.Flag{},
+		&models.CallLog{},
 	}
 }
 
