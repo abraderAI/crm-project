@@ -43,27 +43,22 @@ jobs:
 
             Implement Phase ${{ inputs.phase }} of the DEFT Evolution CRM project (abraderAI/crm-project).
 
-            CONTEXT:
-            - Read SPECIFICATION.md for full project details and Phase ${{ inputs.phase }} requirements
-            - Read deft/main.md, deft/core/project.md, and deft/core/user.md for framework standards
-            - Read deft/languages/go.md for Go standards (phases 1-10)
-            - Read deft/languages/typescript.md for TypeScript/Next.js standards (phases 11-16)
-            - Read deft/tools/taskfile.md for task runner usage
-            - Read deft/scm/git.md and deft/scm/github.md for git/PR conventions
+            START BY reading AGENTS.md — it contains all required framework reading and coding standards.
+            Then read SPECIFICATION.md and implement everything listed under Phase ${{ inputs.phase }}.
 
             REQUIREMENTS:
+            - Follow every rule in AGENTS.md and the deft files it references
             - Implement ALL tasks listed under Phase ${{ inputs.phase }} in SPECIFICATION.md
-            - Follow TDD: write tests first, watch fail, implement, refactor
+            - TDD: write tests first, watch fail, implement, refactor
             - ≥85% test coverage (lines, functions, branches, statements)
-            - Backend phases (1-10): include live API tests as described in SPECIFICATION.md Testing Strategy
-            - Run `task check` and ensure ALL checks pass before creating the PR
-            - Use conventional commits format
+            - Backend phases (1-10): include live API tests per SPECIFICATION.md Testing Strategy section
+            - Run `task check` — it MUST fully pass before creating the PR
 
             DELIVERABLE:
             - Branch: phase/${{ inputs.phase }}
             - PR title: "feat(phase-${{ inputs.phase }}): <phase name from SPECIFICATION.md>"
             - PR label: phase:${{ inputs.phase }}
-            - PR description: list every task implemented with test results summary
+            - PR description: list every subphase task implemented with test results summary
           warp_api_key: ${{ secrets.WARP_API_KEY }}
           profile: ${{ vars.WARP_AGENT_PROFILE || '' }}
 
