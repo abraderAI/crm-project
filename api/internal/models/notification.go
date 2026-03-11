@@ -18,7 +18,7 @@ type NotificationPreference struct {
 	UserID    string `gorm:"type:text;not null;uniqueIndex:idx_notif_pref" json:"user_id"`
 	EventType string `gorm:"type:text;not null;uniqueIndex:idx_notif_pref" json:"event_type"`
 	Channel   string `gorm:"type:text;not null;uniqueIndex:idx_notif_pref" json:"channel"`
-	Enabled   bool   `gorm:"default:true" json:"enabled"`
+	Enabled   bool   `gorm:"not null" json:"enabled"`
 }
 
 // DigestSchedule stores digest email scheduling preferences per user.
@@ -26,5 +26,5 @@ type DigestSchedule struct {
 	BaseModel
 	UserID    string `gorm:"type:text;not null;uniqueIndex" json:"user_id"`
 	Frequency string `gorm:"type:text;not null;default:'daily'" json:"frequency"`
-	Enabled   bool   `gorm:"default:true" json:"enabled"`
+	Enabled   bool   `gorm:"not null" json:"enabled"`
 }
