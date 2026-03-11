@@ -13,20 +13,25 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/billing"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/config"
+	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/event"
 	"github.com/abraderAI/crm-project/api/internal/gdpr"
 	"github.com/abraderAI/crm-project/api/internal/health"
 	"github.com/abraderAI/crm-project/api/internal/membership"
 	"github.com/abraderAI/crm-project/api/internal/message"
 	"github.com/abraderAI/crm-project/api/internal/middleware"
+	"github.com/abraderAI/crm-project/api/internal/moderation"
+	"github.com/abraderAI/crm-project/api/internal/notification"
 	"github.com/abraderAI/crm-project/api/internal/org"
 	"github.com/abraderAI/crm-project/api/internal/revision"
 	"github.com/abraderAI/crm-project/api/internal/search"
 	"github.com/abraderAI/crm-project/api/internal/space"
 	"github.com/abraderAI/crm-project/api/internal/telemetry"
 	"github.com/abraderAI/crm-project/api/internal/thread"
+	ws "github.com/abraderAI/crm-project/api/internal/websocket"
 	"github.com/abraderAI/crm-project/api/internal/upload"
 	"github.com/abraderAI/crm-project/api/internal/voice"
+	"github.com/abraderAI/crm-project/api/internal/vote"
 	"github.com/abraderAI/crm-project/api/internal/webhook"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
@@ -39,6 +44,8 @@ type Config struct {
 	RBACPolicy    *config.RBACPolicy
 	IssuerURL     string // Clerk issuer URL for JWT validation.
 	WebhookSecret string // HMAC secret for billing webhook verification.
+	EventBus      *eventbus.Bus
+	WSHub         *ws.Hub
 	UploadDir     string // Directory for file uploads.
 	MaxUpload     int64  // Maximum upload size in bytes.
 }
@@ -65,6 +72,16 @@ func NewRouter(cfg Config) http.Handler {
 	apiKeyService := auth.NewAPIKeyService(cfg.DB)
 	apiKeyHandler := auth.NewAPIKeyHandler(apiKeyService)
 
+	// Initialize WebSocket hub (use provided or create new).
+	wsHub := cfg.WSHub
+	if wsHub == nil {
+		wsHub = ws.NewHub(cfg.Logger)
+	}
+	wsHandler := ws.NewHandler(wsHub, jwtValidator, cfg.Logger, cfg.CORSOrigins)
+
+	// Initialize notification system.
+	notifRepo := notification.NewRepository(cfg.DB)
+	notifHandler := notification.NewHandler(notifRepo)
 	// Initialize event bus.
 	eventBus := event.NewBus()
 
@@ -96,6 +113,14 @@ func NewRouter(cfg Config) http.Handler {
 	billingProvider := billing.NewFlexPointProvider(cfg.WebhookSecret)
 	billingService := billing.NewService(billingProvider, cfg.DB)
 	billingHandler := billing.NewHandler(billingService, cfg.WebhookSecret)
+
+	voteRepo := vote.NewRepository(cfg.DB)
+	voteService := vote.NewService(voteRepo, nil)
+	voteHandler := vote.NewHandler(voteService)
+
+	modRepo := moderation.NewRepository(cfg.DB)
+	modService := moderation.NewService(modRepo)
+	modHandler := moderation.NewHandler(modService)
 
 	// Voice provider (stub).
 	voiceProvider := voice.NewStubProvider(cfg.DB)
@@ -145,6 +170,9 @@ func NewRouter(cfg Config) http.Handler {
 
 		// Public billing webhook endpoint (HMAC-verified, no JWT).
 		v1.Post("/webhooks/billing", billingHandler.HandleWebhook)
+
+		// WebSocket endpoint (auth via query param).
+		v1.Get("/ws", wsHandler.Upgrade)
 
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {
@@ -220,6 +248,17 @@ func NewRouter(cfg Config) http.Handler {
 				bl.Post("/invoices", billingHandler.CreateInvoice)
 			})
 
+			// Vote weight table.
+			authed.Get("/vote/weights", voteHandler.GetWeightTable)
+
+			// Moderation flag routes.
+			authed.Route("/orgs/{org}/flags", func(fl chi.Router) {
+				fl.Post("/", modHandler.CreateFlag)
+				fl.Get("/", modHandler.ListFlags)
+				fl.Post("/{flag}/resolve", modHandler.ResolveFlag)
+				fl.Post("/{flag}/dismiss", modHandler.DismissFlag)
+			})
+
 			// Space routes.
 			authed.Route("/orgs/{org}/spaces", func(sp chi.Router) {
 				sp.Post("/", spaceHandler.Create)
@@ -263,6 +302,11 @@ func NewRouter(cfg Config) http.Handler {
 						th.Post("/{thread}/unpin", threadHandler.Unpin)
 						th.Post("/{thread}/lock", threadHandler.Lock)
 						th.Post("/{thread}/unlock", threadHandler.Unlock)
+						th.Post("/{thread}/vote", voteHandler.Toggle)
+						th.Post("/{thread}/move", modHandler.MoveThread)
+						th.Post("/{thread}/merge", modHandler.MergeThread)
+						th.Post("/{thread}/hide", modHandler.HideThread)
+						th.Post("/{thread}/unhide", modHandler.UnhideThread)
 
 						// Message routes.
 						th.Route("/{thread}/messages", func(msg chi.Router) {
@@ -274,6 +318,15 @@ func NewRouter(cfg Config) http.Handler {
 						})
 					})
 				})
+			})
+
+			// Notification routes.
+			authed.Route("/notifications", func(n chi.Router) {
+				n.Get("/", notifHandler.List)
+				n.Patch("/{id}/read", notifHandler.MarkRead)
+				n.Post("/mark-all-read", notifHandler.MarkAllRead)
+				n.Get("/preferences", notifHandler.GetPreferences)
+				n.Put("/preferences", notifHandler.UpdatePreferences)
 			})
 		})
 	})
