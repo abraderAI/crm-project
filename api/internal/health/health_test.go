@@ -60,7 +60,7 @@ func TestReadyz_DBClosed(t *testing.T) {
 	db := testDB(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	sqlDB.Close()
+	_ = sqlDB.Close()
 
 	h := NewHandler(db)
 
