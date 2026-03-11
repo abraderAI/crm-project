@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/abraderAI/crm-project/api/internal/auth"
+	"github.com/abraderAI/crm-project/api/internal/billing"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/health"
@@ -23,11 +24,12 @@ import (
 
 // Config holds server dependencies.
 type Config struct {
-	DB          *gorm.DB
-	Logger      *slog.Logger
-	CORSOrigins []string
-	RBACPolicy  *config.RBACPolicy
-	IssuerURL   string // Clerk issuer URL for JWT validation.
+	DB            *gorm.DB
+	Logger        *slog.Logger
+	CORSOrigins   []string
+	RBACPolicy    *config.RBACPolicy
+	IssuerURL     string // Clerk issuer URL for JWT validation.
+	WebhookSecret string // HMAC secret for billing webhook verification.
 }
 
 // NewRouter creates and configures the Chi router with all middleware and routes.
@@ -75,6 +77,11 @@ func NewRouter(cfg Config) http.Handler {
 	memberRepo := membership.NewRepository(cfg.DB)
 	memberHandler := membership.NewHandler(memberRepo)
 
+	// Initialize billing service.
+	billingProvider := billing.NewFlexPointProvider(cfg.WebhookSecret)
+	billingService := billing.NewService(billingProvider, cfg.DB)
+	billingHandler := billing.NewHandler(billingService, cfg.WebhookSecret)
+
 	// API v1 subrouter.
 	r.Route("/v1", func(v1 chi.Router) {
 		// Public v1 root (no auth).
@@ -83,6 +90,9 @@ func NewRouter(cfg Config) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"version":"v1","status":"ok"}`))
 		})
+
+		// Public billing webhook endpoint (HMAC-verified, no JWT).
+		v1.Post("/webhooks/billing", billingHandler.HandleWebhook)
 
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {
@@ -108,6 +118,13 @@ func NewRouter(cfg Config) http.Handler {
 				m.Get("/", memberHandler.ListOrgMembers)
 				m.Patch("/{userID}", memberHandler.UpdateOrgMember)
 				m.Delete("/{userID}", memberHandler.RemoveOrgMember)
+			})
+
+			// Billing routes.
+			authed.Route("/orgs/{org}/billing", func(bl chi.Router) {
+				bl.Get("/", billingHandler.GetBillingStatus)
+				bl.Post("/customers", billingHandler.CreateCustomer)
+				bl.Post("/invoices", billingHandler.CreateInvoice)
 			})
 
 			// Space routes.
