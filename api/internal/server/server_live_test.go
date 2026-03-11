@@ -19,6 +19,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/abraderAI/crm-project/api/internal/database"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
 
@@ -39,6 +40,9 @@ func liveServer(t *testing.T) (string, func()) {
 	require.NoError(t, err)
 	_, err = sqlDB.Exec("PRAGMA foreign_keys = ON")
 	require.NoError(t, err)
+
+	// Run migrations.
+	require.NoError(t, database.Migrate(db))
 
 	testLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
@@ -265,4 +269,59 @@ func TestLive_Healthz_ResponseBody(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	assert.Contains(t, string(body), `"status":"ok"`)
+}
+
+// --- Phase 2 Live API Tests ---
+
+// TestLive_Phase2_MigrationsRan verifies that after server startup with migrations,
+// the health check returns 200 and the database is healthy.
+func TestLive_Phase2_MigrationsRan(t *testing.T) {
+	baseURL, cleanup := liveServer(t)
+	defer cleanup()
+
+	// Readyz returns 200 with healthy database.
+	resp, err := http.Get(baseURL + "/readyz")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var body map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	assert.Equal(t, "ok", body["status"])
+	checks := body["checks"].(map[string]interface{})
+	assert.Equal(t, "ok", checks["database"])
+}
+
+// TestLive_Phase2_HealthAfterMigrations verifies health endpoint still works
+// after full model migrations.
+func TestLive_Phase2_HealthAfterMigrations(t *testing.T) {
+	baseURL, cleanup := liveServer(t)
+	defer cleanup()
+
+	resp, err := http.Get(baseURL + "/healthz")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	assert.NotEmpty(t, resp.Header.Get("X-Request-ID"))
+}
+
+// TestLive_Phase2_RFC7807StillWorks verifies error handling still returns RFC 7807
+// after Phase 2 migrations.
+func TestLive_Phase2_RFC7807StillWorks(t *testing.T) {
+	baseURL, cleanup := liveServer(t)
+	defer cleanup()
+
+	resp, err := http.Get(baseURL + "/v1/nonexistent-phase2-path")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
+
+	var problem apierrors.ProblemDetail
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&problem))
+	assert.Equal(t, 404, problem.Status)
 }
