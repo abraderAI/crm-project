@@ -16,6 +16,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  actions: write
 
 jobs:
   # ── Manual dispatch: run a specific phase ──────────────────────────────────
@@ -23,7 +24,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -73,9 +74,9 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Determine next phases to trigger
+      - name: Determine next phases
         id: next
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
