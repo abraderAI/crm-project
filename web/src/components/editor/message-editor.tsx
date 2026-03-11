@@ -1,113 +1,134 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import TiptapImage from "@tiptap/extension-image";
+import { common, createLowlight } from "lowlight";
 import { EditorToolbar, buildDefaultActions } from "./editor-toolbar";
 
+const lowlight = createLowlight(common);
+
 export interface MessageEditorProps {
-  /** Initial content (markdown string). */
+  /** Initial content (HTML or markdown string). */
   initialContent?: string;
-  /** Called when editor content changes. */
+  /** Called when the user submits the message. */
+  onSubmit: (content: string) => void;
+  /** Called when content changes. */
   onChange?: (content: string) => void;
-  /** Called on submit. */
-  onSubmit?: (content: string) => void;
   /** Placeholder text. */
   placeholder?: string;
   /** Whether the editor is disabled. */
   disabled?: boolean;
+  /** Whether to show the submit button. */
+  showSubmit?: boolean;
   /** Submit button label. */
   submitLabel?: string;
-  /** Called to trigger image upload. */
-  onImageUpload?: () => void;
 }
 
-/**
- * Message editor with rich text (Tiptap) and raw markdown toggle.
- *
- * In jsdom/test environments, Tiptap cannot mount, so the editor degrades
- * to a markdown textarea. The markdown toggle switches between modes.
- */
+/** Tiptap-based message editor with GFM, code highlighting, image insert, and markdown toggle. */
 export function MessageEditor({
   initialContent = "",
-  onChange,
   onSubmit,
+  onChange,
   placeholder = "Write a message...",
   disabled = false,
+  showSubmit = true,
   submitLabel = "Send",
-  onImageUpload,
 }: MessageEditorProps): React.ReactNode {
-  const [content, setContent] = useState(initialContent);
-  const [markdownMode, setMarkdownMode] = useState(false);
+  const [isMarkdownMode, setIsMarkdownMode] = useState(false);
+  const [markdownContent, setMarkdownContent] = useState(initialContent);
 
-  const handleChange = useCallback(
-    (value: string) => {
-      setContent(value);
-      onChange?.(value);
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ codeBlock: false }),
+      CodeBlockLowlight.configure({ lowlight }),
+      TiptapImage.configure({ inline: false, allowBase64: true }),
+    ],
+    content: initialContent,
+    editable: !disabled && !isMarkdownMode,
+    onUpdate: ({ editor: e }) => {
+      const html = e.getHTML();
+      onChange?.(html);
     },
-    [onChange],
-  );
+    immediatelyRender: false,
+  });
 
   const handleSubmit = (): void => {
-    if (content.trim()) {
-      onSubmit?.(content.trim());
+    if (isMarkdownMode) {
+      onSubmit(markdownContent);
+    } else if (editor) {
+      onSubmit(editor.getHTML());
     }
   };
 
-  const handleAction = useCallback(
-    (actionId: string) => {
-      if (markdownMode) return;
-      // In markdown-only mode, insert markdown syntax inline.
-      const insertions: Record<string, string> = {
-        bold: "**bold**",
-        italic: "*italic*",
-        code: "`code`",
-        heading: "## ",
-        bulletList: "- ",
-        orderedList: "1. ",
-        codeBlock: "```\n\n```",
-      };
-      const insertion = insertions[actionId];
-      if (insertion) {
-        handleChange(content + insertion);
-      }
-    },
-    [content, handleChange, markdownMode],
-  );
+  const toggleMarkdown = (): void => {
+    if (isMarkdownMode && editor) {
+      // Switching back to rich — load markdown as HTML (simplified).
+      editor.commands.setContent(markdownContent);
+    } else if (editor) {
+      // Switching to markdown — save current HTML.
+      setMarkdownContent(editor.getHTML());
+    }
+    setIsMarkdownMode(!isMarkdownMode);
+  };
 
-  const actions = buildDefaultActions({});
+  const handleInsertImage = (): void => {
+    if (!editor) return;
+    const url = window.prompt("Image URL:");
+    if (url) {
+      editor.chain().focus().setImage({ src: url }).run();
+    }
+  };
+
+  const actions = editor ? buildDefaultActions(editor) : [];
 
   return (
-    <div className="rounded-lg border border-border bg-background" data-testid="message-editor">
+    <div
+      data-testid="message-editor"
+      className="overflow-hidden rounded-lg border border-border bg-background"
+    >
+      {/* Toolbar */}
       <EditorToolbar
         actions={actions}
-        onAction={handleAction}
-        markdownMode={markdownMode}
-        onToggleMarkdown={() => setMarkdownMode(!markdownMode)}
-        onImageUpload={onImageUpload}
+        isMarkdownMode={isMarkdownMode}
+        onToggleMarkdown={toggleMarkdown}
+        onInsertImage={handleInsertImage}
       />
 
       {/* Editor area */}
-      <textarea
-        value={content}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        rows={6}
-        data-testid="message-editor-textarea"
-        className="w-full resize-y border-none bg-transparent p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-      />
+      {isMarkdownMode ? (
+        <textarea
+          value={markdownContent}
+          onChange={(e) => {
+            setMarkdownContent(e.target.value);
+            onChange?.(e.target.value);
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          data-testid="markdown-textarea"
+          className="w-full min-h-[120px] resize-y bg-background p-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+        />
+      ) : (
+        <div className="prose prose-sm max-w-none p-3" data-testid="rich-editor">
+          <EditorContent editor={editor} />
+        </div>
+      )}
 
       {/* Submit */}
-      <div className="flex items-center justify-end border-t border-border p-2">
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={disabled || !content.trim()}
-          data-testid="message-editor-submit"
-          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          {submitLabel}
-        </button>
-      </div>
+      {showSubmit && (
+        <div className="flex justify-end border-t border-border px-3 py-2">
+          <button
+            onClick={handleSubmit}
+            disabled={disabled}
+            data-testid="editor-submit-btn"
+            className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {submitLabel}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

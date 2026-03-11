@@ -1,132 +1,190 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { FileUpload, MAX_FILE_SIZE, validateFile } from "./file-upload";
+import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { FileUpload, validateFile, ALLOWED_TYPES, MAX_FILE_SIZE } from "./file-upload";
 
-function createFile(name: string, size: number, type: string): File {
+// Mock URL.createObjectURL/revokeObjectURL.
+beforeEach(() => {
+  vi.stubGlobal("URL", {
+    ...globalThis.URL,
+    createObjectURL: vi.fn().mockReturnValue("blob:mock-url"),
+    revokeObjectURL: vi.fn(),
+  });
+});
+
+function createMockFile(name: string, size: number, type: string): File {
   const buffer = new ArrayBuffer(size);
   return new File([buffer], name, { type });
 }
 
 describe("validateFile", () => {
   it("returns null for valid file", () => {
-    const file = createFile("photo.jpg", 1024, "image/jpeg");
-    expect(validateFile(file)).toBeNull();
+    const file = createMockFile("test.txt", 1024, "text/plain");
+    expect(validateFile(file, MAX_FILE_SIZE, ALLOWED_TYPES)).toBeNull();
   });
 
   it("returns error for oversized file", () => {
-    const file = createFile("huge.jpg", MAX_FILE_SIZE + 1, "image/jpeg");
-    const err = validateFile(file);
-    expect(err).not.toBeNull();
-    expect(err?.reason).toContain("exceeds maximum size");
+    const file = createMockFile("big.txt", MAX_FILE_SIZE + 1, "text/plain");
+    expect(validateFile(file, MAX_FILE_SIZE, ALLOWED_TYPES)).toContain("exceeds");
   });
 
   it("returns error for disallowed type", () => {
-    const file = createFile("script.exe", 100, "application/x-msdownload");
-    const err = validateFile(file);
-    expect(err).not.toBeNull();
-    expect(err?.reason).toContain("not allowed");
+    const file = createMockFile("bad.exe", 1024, "application/x-executable");
+    expect(validateFile(file, MAX_FILE_SIZE, ALLOWED_TYPES)).toContain("not allowed");
   });
 
-  it("returns null when allowed types is empty (all allowed)", () => {
-    const file = createFile("anything.xyz", 100, "application/octet-stream");
-    expect(validateFile(file, MAX_FILE_SIZE, [])).toBeNull();
+  it("allows files with empty type", () => {
+    const file = createMockFile("unknown", 1024, "");
+    expect(validateFile(file, MAX_FILE_SIZE, ALLOWED_TYPES)).toBeNull();
   });
 
-  it("handles file with no type", () => {
-    const file = createFile("noext", 100, "");
-    const err = validateFile(file);
-    expect(err).not.toBeNull();
-    expect(err?.reason).toContain("unknown");
+  it("allows image files", () => {
+    const file = createMockFile("photo.png", 1024, "image/png");
+    expect(validateFile(file, MAX_FILE_SIZE, ALLOWED_TYPES)).toBeNull();
   });
 
-  it("uses custom max size", () => {
-    const file = createFile("small.txt", 200, "text/plain");
-    expect(validateFile(file, 100)).not.toBeNull();
-    expect(validateFile(file, 300)).toBeNull();
+  it("allows PDF files", () => {
+    const file = createMockFile("doc.pdf", 1024, "application/pdf");
+    expect(validateFile(file, MAX_FILE_SIZE, ALLOWED_TYPES)).toBeNull();
   });
 });
 
 describe("FileUpload", () => {
-  it("renders the upload zone", () => {
-    render(<FileUpload onFiles={vi.fn()} />);
+  it("renders upload container", () => {
+    render(<FileUpload onUpload={vi.fn()} />);
     expect(screen.getByTestId("file-upload")).toBeInTheDocument();
-    expect(screen.getByText("Drag & drop files, or click to browse")).toBeInTheDocument();
   });
 
-  it("shows max size hint", () => {
-    render(<FileUpload onFiles={vi.fn()} />);
-    expect(screen.getByText("Max 100MB per file")).toBeInTheDocument();
+  it("renders drop zone", () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+    expect(screen.getByTestId("drop-zone")).toBeInTheDocument();
   });
 
-  it("opens file dialog on click", () => {
-    render(<FileUpload onFiles={vi.fn()} />);
-    const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
-    const clickSpy = vi.spyOn(input, "click");
-    fireEvent.click(screen.getByTestId("file-upload"));
-    expect(clickSpy).toHaveBeenCalled();
+  it("renders instructions text", () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+    expect(screen.getByText(/Drag and drop/)).toBeInTheDocument();
   });
 
-  it("calls onFiles with valid files from input", () => {
-    const onFiles = vi.fn();
-    render(<FileUpload onFiles={onFiles} />);
-
-    const input = screen.getByTestId("file-upload-input");
-    const file = createFile("photo.jpg", 1024, "image/jpeg");
-    fireEvent.change(input, { target: { files: [file] } });
-    expect(onFiles).toHaveBeenCalledWith([file]);
+  it("shows max file size", () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+    expect(screen.getByText(/Max 100MB/)).toBeInTheDocument();
   });
 
-  it("calls onError for invalid files from input", () => {
-    const onFiles = vi.fn();
-    const onError = vi.fn();
-    render(<FileUpload onFiles={onFiles} onError={onError} />);
-
-    const input = screen.getByTestId("file-upload-input");
-    const file = createFile("script.exe", 100, "application/x-msdownload");
-    fireEvent.change(input, { target: { files: [file] } });
-    expect(onFiles).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ reason: expect.stringContaining("not allowed") }),
-      ]),
-    );
+  it("shows custom max size", () => {
+    render(<FileUpload onUpload={vi.fn()} maxSize={10 * 1024 * 1024} />);
+    expect(screen.getByText(/Max 10MB/)).toBeInTheDocument();
   });
 
-  it("handles drag over event", () => {
-    render(<FileUpload onFiles={vi.fn()} />);
-    const zone = screen.getByTestId("file-upload");
-    fireEvent.dragOver(zone, { dataTransfer: { files: [] } });
-    expect(screen.getByText("Drop files here")).toBeInTheDocument();
+  it("calls onUpload when file input changes", async () => {
+    const onUpload = vi.fn();
+    render(<FileUpload onUpload={onUpload} />);
+
+    const file = createMockFile("test.txt", 1024, "text/plain");
+    const input = screen.getByTestId("file-input");
+    await userEvent.upload(input, file);
+
+    expect(onUpload).toHaveBeenCalledWith([file]);
   });
 
-  it("handles drag leave event", () => {
-    render(<FileUpload onFiles={vi.fn()} />);
-    const zone = screen.getByTestId("file-upload");
-    fireEvent.dragOver(zone, { dataTransfer: { files: [] } });
-    fireEvent.dragLeave(zone);
-    expect(screen.getByText("Drag & drop files, or click to browse")).toBeInTheDocument();
+  it("shows staged file after upload", async () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+
+    const file = createMockFile("test.txt", 1024, "text/plain");
+    const input = screen.getByTestId("file-input");
+    await userEvent.upload(input, file);
+
+    expect(screen.getByTestId("staged-files")).toBeInTheDocument();
+    expect(screen.getByTestId("staged-file-0")).toBeInTheDocument();
+    expect(screen.getByText("test.txt")).toBeInTheDocument();
   });
 
-  it("handles drop event with valid files", () => {
-    const onFiles = vi.fn();
-    render(<FileUpload onFiles={onFiles} />);
-    const zone = screen.getByTestId("file-upload");
-    const file = createFile("photo.png", 1024, "image/png");
-    fireEvent.drop(zone, { dataTransfer: { files: [file] } });
-    expect(onFiles).toHaveBeenCalledWith([file]);
+  it("shows file size", async () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+
+    const file = createMockFile("test.txt", 2048, "text/plain");
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+
+    expect(screen.getByText("2.0 KB")).toBeInTheDocument();
+  });
+
+  it("shows error for invalid file", async () => {
+    render(<FileUpload onUpload={vi.fn()} maxSize={100} />);
+
+    const file = createMockFile("big.txt", 200, "text/plain");
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+
+    expect(screen.getByTestId("file-error-0")).toBeInTheDocument();
+  });
+
+  it("does not call onUpload for invalid files", async () => {
+    const onUpload = vi.fn();
+    render(<FileUpload onUpload={onUpload} maxSize={100} />);
+
+    const file = createMockFile("big.txt", 200, "text/plain");
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+
+    expect(onUpload).not.toHaveBeenCalled();
+  });
+
+  it("shows image preview for image files", async () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+
+    const file = createMockFile("photo.png", 1024, "image/png");
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+
+    expect(screen.getByTestId("file-preview-0")).toBeInTheDocument();
+  });
+
+  it("removes file on remove button click", async () => {
+    const user = userEvent.setup();
+    render(<FileUpload onUpload={vi.fn()} />);
+
+    const file = createMockFile("test.txt", 1024, "text/plain");
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+
+    expect(screen.getByTestId("staged-file-0")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("remove-file-0"));
+    expect(screen.queryByTestId("staged-file-0")).not.toBeInTheDocument();
+  });
+
+  it("handles drag and drop", () => {
+    const onUpload = vi.fn();
+    render(<FileUpload onUpload={onUpload} />);
+
+    const dropZone = screen.getByTestId("drop-zone");
+    const file = createMockFile("drop.txt", 1024, "text/plain");
+
+    fireEvent.dragOver(dropZone);
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [file] },
+    });
+
+    expect(onUpload).toHaveBeenCalledWith([file]);
+  });
+
+  it("handles drag leave", () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+    const dropZone = screen.getByTestId("drop-zone");
+
+    fireEvent.dragOver(dropZone);
+    fireEvent.dragLeave(dropZone);
+
+    // Should not crash.
+    expect(dropZone).toBeInTheDocument();
   });
 
   it("does not process files when disabled", () => {
-    const onFiles = vi.fn();
-    render(<FileUpload onFiles={onFiles} disabled={true} />);
-    const zone = screen.getByTestId("file-upload");
-    const file = createFile("photo.png", 1024, "image/png");
-    fireEvent.drop(zone, { dataTransfer: { files: [file] } });
-    expect(onFiles).not.toHaveBeenCalled();
-  });
+    const onUpload = vi.fn();
+    render(<FileUpload onUpload={onUpload} disabled={true} />);
 
-  it("disables file input when disabled", () => {
-    render(<FileUpload onFiles={vi.fn()} disabled={true} />);
-    expect(screen.getByTestId("file-upload-input")).toBeDisabled();
+    const dropZone = screen.getByTestId("drop-zone");
+    const file = createMockFile("test.txt", 1024, "text/plain");
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [file] },
+    });
+
+    expect(onUpload).not.toHaveBeenCalled();
   });
 });

@@ -131,6 +131,18 @@ export interface ProblemDetail {
   instance?: string;
 }
 
+/** File upload record. */
+export interface Upload extends BaseEntity {
+  org_id: string;
+  entity_type: string;
+  entity_id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  storage_path: string;
+  uploader_id: string;
+}
+
 /** Search result item. */
 export interface SearchResult {
   entity_type: string;
