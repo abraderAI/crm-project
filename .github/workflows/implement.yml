@@ -73,22 +73,25 @@ jobs:
             - Open a PR to main if you are able to, but do not worry if you cannot
           warp_api_key: ${{ secrets.WARP_API_KEY }}
 
-      - name: Open PR if agent did not
+      - name: Open PR if agent did not; ensure phase label exists
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="phase/${{ inputs.phase }}"
+          LABEL="phase:${{ inputs.phase }}"
           # Check if branch exists remotely
           if ! git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
-            echo "Branch $BRANCH not found — agent may not have pushed. Skipping PR creation."
+            echo "Branch $BRANCH not found — agent may not have pushed. Skipping."
             exit 0
           fi
           # Check if a PR already exists for this branch
-          EXISTING=$(gh pr list --repo abraderAI/crm-project \
-            --head "$BRANCH" --state open --json number --jq 'length')
-          if [ "$EXISTING" -gt 0 ]; then
-            echo "PR already exists for $BRANCH."
+          PR_NUMBER=$(gh pr list --repo abraderAI/crm-project \
+            --head "$BRANCH" --state open --json number,labels \
+            --jq '.[0] | .number // empty')
+          if [ -n "$PR_NUMBER" ]; then
+            echo "PR #$PR_NUMBER already exists for $BRANCH — ensuring label is set."
+            gh pr edit "$PR_NUMBER" --repo abraderAI/crm-project --add-label "$LABEL" 2>/dev/null || true
             exit 0
           fi
           echo "Creating PR for $BRANCH"
@@ -97,7 +100,7 @@ jobs:
             --head "$BRANCH" \
             --base main \
             --title "feat(phase-${{ inputs.phase }}): implementation" \
-            --label "phase:${{ inputs.phase }}" \
+            --label "$LABEL" \
             --body "Automated PR for Phase ${{ inputs.phase }}. See commit messages for details."
 
   # ── Auto-chain: when a phase PR is merged, trigger the next phase(s) ───────
