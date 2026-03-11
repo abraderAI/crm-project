@@ -151,3 +151,82 @@ export interface SearchResult {
   snippet: string;
   score: number;
 }
+
+/** Vote on a thread. */
+export interface Vote extends BaseEntity {
+  thread_id: string;
+  user_id: string;
+  weight: number;
+}
+
+/** Content flag for moderation. */
+export interface Flag extends BaseEntity {
+  thread_id: string;
+  reporter_id: string;
+  reason: string;
+  status: "pending" | "resolved" | "dismissed";
+  resolved_by?: string;
+  resolution_note?: string;
+}
+
+/** Webhook subscription. */
+export interface WebhookSubscription extends BaseEntity {
+  org_id: string;
+  scope_type: string;
+  scope_id: string;
+  url: string;
+  event_filter: string;
+  is_active: boolean;
+}
+
+/** Webhook delivery record. */
+export interface WebhookDelivery extends BaseEntity {
+  subscription_id: string;
+  event_type: string;
+  payload: string;
+  status_code: number;
+  attempts: number;
+  next_retry_at?: string;
+  completed_at?: string;
+}
+
+/** Audit log entry. */
+export interface AuditEntry extends BaseEntity {
+  user_id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  before_state?: string;
+  after_state?: string;
+  ip_address?: string;
+  request_id?: string;
+}
+
+/** Billing information for an org. */
+export interface BillingInfo {
+  org_id: string;
+  tier: string;
+  payment_status: string;
+  invoices: Invoice[];
+}
+
+/** Invoice record. */
+export interface Invoice {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  issued_at: string;
+  due_at: string;
+  paid_at?: string;
+}
+
+/** Sort option for community thread lists. */
+export type ThreadSortOption = "votes" | "newest" | "oldest";
+
+/** Board option for moving threads. */
+export interface BoardOption {
+  id: string;
+  name: string;
+  slug: string;
+}
