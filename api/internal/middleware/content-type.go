@@ -13,7 +13,7 @@ func ContentType(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requiresBody(r.Method) && r.ContentLength > 0 {
 			ct := r.Header.Get("Content-Type")
-			if !isJSON(ct) {
+			if !isJSON(ct) && !isMultipart(ct) {
 				apierrors.BadRequest(w, "Content-Type must be application/json")
 				return
 			}
@@ -35,4 +35,9 @@ func requiresBody(method string) bool {
 func isJSON(contentType string) bool {
 	ct := strings.TrimSpace(strings.Split(contentType, ";")[0])
 	return ct == "application/json"
+}
+
+func isMultipart(contentType string) bool {
+	ct := strings.TrimSpace(strings.Split(contentType, ";")[0])
+	return ct == "multipart/form-data"
 }

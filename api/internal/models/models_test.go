@@ -539,6 +539,72 @@ func TestFullHierarchy_CascadeDelete(t *testing.T) {
 	assert.ErrorIs(t, db.Unscoped().First(&models.Message{}, "id = ?", msg.ID).Error, gorm.ErrRecordNotFound)
 }
 
+// --- CallLog ---
+
+func TestCallDirection_IsValid(t *testing.T) {
+	assert.True(t, models.CallDirectionInbound.IsValid())
+	assert.True(t, models.CallDirectionOutbound.IsValid())
+	assert.False(t, models.CallDirection("unknown").IsValid())
+	assert.False(t, models.CallDirection("").IsValid())
+}
+
+func TestCallStatus_IsValid(t *testing.T) {
+	assert.True(t, models.CallStatusRinging.IsValid())
+	assert.True(t, models.CallStatusActive.IsValid())
+	assert.True(t, models.CallStatusCompleted.IsValid())
+	assert.True(t, models.CallStatusFailed.IsValid())
+	assert.True(t, models.CallStatusEscalated.IsValid())
+	assert.False(t, models.CallStatus("unknown").IsValid())
+	assert.False(t, models.CallStatus("").IsValid())
+}
+
+func TestCallLog_CRUD(t *testing.T) {
+	db := testDB(t)
+	org := &models.Org{Name: "O", Slug: "calllog-org", Metadata: "{}"}
+	require.NoError(t, db.Create(org).Error)
+
+	cl := &models.CallLog{
+		OrgID:      org.ID,
+		CallerID:   "user-1",
+		Direction:  models.CallDirectionInbound,
+		Duration:   120,
+		Status:     models.CallStatusCompleted,
+		Transcript: "Hello world",
+		Metadata:   `{"topic":"billing"}`,
+	}
+	require.NoError(t, db.Create(cl).Error)
+	assert.NotEmpty(t, cl.ID)
+
+	var found models.CallLog
+	require.NoError(t, db.First(&found, "id = ?", cl.ID).Error)
+	assert.Equal(t, org.ID, found.OrgID)
+	assert.Equal(t, "user-1", found.CallerID)
+	assert.Equal(t, models.CallDirectionInbound, found.Direction)
+	assert.Equal(t, 120, found.Duration)
+	assert.Equal(t, models.CallStatusCompleted, found.Status)
+	assert.Equal(t, "Hello world", found.Transcript)
+}
+
+func TestCallLog_OrgCascadeDelete(t *testing.T) {
+	db := testDB(t)
+	org := &models.Org{Name: "O", Slug: "calllog-cascade-org", Metadata: "{}"}
+	require.NoError(t, db.Create(org).Error)
+
+	cl := &models.CallLog{
+		OrgID:    org.ID,
+		CallerID: "user-1",
+		Metadata: "{}",
+	}
+	require.NoError(t, db.Create(cl).Error)
+
+	// Hard-delete org should cascade to call log.
+	require.NoError(t, db.Unscoped().Delete(org).Error)
+
+	var count int64
+	db.Model(&models.CallLog{}).Where("id = ?", cl.ID).Count(&count)
+	assert.Zero(t, count)
+}
+
 // --- Fuzzing ---
 
 func FuzzMetadataJSON(f *testing.F) {
