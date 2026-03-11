@@ -29,8 +29,11 @@ jobs:
           submodules: recursive
 
       - uses: actions/setup-go@v5
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           go-version: '1.22'
+          cache-dependency-path: 'api/go.sum'
 
       - name: Install task CLI
         run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
@@ -46,6 +49,7 @@ jobs:
           done
 
       - name: Run Oz agent for phase ${{ inputs.phase }}
+        id: oz_agent
         uses: warpdotdev/oz-agent-action@main
         with:
           prompt: |
@@ -61,13 +65,36 @@ jobs:
             - ≥85% test coverage (lines, functions, branches, statements)
             - Backend phases (1-10): include live API tests per SPECIFICATION.md Testing Strategy section
             - Run `task check` — it MUST fully pass before creating the PR
-
-            DELIVERABLE:
-            - Branch: phase/${{ inputs.phase }}
-            - PR title: "feat(phase-${{ inputs.phase }}): <phase name from SPECIFICATION.md>"
-            - PR label: phase:${{ inputs.phase }}
-            - PR description: list every subphase task implemented with test results summary
+            - Push your work to branch: phase/${{ inputs.phase }}
+            - Open a PR to main if you are able to, but do not worry if you cannot
           warp_api_key: ${{ secrets.WARP_API_KEY }}
+
+      - name: Open PR if agent did not
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="phase/${{ inputs.phase }}"
+          # Check if branch exists remotely
+          if ! git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
+            echo "Branch $BRANCH not found — agent may not have pushed. Skipping PR creation."
+            exit 0
+          fi
+          # Check if a PR already exists for this branch
+          EXISTING=$(gh pr list --repo abraderAI/crm-project \
+            --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "PR already exists for $BRANCH."
+            exit 0
+          fi
+          echo "Creating PR for $BRANCH"
+          gh pr create \
+            --repo abraderAI/crm-project \
+            --head "$BRANCH" \
+            --base main \
+            --title "feat(phase-${{ inputs.phase }}): implementation" \
+            --label "phase:${{ inputs.phase }}" \
+            --body "Automated PR for Phase ${{ inputs.phase }}. See commit messages for details."
 
   # ── Auto-chain: when a phase PR is merged, trigger the next phase(s) ───────
   auto-chain:
