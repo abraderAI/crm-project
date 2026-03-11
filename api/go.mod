@@ -1,8 +1,9 @@
 module github.com/abraderAI/crm-project/api
 
-go 1.22.12
+go 1.23
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0

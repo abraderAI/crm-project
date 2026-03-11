@@ -11,13 +11,16 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/auth"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/config"
+	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/health"
 	"github.com/abraderAI/crm-project/api/internal/membership"
 	"github.com/abraderAI/crm-project/api/internal/message"
 	"github.com/abraderAI/crm-project/api/internal/middleware"
+	"github.com/abraderAI/crm-project/api/internal/notification"
 	"github.com/abraderAI/crm-project/api/internal/org"
 	"github.com/abraderAI/crm-project/api/internal/space"
 	"github.com/abraderAI/crm-project/api/internal/thread"
+	ws "github.com/abraderAI/crm-project/api/internal/websocket"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
 
@@ -28,6 +31,8 @@ type Config struct {
 	CORSOrigins []string
 	RBACPolicy  *config.RBACPolicy
 	IssuerURL   string // Clerk issuer URL for JWT validation.
+	EventBus    *eventbus.Bus
+	WSHub       *ws.Hub
 }
 
 // NewRouter creates and configures the Chi router with all middleware and routes.
@@ -50,6 +55,17 @@ func NewRouter(cfg Config) http.Handler {
 	jwtValidator := auth.NewJWTValidator(cfg.IssuerURL)
 	apiKeyService := auth.NewAPIKeyService(cfg.DB)
 	apiKeyHandler := auth.NewAPIKeyHandler(apiKeyService)
+
+	// Initialize WebSocket hub (use provided or create new).
+	wsHub := cfg.WSHub
+	if wsHub == nil {
+		wsHub = ws.NewHub(cfg.Logger)
+	}
+	wsHandler := ws.NewHandler(wsHub, jwtValidator, cfg.Logger, cfg.CORSOrigins)
+
+	// Initialize notification system.
+	notifRepo := notification.NewRepository(cfg.DB)
+	notifHandler := notification.NewHandler(notifRepo)
 
 	// Initialize domain services.
 	orgRepo := org.NewRepository(cfg.DB)
@@ -83,6 +99,9 @@ func NewRouter(cfg Config) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"version":"v1","status":"ok"}`))
 		})
+
+		// WebSocket endpoint (auth via query param).
+		v1.Get("/ws", wsHandler.Upgrade)
 
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {
@@ -164,6 +183,15 @@ func NewRouter(cfg Config) http.Handler {
 						})
 					})
 				})
+			})
+
+			// Notification routes.
+			authed.Route("/notifications", func(n chi.Router) {
+				n.Get("/", notifHandler.List)
+				n.Patch("/{id}/read", notifHandler.MarkRead)
+				n.Post("/mark-all-read", notifHandler.MarkAllRead)
+				n.Get("/preferences", notifHandler.GetPreferences)
+				n.Put("/preferences", notifHandler.UpdatePreferences)
 			})
 		})
 	})
