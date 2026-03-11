@@ -15,9 +15,11 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/membership"
 	"github.com/abraderAI/crm-project/api/internal/message"
 	"github.com/abraderAI/crm-project/api/internal/middleware"
+	"github.com/abraderAI/crm-project/api/internal/moderation"
 	"github.com/abraderAI/crm-project/api/internal/org"
 	"github.com/abraderAI/crm-project/api/internal/space"
 	"github.com/abraderAI/crm-project/api/internal/thread"
+	"github.com/abraderAI/crm-project/api/internal/vote"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
 
@@ -75,6 +77,14 @@ func NewRouter(cfg Config) http.Handler {
 	memberRepo := membership.NewRepository(cfg.DB)
 	memberHandler := membership.NewHandler(memberRepo)
 
+	voteRepo := vote.NewRepository(cfg.DB)
+	voteService := vote.NewService(voteRepo, nil)
+	voteHandler := vote.NewHandler(voteService)
+
+	modRepo := moderation.NewRepository(cfg.DB)
+	modService := moderation.NewService(modRepo)
+	modHandler := moderation.NewHandler(modService)
+
 	// API v1 subrouter.
 	r.Route("/v1", func(v1 chi.Router) {
 		// Public v1 root (no auth).
@@ -108,6 +118,17 @@ func NewRouter(cfg Config) http.Handler {
 				m.Get("/", memberHandler.ListOrgMembers)
 				m.Patch("/{userID}", memberHandler.UpdateOrgMember)
 				m.Delete("/{userID}", memberHandler.RemoveOrgMember)
+			})
+
+			// Vote weight table.
+			authed.Get("/vote/weights", voteHandler.GetWeightTable)
+
+			// Moderation flag routes.
+			authed.Route("/orgs/{org}/flags", func(fl chi.Router) {
+				fl.Post("/", modHandler.CreateFlag)
+				fl.Get("/", modHandler.ListFlags)
+				fl.Post("/{flag}/resolve", modHandler.ResolveFlag)
+				fl.Post("/{flag}/dismiss", modHandler.DismissFlag)
 			})
 
 			// Space routes.
@@ -153,6 +174,11 @@ func NewRouter(cfg Config) http.Handler {
 						th.Post("/{thread}/unpin", threadHandler.Unpin)
 						th.Post("/{thread}/lock", threadHandler.Lock)
 						th.Post("/{thread}/unlock", threadHandler.Unlock)
+						th.Post("/{thread}/vote", voteHandler.Toggle)
+						th.Post("/{thread}/move", modHandler.MoveThread)
+						th.Post("/{thread}/merge", modHandler.MergeThread)
+						th.Post("/{thread}/hide", modHandler.HideThread)
+						th.Post("/{thread}/unhide", modHandler.UnhideThread)
 
 						// Message routes.
 						th.Route("/{thread}/messages", func(msg chi.Router) {

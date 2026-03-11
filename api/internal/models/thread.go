@@ -11,6 +11,7 @@ type Thread struct {
 	AuthorID  string `gorm:"type:text;not null;index" json:"author_id"`
 	IsPinned  bool   `gorm:"default:false" json:"is_pinned"`
 	IsLocked  bool   `gorm:"default:false" json:"is_locked"`
+	IsHidden  bool   `gorm:"default:false" json:"is_hidden"`
 	VoteScore int    `gorm:"default:0" json:"vote_score"`
 
 	// Generated columns extracted from Metadata JSON for indexing/querying.
