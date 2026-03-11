@@ -29,6 +29,7 @@ func allModels() []any {
 		&models.DigestSchedule{},
 		&models.Vote{},
 		&models.Upload{},
+		&models.CallLog{},
 	}
 }
 
