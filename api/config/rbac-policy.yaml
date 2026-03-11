@@ -1,0 +1,80 @@
+# RBAC Policy Configuration
+# Resolution strategy: explicit override with parent fallback
+# Check: board membership → space membership → org membership → no access
+
+resolution:
+  strategy: "explicit_override_with_parent_fallback"
+  # Lower-level membership completely replaces inherited role.
+  order:
+    - board
+    - space
+    - org
+
+roles:
+  hierarchy:
+    - viewer
+    - commenter
+    - contributor
+    - moderator
+    - admin
+    - owner
+
+  permissions:
+    viewer:
+      - read
+    commenter:
+      - read
+      - comment
+    contributor:
+      - read
+      - comment
+      - create
+      - update_own
+    moderator:
+      - read
+      - comment
+      - create
+      - update_own
+      - update_any
+      - delete_any
+      - pin
+      - lock
+      - move
+      - moderate
+    admin:
+      - read
+      - comment
+      - create
+      - update_own
+      - update_any
+      - delete_any
+      - pin
+      - lock
+      - move
+      - moderate
+      - manage_members
+      - manage_settings
+    owner:
+      - read
+      - comment
+      - create
+      - update_own
+      - update_any
+      - delete_any
+      - pin
+      - lock
+      - move
+      - moderate
+      - manage_members
+      - manage_settings
+      - delete_entity
+      - manage_billing
+      - transfer_ownership
+
+defaults:
+  # Default role assigned to new org members.
+  org_member_role: "viewer"
+  # Default role assigned to new space members.
+  space_member_role: "viewer"
+  # Default role assigned to new board members.
+  board_member_role: "viewer"
