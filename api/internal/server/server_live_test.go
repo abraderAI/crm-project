@@ -685,6 +685,361 @@ func TestLive_Phase3_HealthStillWorks(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 }
 
+// --- Phase 4 Live API Tests ---
+
+// doJSON is a helper for authenticated JSON requests.
+func doJSON(t *testing.T, method, url, body, token string) *http.Response {
+	t.Helper()
+	var bodyReader io.Reader
+	if body != "" {
+		bodyReader = strings.NewReader(body)
+	}
+	req, err := http.NewRequest(method, url, bodyReader)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+token)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	return resp
+}
+
+// decodeBody decodes a JSON response into a map.
+func decodeBody(t *testing.T, resp *http.Response) map[string]interface{} {
+	t.Helper()
+	var body map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	return body
+}
+
+// TestLive_Phase4_HierarchyLifecycle tests the full Org → Space → Board → Thread → Message lifecycle.
+func TestLive_Phase4_HierarchyLifecycle(t *testing.T) {
+	env := liveAuthServer(t)
+	defer env.Cleanup()
+
+	token := env.SignToken(auth.JWTClaims{
+		Subject:   "user_phase4",
+		Issuer:    env.IssuerURL,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+	})
+
+	// 1. Create Org.
+	resp := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs", `{"name":"Phase4 Org","metadata":"{\"billing_tier\":\"pro\"}"}`, token)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	orgBody := decodeBody(t, resp)
+	orgID := orgBody["id"].(string)
+	orgSlug := orgBody["slug"].(string)
+	assert.NotEmpty(t, orgID)
+	assert.Equal(t, "phase4-org", orgSlug)
+
+	// 2. Get Org by slug.
+	resp2 := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs/"+orgSlug, "", token)
+	defer resp2.Body.Close()
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+
+	// 3. List Orgs.
+	resp3 := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs", "", token)
+	defer resp3.Body.Close()
+	assert.Equal(t, http.StatusOK, resp3.StatusCode)
+	listBody := decodeBody(t, resp3)
+	data := listBody["data"].([]interface{})
+	assert.GreaterOrEqual(t, len(data), 1)
+
+	// 4. Update Org.
+	resp4 := doJSON(t, http.MethodPatch, env.BaseURL+"/v1/orgs/"+orgID, `{"description":"updated"}`, token)
+	defer resp4.Body.Close()
+	assert.Equal(t, http.StatusOK, resp4.StatusCode)
+
+	// 5. Create Space.
+	resp5 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces", `{"name":"Support Space","type":"support"}`, token)
+	defer resp5.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp5.StatusCode)
+	spaceBody := decodeBody(t, resp5)
+	spaceID := spaceBody["id"].(string)
+
+	// 6. Get Space by slug.
+	resp6 := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs/"+orgSlug+"/spaces/support-space", "", token)
+	defer resp6.Body.Close()
+	assert.Equal(t, http.StatusOK, resp6.StatusCode)
+
+	// 7. Create Board.
+	resp7 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards", `{"name":"General Board"}`, token)
+	defer resp7.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp7.StatusCode)
+	boardBody := decodeBody(t, resp7)
+	boardID := boardBody["id"].(string)
+
+	// 8. Lock Board.
+	resp8 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/lock", "", token)
+	defer resp8.Body.Close()
+	assert.Equal(t, http.StatusOK, resp8.StatusCode)
+	lockBody := decodeBody(t, resp8)
+	assert.Equal(t, true, lockBody["is_locked"])
+
+	// 9. Try creating thread on locked board → should fail 409.
+	resp9 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads", `{"title":"Blocked"}`, token)
+	defer resp9.Body.Close()
+	assert.Equal(t, http.StatusConflict, resp9.StatusCode)
+
+	// 10. Unlock Board.
+	resp10 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/unlock", "", token)
+	defer resp10.Body.Close()
+	assert.Equal(t, http.StatusOK, resp10.StatusCode)
+
+	// 11. Create Thread.
+	resp11 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads",
+		`{"title":"Bug Report","body":"Steps to reproduce...","metadata":"{\"status\":\"open\",\"priority\":\"high\"}"}`, token)
+	defer resp11.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp11.StatusCode)
+	threadBody := decodeBody(t, resp11)
+	threadID := threadBody["id"].(string)
+
+	// 12. Pin Thread.
+	resp12 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID+"/pin", "", token)
+	defer resp12.Body.Close()
+	assert.Equal(t, http.StatusOK, resp12.StatusCode)
+	pinBody := decodeBody(t, resp12)
+	assert.Equal(t, true, pinBody["is_pinned"])
+
+	// 13. Create Message.
+	resp13 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID+"/messages",
+		`{"body":"I can reproduce this.","type":"comment"}`, token)
+	defer resp13.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp13.StatusCode)
+	msgBody := decodeBody(t, resp13)
+	msgID := msgBody["id"].(string)
+
+	// 14. Update Message (author-only).
+	resp14 := doJSON(t, http.MethodPatch, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID+"/messages/"+msgID,
+		`{"body":"Updated: I can still reproduce this."}`, token)
+	defer resp14.Body.Close()
+	assert.Equal(t, http.StatusOK, resp14.StatusCode)
+
+	// 15. List Messages.
+	resp15 := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID+"/messages", "", token)
+	defer resp15.Body.Close()
+	assert.Equal(t, http.StatusOK, resp15.StatusCode)
+
+	// 16. Lock Thread.
+	resp16 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID+"/lock", "", token)
+	defer resp16.Body.Close()
+	assert.Equal(t, http.StatusOK, resp16.StatusCode)
+
+	// 17. Try creating message on locked thread → should fail 409.
+	resp17 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID+"/messages",
+		`{"body":"Should fail"}`, token)
+	defer resp17.Body.Close()
+	assert.Equal(t, http.StatusConflict, resp17.StatusCode)
+
+	// 18. Delete Message.
+	resp18 := doJSON(t, http.MethodDelete, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID+"/messages/"+msgID, "", token)
+	defer resp18.Body.Close()
+	assert.Equal(t, http.StatusNoContent, resp18.StatusCode)
+
+	// 19. Unlock and Delete Thread.
+	resp19 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID+"/unlock", "", token)
+	defer resp19.Body.Close()
+	assert.Equal(t, http.StatusOK, resp19.StatusCode)
+
+	resp20 := doJSON(t, http.MethodDelete, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID+"/threads/"+threadID, "", token)
+	defer resp20.Body.Close()
+	assert.Equal(t, http.StatusNoContent, resp20.StatusCode)
+
+	// 20. Delete Board.
+	resp21 := doJSON(t, http.MethodDelete, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards/"+boardID, "", token)
+	defer resp21.Body.Close()
+	assert.Equal(t, http.StatusNoContent, resp21.StatusCode)
+
+	// 21. Delete Space.
+	resp22 := doJSON(t, http.MethodDelete, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID, "", token)
+	defer resp22.Body.Close()
+	assert.Equal(t, http.StatusNoContent, resp22.StatusCode)
+
+	// 22. Delete Org.
+	resp23 := doJSON(t, http.MethodDelete, env.BaseURL+"/v1/orgs/"+orgID, "", token)
+	defer resp23.Body.Close()
+	assert.Equal(t, http.StatusNoContent, resp23.StatusCode)
+}
+
+// TestLive_Phase4_OrgMembership tests org membership management.
+func TestLive_Phase4_OrgMembership(t *testing.T) {
+	env := liveAuthServer(t)
+	defer env.Cleanup()
+
+	token := env.SignToken(auth.JWTClaims{
+		Subject:   "user_member",
+		Issuer:    env.IssuerURL,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+	})
+
+	// Create org.
+	resp := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs", `{"name":"Member Org"}`, token)
+	defer resp.Body.Close()
+	orgBody := decodeBody(t, resp)
+	orgID := orgBody["id"].(string)
+
+	// Add member.
+	resp2 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/members",
+		`{"user_id":"newuser","role":"viewer"}`, token)
+	defer resp2.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp2.StatusCode)
+
+	// List members.
+	resp3 := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs/"+orgID+"/members", "", token)
+	defer resp3.Body.Close()
+	assert.Equal(t, http.StatusOK, resp3.StatusCode)
+}
+
+// TestLive_Phase4_MetadataFilter tests thread metadata filtering.
+func TestLive_Phase4_MetadataFilter(t *testing.T) {
+	env := liveAuthServer(t)
+	defer env.Cleanup()
+
+	token := env.SignToken(auth.JWTClaims{
+		Subject:   "user_filter",
+		Issuer:    env.IssuerURL,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+	})
+
+	// Create hierarchy.
+	resp := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs", `{"name":"Filter Org"}`, token)
+	defer resp.Body.Close()
+	orgBody := decodeBody(t, resp)
+	orgID := orgBody["id"].(string)
+
+	resp2 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces", `{"name":"Filter Space"}`, token)
+	defer resp2.Body.Close()
+	spaceID := decodeBody(t, resp2)["id"].(string)
+
+	resp3 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces/"+spaceID+"/boards", `{"name":"Filter Board"}`, token)
+	defer resp3.Body.Close()
+	boardID := decodeBody(t, resp3)["id"].(string)
+
+	base := env.BaseURL + "/v1/orgs/" + orgID + "/spaces/" + spaceID + "/boards/" + boardID + "/threads"
+
+	// Create threads with different metadata.
+	resp4 := doJSON(t, http.MethodPost, base, `{"title":"Open Bug","metadata":"{\"status\":\"open\"}"}`, token)
+	defer resp4.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp4.StatusCode)
+
+	resp5 := doJSON(t, http.MethodPost, base, `{"title":"Closed Bug","metadata":"{\"status\":\"closed\"}"}`, token)
+	defer resp5.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp5.StatusCode)
+
+	// Filter by status=open.
+	req, err := http.NewRequest(http.MethodGet, base+"?metadata[status]=open", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp6, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp6.Body.Close()
+	assert.Equal(t, http.StatusOK, resp6.StatusCode)
+	filterBody := decodeBody(t, resp6)
+	threads := filterBody["data"].([]interface{})
+	assert.Len(t, threads, 1)
+}
+
+// TestLive_Phase4_SlugURLs tests accessing resources by slug.
+func TestLive_Phase4_SlugURLs(t *testing.T) {
+	env := liveAuthServer(t)
+	defer env.Cleanup()
+
+	token := env.SignToken(auth.JWTClaims{
+		Subject:   "user_slug",
+		Issuer:    env.IssuerURL,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+	})
+
+	// Create hierarchy.
+	resp := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs", `{"name":"Slug Org"}`, token)
+	defer resp.Body.Close()
+	orgID := decodeBody(t, resp)["id"].(string)
+
+	resp2 := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs/"+orgID+"/spaces", `{"name":"Slug Space"}`, token)
+	defer resp2.Body.Close()
+
+	// Access space by slug.
+	resp3 := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs/slug-org/spaces/slug-space", "", token)
+	defer resp3.Body.Close()
+	assert.Equal(t, http.StatusOK, resp3.StatusCode)
+}
+
+// TestLive_Phase4_Pagination tests cursor-based pagination.
+func TestLive_Phase4_Pagination(t *testing.T) {
+	env := liveAuthServer(t)
+	defer env.Cleanup()
+
+	token := env.SignToken(auth.JWTClaims{
+		Subject:   "user_page",
+		Issuer:    env.IssuerURL,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+	})
+
+	orgID := ""
+	// Create 3 orgs.
+	for i := 0; i < 3; i++ {
+		resp := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs",
+			fmt.Sprintf(`{"name":"Page Org %d"}`, i), token)
+		defer resp.Body.Close()
+		if i == 0 {
+			orgID = decodeBody(t, resp)["id"].(string)
+			_ = orgID
+		}
+	}
+
+	// List with limit=2.
+	resp2 := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs?limit=2", "", token)
+	defer resp2.Body.Close()
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+	pageBody := decodeBody(t, resp2)
+	pageInfo := pageBody["page_info"].(map[string]interface{})
+	assert.Equal(t, true, pageInfo["has_more"])
+	assert.NotEmpty(t, pageInfo["next_cursor"])
+
+	// Use cursor for next page.
+	cursor := pageInfo["next_cursor"].(string)
+	resp3 := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs?limit=2&cursor="+cursor, "", token)
+	defer resp3.Body.Close()
+	assert.Equal(t, http.StatusOK, resp3.StatusCode)
+}
+
+// TestLive_Phase4_NotFound tests 404 responses for missing resources.
+func TestLive_Phase4_NotFound(t *testing.T) {
+	env := liveAuthServer(t)
+	defer env.Cleanup()
+
+	token := env.SignToken(auth.JWTClaims{
+		Subject:   "user_404",
+		Issuer:    env.IssuerURL,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+	})
+
+	resp := doJSON(t, http.MethodGet, env.BaseURL+"/v1/orgs/nonexistent-org", "", token)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
+}
+
+// TestLive_Phase4_ValidationErrors tests validation error responses.
+func TestLive_Phase4_ValidationErrors(t *testing.T) {
+	env := liveAuthServer(t)
+	defer env.Cleanup()
+
+	token := env.SignToken(auth.JWTClaims{
+		Subject:   "user_val",
+		Issuer:    env.IssuerURL,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+	})
+
+	// Create org with empty name → validation error.
+	resp := doJSON(t, http.MethodPost, env.BaseURL+"/v1/orgs", `{"name":""}`, token)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
+}
+
 // TestLive_Phase3_RFC7807OnAuthFailure verifies all auth failures return RFC 7807.
 func TestLive_Phase3_RFC7807OnAuthFailure(t *testing.T) {
 	env := liveAuthServer(t)
