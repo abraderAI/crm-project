@@ -1,0 +1,43 @@
+# ---- Dependencies stage ----
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --ignore-scripts
+
+# ---- Build stage ----
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY web/ .
+
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npx next build
+
+# ---- Runtime stage ----
+FROM node:20-alpine AS runner
+
+LABEL org.opencontainers.image.source="https://github.com/abraderAI/crm-project"
+LABEL org.opencontainers.image.description="DEFT Evolution Web Frontend"
+
+RUN addgroup -S deft && adduser -S deft -G deft
+
+WORKDIR /app
+
+COPY --from=builder --chown=deft:deft /app/.next/standalone ./
+COPY --from=builder --chown=deft:deft /app/.next/static ./.next/static
+COPY --from=builder --chown=deft:deft /app/public ./public
+
+USER deft
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV NEXT_TELEMETRY_DISABLED=1
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+    CMD wget --spider -q http://localhost:3000 || exit 1
+
+CMD ["node", "server.js"]

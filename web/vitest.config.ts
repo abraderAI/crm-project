@@ -27,6 +27,7 @@ export default defineConfig({
         "src/app/**/sign-in/**",
         "src/app/**/sign-up/**",
         "src/lib/api-types.ts",
+        "e2e/**",
       ],
       thresholds: {
         lines: 85,
