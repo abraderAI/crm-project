@@ -138,6 +138,18 @@ tasks:
     cmds:
       - npx next build
 
+  web:e2e:
+    desc: Run Playwright E2E smoke tests
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx playwright test
+
+  web:e2e:smoke:
+    desc: Run Playwright smoke tests only
+    dir: '{{.WEB_DIR}}'
+    cmds:
+      - npx playwright test --grep @smoke
+
   clean:
     desc: Remove build artifacts
     cmds:

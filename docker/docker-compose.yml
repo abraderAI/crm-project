@@ -6,28 +6,61 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - "8080:8080"
+      - "${API_PORT:-8080}:8080"
     environment:
       - SERVER_PORT=8080
+      - SERVER_HOST=0.0.0.0
       - SQLITE_PATH=/data/deft.db
-      - LOG_LEVEL=debug
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CORS_ORIGINS=http://localhost:3000
       - RBAC_POLICY_PATH=config/rbac-policy.yaml
+      - UPLOAD_DIR=/app/uploads
+      - UPLOAD_MAX_SIZE=104857600
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY:-}
+      - CLERK_ISSUER_URL=${CLERK_ISSUER_URL:-}
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_ENDPOINT=${OTEL_ENDPOINT:-}
     volumes:
       - sqlite-data:/data
+      - upload-data:/app/uploads
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 5s
+    networks:
+      - deft
 
   web:
-    image: node:20-alpine
-    working_dir: /app
-    command: echo "Web placeholder - Next.js will be configured in Phase 11"
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
     ports:
-      - "3000:3000"
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8080
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY:-}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - deft
 
 volumes:
   sqlite-data:
+  upload-data:
+
+networks:
+  deft:
+    driver: bridge
