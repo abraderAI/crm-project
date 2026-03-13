@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/abraderAI/crm-project/api/internal/admin"
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/database"
 	"github.com/abraderAI/crm-project/api/internal/server"
@@ -51,10 +52,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Bootstrap platform admin from env var.
+	if cfg.PlatformAdminUserID != "" {
+		adminSvc := admin.NewService(db)
+		if err := adminSvc.BootstrapAdmin(context.Background(), cfg.PlatformAdminUserID); err != nil {
+			logger.Error("failed to bootstrap platform admin", slog.String("error", err.Error()))
+		} else {
+			logger.Info("platform admin bootstrapped", slog.String("user_id", cfg.PlatformAdminUserID))
+		}
+	}
+
 	router := server.NewRouter(server.Config{
-		DB:          db,
-		Logger:      logger,
-		CORSOrigins: cfg.CORSOrigins,
+		DB:                  db,
+		Logger:              logger,
+		CORSOrigins:         cfg.CORSOrigins,
+		PlatformAdminUserID: cfg.PlatformAdminUserID,
 	})
 
 	srv := &http.Server{

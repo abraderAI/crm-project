@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,6 +147,7 @@ func TestLive_Phase10_VoiceUnauthorized(t *testing.T) {
 func TestLive_Phase10_GDPRExportUserData(t *testing.T) {
 	env := liveAuthServer(t)
 	defer env.Cleanup()
+	adminToken := setupAdminToken(t, env)
 
 	// Create some data for the user.
 	orgID := liveCreateOrg(t, env, "gdpr-export-org")
@@ -154,7 +156,7 @@ func TestLive_Phase10_GDPRExportUserData(t *testing.T) {
 	userID := "user_test123"
 	req, err := http.NewRequest(http.MethodGet, env.BaseURL+"/v1/admin/users/"+userID+"/export", nil)
 	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+env.SignToken(liveValidClaims(env.IssuerURL)))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -176,6 +178,7 @@ func TestLive_Phase10_GDPRExportUserData(t *testing.T) {
 func TestLive_Phase10_GDPRPurgeUser(t *testing.T) {
 	env := liveAuthServer(t)
 	defer env.Cleanup()
+	adminToken := setupAdminToken(t, env)
 
 	// Create data for the user.
 	orgID := liveCreateOrg(t, env, "gdpr-purge-org")
@@ -197,7 +200,7 @@ func TestLive_Phase10_GDPRPurgeUser(t *testing.T) {
 	// Purge the user.
 	req, err := http.NewRequest(http.MethodDelete, env.BaseURL+"/v1/admin/users/user_purge_target/purge", nil)
 	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+env.SignToken(liveValidClaims(env.IssuerURL)))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -212,7 +215,7 @@ func TestLive_Phase10_GDPRPurgeUser(t *testing.T) {
 	// Verify data is gone — export should return empty arrays.
 	req2, err := http.NewRequest(http.MethodGet, env.BaseURL+"/v1/admin/users/user_purge_target/export", nil)
 	require.NoError(t, err)
-	req2.Header.Set("Authorization", "Bearer "+env.SignToken(liveValidClaims(env.IssuerURL)))
+	req2.Header.Set("Authorization", "Bearer "+adminToken)
 
 	resp2, err := http.DefaultClient.Do(req2)
 	require.NoError(t, err)
@@ -231,14 +234,20 @@ func TestLive_Phase10_GDPRPurgeUser(t *testing.T) {
 // TestLive_Phase10_GDPRPurgeOrg cascade-deletes an org.
 func TestLive_Phase10_GDPRPurgeOrg(t *testing.T) {
 	env := liveAuthServer(t)
-	defer env.Cleanup()
+	defer func() {
+		env.DB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		env.Cleanup()
+	}()
+	adminToken := setupAdminToken(t, env)
 
 	orgID := liveCreateOrg(t, env, "gdpr-org-purge")
 
-	// Purge the org.
-	req, err := http.NewRequest(http.MethodDelete, env.BaseURL+"/v1/admin/orgs/"+orgID+"/purge", nil)
+	// Purge the org (admin handler requires confirm body).
+	req, err := http.NewRequest(http.MethodDelete, env.BaseURL+"/v1/admin/orgs/"+orgID+"/purge",
+		strings.NewReader(`{"confirm":"purge `+orgID+`"}`))
 	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+env.SignToken(liveValidClaims(env.IssuerURL)))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

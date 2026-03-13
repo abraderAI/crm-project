@@ -31,6 +31,8 @@ func allModels() []any {
 		&models.Upload{},
 		&models.Flag{},
 		&models.CallLog{},
+		&models.PlatformAdmin{},
+		&models.UserShadow{},
 	}
 }
 
