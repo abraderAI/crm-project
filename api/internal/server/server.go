@@ -165,7 +165,7 @@ func NewRouter(cfg Config) http.Handler {
 
 	// Admin service and handler.
 	adminService := admin.NewService(cfg.DB)
-	adminHandler := admin.NewHandler(adminService, auditService, gdprService)
+	adminHandler := admin.NewHandler(adminService, auditService, gdprService, cfg.RBACPolicy)
 
 	revisionRepo := revision.NewRepository(cfg.DB)
 	revisionHandler := revision.NewHandler(revisionRepo)
@@ -206,6 +206,7 @@ func NewRouter(cfg Config) http.Handler {
 			authed.Use(auth.DualAuth(jwtValidator, apiKeyService))
 			authed.Use(admin.BanCheck(adminService))
 			authed.Use(admin.OrgSuspensionCheck(adminService))
+			authed.Use(admin.MaintenanceMode(adminService))
 			authed.Use(admin.UserShadowSync(adminService))
 
 			// Search endpoint.
@@ -273,6 +274,23 @@ func NewRouter(cfg Config) http.Handler {
 				ar.Get("/platform-admins", adminHandler.ListPlatformAdmins)
 				ar.Post("/platform-admins", adminHandler.AddPlatformAdmin)
 				ar.Delete("/platform-admins/{user_id}", adminHandler.RemovePlatformAdmin)
+
+				// Phase B: Configuration & Monitoring.
+				ar.Get("/settings", adminHandler.GetSettings)
+				ar.Patch("/settings", adminHandler.PatchSettings)
+
+				ar.Get("/rbac-policy", adminHandler.GetRBACPolicy)
+				ar.Patch("/rbac-policy", adminHandler.PatchRBACPolicy)
+				ar.Post("/rbac-policy/preview", adminHandler.PreviewRBACPolicy)
+
+				ar.Get("/feature-flags", adminHandler.ListFeatureFlags)
+				ar.Patch("/feature-flags/{key}", adminHandler.PatchFeatureFlag)
+
+				ar.Get("/stats", adminHandler.GetStats)
+
+				ar.Get("/webhooks/deliveries", adminHandler.ListWebhookDeliveries)
+
+				ar.Get("/integrations/status", adminHandler.GetIntegrationHealth)
 			})
 			// Webhook routes.
 			authed.Route("/orgs/{org}/webhooks", func(wh chi.Router) {

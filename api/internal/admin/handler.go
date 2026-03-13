@@ -10,6 +10,7 @@ import (
 
 	"github.com/abraderAI/crm-project/api/internal/audit"
 	"github.com/abraderAI/crm-project/api/internal/auth"
+	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/gdpr"
 	"github.com/abraderAI/crm-project/api/internal/models"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
@@ -22,14 +23,16 @@ type Handler struct {
 	service      *Service
 	auditService *audit.Service
 	gdprService  *gdpr.Service
+	rbacPolicy   *config.RBACPolicy
 }
 
 // NewHandler creates a new admin handler.
-func NewHandler(service *Service, auditService *audit.Service, gdprService *gdpr.Service) *Handler {
+func NewHandler(service *Service, auditService *audit.Service, gdprService *gdpr.Service, rbacPolicy *config.RBACPolicy) *Handler {
 	return &Handler{
 		service:      service,
 		auditService: auditService,
 		gdprService:  gdprService,
+		rbacPolicy:   rbacPolicy,
 	}
 }
 
