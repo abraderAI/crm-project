@@ -66,6 +66,7 @@ func main() {
 		DB:                  db,
 		Logger:              logger,
 		CORSOrigins:         cfg.CORSOrigins,
+		IssuerURL:           cfg.ClerkIssuerURL,
 		PlatformAdminUserID: cfg.PlatformAdminUserID,
 	})
 
