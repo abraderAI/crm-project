@@ -35,6 +35,11 @@ func allModels() []any {
 		&models.UserShadow{},
 		&models.SystemSetting{},
 		&models.FeatureFlag{},
+		&models.AdminExport{},
+		&models.APIUsageStat{},
+		&models.LoginEvent{},
+		&models.FailedAuth{},
+		&models.LLMUsageLog{},
 	}
 }
 

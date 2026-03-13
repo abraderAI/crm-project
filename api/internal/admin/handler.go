@@ -13,6 +13,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/gdpr"
 	"github.com/abraderAI/crm-project/api/internal/models"
+	"github.com/abraderAI/crm-project/api/internal/upload"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 	"github.com/abraderAI/crm-project/api/pkg/pagination"
 	"github.com/abraderAI/crm-project/api/pkg/response"
@@ -24,6 +25,7 @@ type Handler struct {
 	auditService *audit.Service
 	gdprService  *gdpr.Service
 	rbacPolicy   *config.RBACPolicy
+	storage      upload.StorageProvider
 }
 
 // NewHandler creates a new admin handler.
@@ -34,6 +36,11 @@ func NewHandler(service *Service, auditService *audit.Service, gdprService *gdpr
 		gdprService:  gdprService,
 		rbacPolicy:   rbacPolicy,
 	}
+}
+
+// SetStorage sets the storage provider for exports.
+func (h *Handler) SetStorage(storage upload.StorageProvider) {
+	h.storage = storage
 }
 
 // --- User Management ---

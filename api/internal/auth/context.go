@@ -21,9 +21,10 @@ const (
 
 // UserContext holds authenticated user information set by auth middleware.
 type UserContext struct {
-	UserID     string     `json:"user_id"`
-	AuthMethod AuthMethod `json:"auth_method"`
-	OrgID      string     `json:"org_id,omitempty"` // Set when authenticated via API key.
+	UserID         string     `json:"user_id"`
+	AuthMethod     AuthMethod `json:"auth_method"`
+	OrgID          string     `json:"org_id,omitempty"`          // Set when authenticated via API key.
+	ImpersonatorID string     `json:"impersonator_id,omitempty"` // Set when impersonating another user.
 }
 
 // SetUserContext stores the UserContext in the request context.
