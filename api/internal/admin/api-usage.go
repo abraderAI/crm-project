@@ -23,17 +23,16 @@ func APIUsageCounter(db *gorm.DB) func(http.Handler) http.Handler {
 			method := r.Method
 			hour := time.Now().UTC().Format("2006-01-02-15")
 
-			go func() {
-				_ = db.Clauses(clause.OnConflict{
-					Columns:   []clause.Column{{Name: "endpoint"}, {Name: "method"}, {Name: "hour"}},
-					DoUpdates: clause.Assignments(map[string]any{"count": gorm.Expr("count + 1")}),
-				}).Create(&models.APIUsageStat{
-					Endpoint: endpoint,
-					Method:   method,
-					Hour:     hour,
-					Count:    1,
-				}).Error
-			}()
+			// Synchronous write avoids SQLite contention from concurrent goroutines.
+			_ = db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "endpoint"}, {Name: "method"}, {Name: "hour"}},
+				DoUpdates: clause.Assignments(map[string]any{"count": gorm.Expr("count + 1")}),
+			}).Create(&models.APIUsageStat{
+				Endpoint: endpoint,
+				Method:   method,
+				Hour:     hour,
+				Count:    1,
+			}).Error
 
 			next.ServeHTTP(w, r)
 		})

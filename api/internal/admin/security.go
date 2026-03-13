@@ -46,13 +46,12 @@ func LoginEventRecorder(db *gorm.DB) func(http.Handler) http.Handler {
 				if shouldRecord {
 					ip := extractIP(r)
 					ua := r.UserAgent()
-					go func() {
-						_ = db.Create(&models.LoginEvent{
-							UserID:    userID,
-							IPAddress: ip,
-							UserAgent: ua,
-						}).Error
-					}()
+					// Synchronous write avoids SQLite contention from concurrent goroutines.
+					_ = db.Create(&models.LoginEvent{
+						UserID:    userID,
+						IPAddress: ip,
+						UserAgent: ua,
+					}).Error
 				}
 			}
 
@@ -85,17 +84,16 @@ func FailedAuthRecorder(db *gorm.DB) func(http.Handler) http.Handler {
 					}
 				}
 
-				go func() {
-					_ = db.Clauses(clause.OnConflict{
-						Columns:   []clause.Column{{Name: "ip_address"}, {Name: "user_id"}, {Name: "hour"}},
-						DoUpdates: clause.Assignments(map[string]any{"count": gorm.Expr("count + 1")}),
-					}).Create(&models.FailedAuth{
-						IPAddress: ip,
-						UserID:    userID,
-						Hour:      hour,
-						Count:     1,
-					}).Error
-				}()
+				// Synchronous write avoids SQLite contention from concurrent goroutines.
+				_ = db.Clauses(clause.OnConflict{
+					Columns:   []clause.Column{{Name: "ip_address"}, {Name: "user_id"}, {Name: "hour"}},
+					DoUpdates: clause.Assignments(map[string]any{"count": gorm.Expr("count + 1")}),
+				}).Create(&models.FailedAuth{
+					IPAddress: ip,
+					UserID:    userID,
+					Hour:      hour,
+					Count:     1,
+				}).Error
 			}
 		})
 	}

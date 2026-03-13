@@ -401,7 +401,7 @@ func (s *Service) SuspendOrg(ctx context.Context, orgIDOrSlug, reason, suspended
 		query = query.Where("slug = ?", orgIDOrSlug)
 	}
 	result := query.Updates(map[string]any{
-		"suspended_at":   &now,
+		"suspended_at":   now,
 		"suspend_reason": reason,
 		"suspended_by":   suspendedBy,
 	})
