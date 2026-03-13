@@ -56,6 +56,9 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.Revision{},
 		&models.APIKey{},
 		&models.WebhookSubscription{},
+		&models.WebhookDelivery{},
+		&models.SystemSetting{},
+		&models.FeatureFlag{},
 	))
 	return db
 }
@@ -856,7 +859,7 @@ func setupTestHandler(t *testing.T) (*Handler, *gorm.DB) {
 	svc := NewService(db)
 	auditSvc := audit.NewService(db)
 	gdprSvc := gdpr.NewService(db)
-	h := NewHandler(svc, auditSvc, gdprSvc)
+	h := NewHandler(svc, auditSvc, gdprSvc, nil)
 	return h, db
 }
 
@@ -896,7 +899,7 @@ func TestHandler_ListUsers_WithFilters(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var body struct{ Data []json.RawMessage }
-	json.NewDecoder(w.Body).Decode(&body)
+	_ = json.NewDecoder(w.Body).Decode(&body)
 	assert.Len(t, body.Data, 1)
 }
 

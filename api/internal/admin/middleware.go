@@ -108,6 +108,44 @@ func OrgSuspensionCheck(svc *Service) func(http.Handler) http.Handler {
 	}
 }
 
+// MaintenanceMode middleware checks if maintenance_mode feature flag is enabled.
+// When enabled, all non-GET, non-admin requests return 503 with RFC 7807 body.
+func MaintenanceMode(svc *Service) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Allow GET, HEAD, OPTIONS.
+			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Allow admin routes.
+			if strings.Contains(r.URL.Path, "/v1/admin/") {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			enabled, err := svc.IsFeatureEnabled(r.Context(), "maintenance_mode")
+			if err != nil {
+				// On error, don't block — fail open.
+				next.ServeHTTP(w, r)
+				return
+			}
+			if enabled {
+				apierrors.WriteProblem(w, apierrors.ProblemDetail{
+					Type:   "https://httpstatuses.com/503",
+					Title:  "Service Unavailable",
+					Status: http.StatusServiceUnavailable,
+					Detail: "the platform is currently in maintenance mode",
+				})
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // UserShadowSync middleware syncs user shadow data on every authenticated request.
 func UserShadowSync(svc *Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

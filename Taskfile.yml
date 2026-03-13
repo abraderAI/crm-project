@@ -77,6 +77,10 @@ tasks:
       - go test -race -fuzz=FuzzValidateTransition -fuzztime=5s ./internal/pipeline/
       - go test -race -fuzz=FuzzScoringEvaluate -fuzztime=5s ./internal/scoring/
       - go test -race -fuzz=FuzzScoringCustomRules -fuzztime=5s ./internal/scoring/
+      - go test -race -fuzz=FuzzUpdateSettingsValues -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzRBACOverride -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzFeatureFlagKey -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzSettingsKey -fuzztime=5s ./internal/admin/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)

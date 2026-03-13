@@ -33,6 +33,8 @@ func allModels() []any {
 		&models.CallLog{},
 		&models.PlatformAdmin{},
 		&models.UserShadow{},
+		&models.SystemSetting{},
+		&models.FeatureFlag{},
 	}
 }
 
