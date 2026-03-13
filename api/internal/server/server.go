@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	"github.com/abraderAI/crm-project/api/internal/admin"
 	"github.com/abraderAI/crm-project/api/internal/audit"
 	"github.com/abraderAI/crm-project/api/internal/auth"
 	"github.com/abraderAI/crm-project/api/internal/billing"
@@ -42,16 +43,17 @@ import (
 
 // Config holds server dependencies.
 type Config struct {
-	DB            *gorm.DB
-	Logger        *slog.Logger
-	CORSOrigins   []string
-	RBACPolicy    *config.RBACPolicy
-	IssuerURL     string // Clerk issuer URL for JWT validation.
-	WebhookSecret string // HMAC secret for billing webhook verification.
-	EventBus      *eventbus.Bus
-	WSHub         *ws.Hub
-	UploadDir     string // Directory for file uploads.
-	MaxUpload     int64  // Maximum upload size in bytes.
+	DB                  *gorm.DB
+	Logger              *slog.Logger
+	CORSOrigins         []string
+	RBACPolicy          *config.RBACPolicy
+	IssuerURL           string // Clerk issuer URL for JWT validation.
+	WebhookSecret       string // HMAC secret for billing webhook verification.
+	EventBus            *eventbus.Bus
+	WSHub               *ws.Hub
+	UploadDir           string // Directory for file uploads.
+	MaxUpload           int64  // Maximum upload size in bytes.
+	PlatformAdminUserID string // Bootstrap platform admin user ID.
 }
 
 // NewRouter creates and configures the Chi router with all middleware and routes.
@@ -133,6 +135,7 @@ func NewRouter(cfg Config) http.Handler {
 	// GDPR service.
 	gdprService := gdpr.NewService(cfg.DB)
 	gdprHandler := gdpr.NewHandler(gdprService)
+
 	// Phase 5: Advanced API features.
 	searchRepo := search.NewRepository(cfg.DB)
 	searchHandler := search.NewHandler(searchRepo)
@@ -159,6 +162,10 @@ func NewRouter(cfg Config) http.Handler {
 
 	auditService := audit.NewService(cfg.DB)
 	auditHandler := audit.NewHandler(auditService)
+
+	// Admin service and handler.
+	adminService := admin.NewService(cfg.DB)
+	adminHandler := admin.NewHandler(adminService, auditService, gdprService)
 
 	revisionRepo := revision.NewRepository(cfg.DB)
 	revisionHandler := revision.NewHandler(revisionRepo)
@@ -197,6 +204,9 @@ func NewRouter(cfg Config) http.Handler {
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {
 			authed.Use(auth.DualAuth(jwtValidator, apiKeyService))
+			authed.Use(admin.BanCheck(adminService))
+			authed.Use(admin.OrgSuspensionCheck(adminService))
+			authed.Use(admin.UserShadowSync(adminService))
 
 			// Search endpoint.
 			authed.Get("/search", searchHandler.Search)
@@ -234,11 +244,35 @@ func NewRouter(cfg Config) http.Handler {
 				call.Post("/{call}/escalate", voiceHandler.Escalate)
 			})
 
-			// Admin routes (GDPR).
-			authed.Route("/admin", func(admin chi.Router) {
-				admin.Get("/users/{user}/export", gdprHandler.ExportUserData)
-				admin.Delete("/users/{user}/purge", gdprHandler.PurgeUser)
-				admin.Delete("/orgs/{org}/purge", gdprHandler.PurgeOrg)
+			// Admin routes — require platform admin.
+			authed.Route("/admin", func(ar chi.Router) {
+				ar.Use(admin.PlatformAdminOnly(adminService))
+
+				// Legacy GDPR export.
+				ar.Get("/users/{user}/export", gdprHandler.ExportUserData)
+
+				// User management.
+				ar.Get("/users", adminHandler.ListUsers)
+				ar.Get("/users/{user_id}", adminHandler.GetUser)
+				ar.Post("/users/{user_id}/ban", adminHandler.BanUser)
+				ar.Post("/users/{user_id}/unban", adminHandler.UnbanUser)
+				ar.Delete("/users/{user_id}/purge", adminHandler.PurgeUser)
+
+				// Org management.
+				ar.Get("/orgs", adminHandler.ListOrgs)
+				ar.Get("/orgs/{org}", adminHandler.GetOrg)
+				ar.Post("/orgs/{org}/suspend", adminHandler.SuspendOrg)
+				ar.Post("/orgs/{org}/unsuspend", adminHandler.UnsuspendOrg)
+				ar.Post("/orgs/{org}/transfer-ownership", adminHandler.TransferOwnership)
+				ar.Delete("/orgs/{org}/purge", adminHandler.PurgeOrg)
+
+				// Platform-wide audit log.
+				ar.Get("/audit-log", adminHandler.ListAuditLog)
+
+				// Platform admin management.
+				ar.Get("/platform-admins", adminHandler.ListPlatformAdmins)
+				ar.Post("/platform-admins", adminHandler.AddPlatformAdmin)
+				ar.Delete("/platform-admins/{user_id}", adminHandler.RemovePlatformAdmin)
 			})
 			// Webhook routes.
 			authed.Route("/orgs/{org}/webhooks", func(wh chi.Router) {

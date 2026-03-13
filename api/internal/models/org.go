@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 // Org represents a top-level organization in the platform hierarchy.
 type Org struct {
 	BaseModel
@@ -11,6 +13,11 @@ type Org struct {
 	// Generated columns extracted from Metadata JSON for indexing/querying.
 	BillingTier   string `gorm:"type:text;->;-:migration" json:"billing_tier,omitempty"`
 	PaymentStatus string `gorm:"type:text;->;-:migration" json:"payment_status,omitempty"`
+
+	// Admin: suspension fields.
+	SuspendedAt   *time.Time `json:"suspended_at,omitempty"`
+	SuspendReason string     `gorm:"type:text" json:"suspend_reason,omitempty"`
+	SuspendedBy   string     `gorm:"type:text" json:"suspended_by,omitempty"`
 
 	// Associations.
 	Spaces []Space `gorm:"foreignKey:OrgID;constraint:OnDelete:CASCADE" json:"spaces,omitempty"`

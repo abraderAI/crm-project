@@ -38,24 +38,28 @@ type Config struct {
 
 	// RBAC policy path.
 	RBACPolicyPath string
+
+	// Admin: bootstrap platform admin user ID.
+	PlatformAdminUserID string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
 func Load() (*Config, error) {
 	cfg := &Config{
-		ServerPort:      getEnvInt("SERVER_PORT", 8080),
-		ServerHost:      getEnv("SERVER_HOST", "0.0.0.0"),
-		SQLitePath:      getEnv("SQLITE_PATH", "data/deft.db"),
-		ClerkSecretKey:  getEnv("CLERK_SECRET_KEY", ""),
-		ClerkPublishKey: getEnv("CLERK_PUBLISHABLE_KEY", ""),
-		ClerkIssuerURL:  getEnv("CLERK_ISSUER_URL", ""),
-		LogLevel:        getEnv("LOG_LEVEL", "info"),
-		CORSOrigins:     getEnvSlice("CORS_ORIGINS", []string{"http://localhost:3000"}),
-		UploadDir:       getEnv("UPLOAD_DIR", "uploads"),
-		UploadMaxSize:   getEnvInt64("UPLOAD_MAX_SIZE", 104857600), // 100MB
-		OTelEndpoint:    getEnv("OTEL_ENDPOINT", ""),
-		OTelEnabled:     getEnvBool("OTEL_ENABLED", false),
-		RBACPolicyPath:  getEnv("RBAC_POLICY_PATH", "config/rbac-policy.yaml"),
+		ServerPort:          getEnvInt("SERVER_PORT", 8080),
+		ServerHost:          getEnv("SERVER_HOST", "0.0.0.0"),
+		SQLitePath:          getEnv("SQLITE_PATH", "data/deft.db"),
+		ClerkSecretKey:      getEnv("CLERK_SECRET_KEY", ""),
+		ClerkPublishKey:     getEnv("CLERK_PUBLISHABLE_KEY", ""),
+		ClerkIssuerURL:      getEnv("CLERK_ISSUER_URL", ""),
+		LogLevel:            getEnv("LOG_LEVEL", "info"),
+		CORSOrigins:         getEnvSlice("CORS_ORIGINS", []string{"http://localhost:3000"}),
+		UploadDir:           getEnv("UPLOAD_DIR", "uploads"),
+		UploadMaxSize:       getEnvInt64("UPLOAD_MAX_SIZE", 104857600), // 100MB
+		OTelEndpoint:        getEnv("OTEL_ENDPOINT", ""),
+		OTelEnabled:         getEnvBool("OTEL_ENABLED", false),
+		RBACPolicyPath:      getEnv("RBAC_POLICY_PATH", "config/rbac-policy.yaml"),
+		PlatformAdminUserID: getEnv("PLATFORM_ADMIN_USER_ID", ""),
 	}
 
 	if err := cfg.Validate(); err != nil {
