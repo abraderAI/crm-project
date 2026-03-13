@@ -81,6 +81,12 @@ tasks:
       - go test -race -fuzz=FuzzRBACOverride -fuzztime=5s ./internal/admin/
       - go test -race -fuzz=FuzzFeatureFlagKey -fuzztime=5s ./internal/admin/
       - go test -race -fuzz=FuzzSettingsKey -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzImpersonationToken -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzExportFilters -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzUsageQueryParams -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzExportType -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzFailedAuthPeriod -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzImpersonationCreate -fuzztime=5s ./internal/admin/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)

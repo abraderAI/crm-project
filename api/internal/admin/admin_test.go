@@ -32,6 +32,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 	_, err = sqlDB.Exec("PRAGMA foreign_keys = ON")
 	require.NoError(t, err)
 
@@ -59,6 +60,11 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.WebhookDelivery{},
 		&models.SystemSetting{},
 		&models.FeatureFlag{},
+		&models.AdminExport{},
+		&models.APIUsageStat{},
+		&models.LoginEvent{},
+		&models.FailedAuth{},
+		&models.LLMUsageLog{},
 	))
 	return db
 }

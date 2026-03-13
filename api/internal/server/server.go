@@ -208,6 +208,8 @@ func NewRouter(cfg Config) http.Handler {
 			authed.Use(admin.OrgSuspensionCheck(adminService))
 			authed.Use(admin.MaintenanceMode(adminService))
 			authed.Use(admin.UserShadowSync(adminService))
+			authed.Use(admin.APIUsageCounter(cfg.DB))
+			authed.Use(admin.LoginEventRecorder(cfg.DB))
 
 			// Search endpoint.
 			authed.Get("/search", searchHandler.Search)
@@ -291,6 +293,19 @@ func NewRouter(cfg Config) http.Handler {
 				ar.Get("/webhooks/deliveries", adminHandler.ListWebhookDeliveries)
 
 				ar.Get("/integrations/status", adminHandler.GetIntegrationHealth)
+
+				// Phase C: Advanced Admin Features.
+				ar.Post("/users/{user_id}/impersonate", adminHandler.ImpersonateHandler)
+
+				ar.Post("/exports", adminHandler.CreateExportHandler)
+				ar.Get("/exports", adminHandler.ListExportsHandler)
+				ar.Get("/exports/{id}", adminHandler.GetExportHandler)
+
+				ar.Get("/api-usage", adminHandler.GetAPIUsageHandler)
+				ar.Get("/llm-usage", adminHandler.GetLLMUsageHandler)
+
+				ar.Get("/security/recent-logins", adminHandler.GetRecentLoginsHandler)
+				ar.Get("/security/failed-auths", adminHandler.GetFailedAuthsHandler)
 			})
 			// Webhook routes.
 			authed.Route("/orgs/{org}/webhooks", func(wh chi.Router) {
