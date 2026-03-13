@@ -1,7 +1,9 @@
 package telemetry
 
 import (
+	"bufio"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -14,14 +16,36 @@ import (
 const tracerName = "deft-evolution-api/http"
 
 // statusWriter wraps http.ResponseWriter to capture the status code.
+// It also implements http.Hijacker and http.Flusher so that WebSocket
+// upgrades and streaming responses work through the middleware chain.
 type statusWriter struct {
 	http.ResponseWriter
-	status int
+	status      int
+	wroteHeader bool
 }
 
 func (w *statusWriter) WriteHeader(code int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
 	w.status = code
 	w.ResponseWriter.WriteHeader(code)
+}
+
+// Hijack implements http.Hijacker, required for WebSocket upgrades.
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, fmt.Errorf("underlying ResponseWriter does not implement http.Hijacker")
+}
+
+// Flush implements http.Flusher, required for streaming responses.
+func (w *statusWriter) Flush() {
+	if fl, ok := w.ResponseWriter.(http.Flusher); ok {
+		fl.Flush()
+	}
 }
 
 // HTTPTrace returns middleware that creates a span for each HTTP request.

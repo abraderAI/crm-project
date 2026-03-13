@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -78,7 +79,10 @@ func liveServer(t *testing.T) (string, func()) {
 	}
 
 	cleanup := func() {
-		_ = srv.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+		_, _ = sqlDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 		_ = sqlDB.Close()
 	}
 
@@ -426,8 +430,11 @@ func liveAuthServer(t *testing.T) *liveAuthEnv {
 		DB:        db,
 		SignToken: signToken,
 		Cleanup: func() {
-			_ = srv.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = srv.Shutdown(ctx)
 			jwksSrv.Close()
+			_, _ = sqlDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 			_ = sqlDB.Close()
 		},
 	}
