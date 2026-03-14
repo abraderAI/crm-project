@@ -22,6 +22,8 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **GDPR** — Hard-purge admin endpoints; soft delete everywhere else
 - **Observability** — Structured `slog` logging + OpenTelemetry traces and metrics
 - **Voice** — Stubbed `VoiceProvider` interface with thread-based logging and escalation
+- **App shell** — Sidebar navigation, topbar with search + user menu, breadcrumbs, dark/light theme toggle
+- **File preview** — Rich staged file previews (image thumbnails, icons, size) with upload progress indicators
 
 ---
 
@@ -93,6 +95,41 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 ├── SPECIFICATION.md            # Full implementation spec
 └── Taskfile.yml                # All build/test/lint commands
 ```
+
+---
+
+## Frontend Routes
+
+| Route | Description |
+|---|---|
+| `/` | Home / dashboard |
+| `/sign-in`, `/sign-up` | Clerk authentication |
+| `/orgs/create` | Create organization |
+| `/orgs/[org]` | Org overview |
+| `/orgs/[org]/settings` | Org settings |
+| `/orgs/[org]/spaces/create` | Create space |
+| `/orgs/[org]/spaces/[space]` | Space overview |
+| `/orgs/[org]/spaces/[space]/settings` | Space settings |
+| `/orgs/[org]/spaces/[space]/boards/create` | Create board |
+| `/orgs/[org]/spaces/[space]/boards/[board]` | Board view (thread list) |
+| `/orgs/[org]/spaces/[space]/boards/[board]/settings` | Board settings |
+| `/orgs/[org]/spaces/[space]/boards/[board]/threads/create` | Create thread |
+| `/orgs/[org]/spaces/[space]/boards/[board]/threads/[thread]` | Thread detail (messages, editor, attachments, voting, flags, revisions) |
+| `/crm` | CRM pipeline — Kanban board with drag-and-drop stage management |
+| `/crm/leads/[org]/[space]/[board]/[thread]` | Lead detail — enrichment, scoring breakdown, metadata sidebar |
+| `/search` | Full-text search with filters |
+| `/notifications` | Notification feed |
+| `/notifications/preferences` | Notification channel preferences |
+| `/admin` | Admin dashboard |
+| `/admin/users` | User management (ban, purge, impersonate) |
+| `/admin/billing` | Billing dashboard (FlexPoint) |
+| `/admin/webhooks` | Webhook management + delivery log |
+| `/admin/members` | Organization membership manager |
+| `/admin/moderation` | Content moderation queue |
+| `/admin/audit-log` | Platform-wide audit log |
+| `/admin/feature-flags` | Feature flag management |
+
+All routes use server components for data fetching with client wrappers for interactivity. The app shell (`AppLayoutWrapper`) provides sidebar navigation, topbar with search and Clerk `UserButton`, and route-aware active states.
 
 ---
 
@@ -333,10 +370,11 @@ Admin-specific tables: `platform_admins`, `users_shadow`, `system_settings`, `fe
 
 ## Quality
 
+- **907 frontend tests** across 62 test files (Vitest) — 94% statement coverage
+- **37 Go test packages** with race detector enabled — 86% coverage
 - ≥ 85% test coverage enforced on every PR
-- Race detector enabled on all test runs (`-race`)
 - ≥ 50 fuzz test cases per input entry point
-- `task check` must pass fully before any merge
+- `task check` must pass fully before any merge (fmt + lint + typecheck + tests + coverage)
 - All errors follow RFC 7807 Problem Details
 - All admin destructive actions require confirmation and are audit-logged with reason
 
