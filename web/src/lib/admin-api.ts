@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import type {
   AuditEntry,
+  BillingInfo,
   FeatureFlag,
   PaginatedResponse,
   PlatformAdmin,
@@ -54,4 +55,10 @@ export async function fetchFeatureFlags(): Promise<FeatureFlag[]> {
   const token = await getToken();
   const res = await serverFetch<{ data: FeatureFlag[] }>("/admin/feature-flags", { token });
   return res.data;
+}
+
+/** Fetch billing information for the current org. */
+export async function fetchBillingInfo(): Promise<BillingInfo> {
+  const token = await getToken();
+  return serverFetch<BillingInfo>("/admin/billing", { token });
 }
