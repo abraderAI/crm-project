@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { AlertTriangle, History } from "lucide-react";
 
-import type { Thread, Message, Revision as ApiRevision, Upload } from "@/lib/api-types";
+import type {
+  Thread,
+  Message,
+  Revision as ApiRevision,
+  Upload,
+  TypingPayload,
+  WSMessage,
+} from "@/lib/api-types";
 import {
   createMessage,
   fetchThreadRevisions,
@@ -14,7 +21,10 @@ import {
   toggleVote,
   createFlag,
 } from "@/lib/entity-api";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { useTyping } from "@/hooks/use-typing";
 import { ThreadDetail } from "./thread-detail";
+import { RealtimeMessages } from "@/components/realtime/realtime-messages";
 import { VoteButton } from "@/components/community/vote-button";
 import { FlagForm } from "@/components/community/flag-form";
 import { MessageEditor } from "@/components/editor/message-editor";
@@ -77,6 +87,45 @@ export function ThreadDetailView({
   const [sending, setSending] = useState(false);
   const [voting, setVoting] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+
+  // WebSocket token (async from Clerk)
+  const [wsToken, setWsToken] = useState<string | null>(null);
+  const [wsNewMessages, setWsNewMessages] = useState<Message[]>([]);
+  const handleRemoteTypingRef = useRef<((msg: WSMessage<TypingPayload>) => void) | null>(null);
+
+  useEffect(() => {
+    void getToken().then((t) => setWsToken(t));
+  }, [getToken]);
+
+  const { subscribe, unsubscribe, send: wsSend } = useWebSocket({
+    token: wsToken,
+    enabled: !!wsToken,
+    onEvent: {
+      "message.created": (msg) => {
+        setWsNewMessages((prev) => [...prev, msg.payload as Message]);
+      },
+      "typing": (msg) => {
+        handleRemoteTypingRef.current?.(msg as WSMessage<TypingPayload>);
+      },
+    },
+  });
+
+  const sendTypingEvent = useCallback(
+    (tid: string) => {
+      wsSend({ action: "typing", thread_id: tid });
+    },
+    [wsSend],
+  );
+
+  const { typingUsers: wsTypingUsers, handleRemoteTyping } = useTyping({
+    threadId: thread.id,
+    currentUserId: userId ?? undefined,
+    sendTyping: sendTypingEvent,
+  });
+
+  useEffect(() => {
+    handleRemoteTypingRef.current = handleRemoteTyping;
+  }, [handleRemoteTyping]);
 
   // Flag form state
   const [showFlagForm, setShowFlagForm] = useState(false);
@@ -200,6 +249,18 @@ export function ThreadDetailView({
         currentUserId={userId ?? undefined}
         onNewMessage={!thread.is_locked ? handleScrollToEditor : undefined}
         editorSlot={editor}
+        messagesSlot={
+          <RealtimeMessages
+            threadId={thread.id}
+            initialMessages={messages}
+            currentUserId={userId ?? undefined}
+            wsSubscribe={subscribe}
+            wsUnsubscribe={unsubscribe}
+            wsSendTyping={sendTypingEvent}
+            externalNewMessages={wsNewMessages}
+            externalTypingUsers={wsTypingUsers}
+          />
+        }
       />
 
       {/* Attachments */}
