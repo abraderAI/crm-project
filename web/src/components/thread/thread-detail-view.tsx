@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { History } from "lucide-react";
+import { AlertTriangle, History } from "lucide-react";
 
 import type { Thread, Message, Revision as ApiRevision, Upload } from "@/lib/api-types";
 import {
@@ -12,9 +12,11 @@ import {
   fetchThreadUploads,
   uploadFile,
   toggleVote,
+  createFlag,
 } from "@/lib/entity-api";
 import { ThreadDetail } from "./thread-detail";
 import { VoteButton } from "@/components/community/vote-button";
+import { FlagForm } from "@/components/community/flag-form";
 import { MessageEditor } from "@/components/editor/message-editor";
 import { RevisionHistory, type Revision } from "@/components/editor/revision-history";
 import { FileUpload } from "@/components/upload/file-upload";
@@ -75,6 +77,10 @@ export function ThreadDetailView({
   const [sending, setSending] = useState(false);
   const [voting, setVoting] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+
+  // Flag form state
+  const [showFlagForm, setShowFlagForm] = useState(false);
+  const [flagging, setFlagging] = useState(false);
 
   // Revision history state
   const [showRevisions, setShowRevisions] = useState(false);
@@ -150,6 +156,18 @@ export function ThreadDetailView({
     }
   };
 
+  const handleSubmitFlag = async (reason: string): Promise<void> => {
+    setFlagging(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Unauthenticated");
+      await createFlag(token, thread.id, reason);
+      setShowFlagForm(false);
+    } finally {
+      setFlagging(false);
+    }
+  };
+
   const handleScrollToEditor = (): void => {
     editorRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -193,6 +211,27 @@ export function ThreadDetailView({
           <FileList files={files} />
         </div>
       )}
+
+      {/* Flag content toggle */}
+      <div>
+        <button
+          onClick={() => setShowFlagForm(!showFlagForm)}
+          data-testid="flag-toggle"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <AlertTriangle className="h-4 w-4" />
+          {showFlagForm ? "Cancel Report" : "Report Content"}
+        </button>
+        {showFlagForm && (
+          <div className="mt-3">
+            <FlagForm
+              onSubmit={handleSubmitFlag}
+              onCancel={() => setShowFlagForm(false)}
+              loading={flagging}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Revision History toggle */}
       <div>

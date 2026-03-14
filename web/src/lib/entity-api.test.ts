@@ -40,6 +40,9 @@ import {
   changeMembershipRole,
   removeMembership,
   toggleVote,
+  createFlag,
+  resolveFlag,
+  dismissFlag,
 } from "./entity-api";
 
 describe("entity-api", () => {
@@ -502,6 +505,52 @@ describe("entity-api", () => {
         { token },
       );
       expect(result).toEqual(vote);
+    });
+  });
+
+  // --- Flag mutations ---
+
+  describe("createFlag", () => {
+    it("posts to /admin/flags with thread_id and reason", async () => {
+      const flag = { id: "f1", thread_id: "t1", reason: "Spam" };
+      mockClientMutate.mockResolvedValue(flag);
+
+      const result = await createFlag(token, "t1", "Spam");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/flags", {
+        token,
+        body: { thread_id: "t1", reason: "Spam" },
+      });
+      expect(result).toEqual(flag);
+    });
+  });
+
+  describe("resolveFlag", () => {
+    it("patches /admin/flags/:id/resolve with note", async () => {
+      const flag = { id: "f1", status: "resolved" };
+      mockClientMutate.mockResolvedValue(flag);
+
+      const result = await resolveFlag(token, "f1", "Addressed by moderator");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/admin/flags/f1/resolve", {
+        token,
+        body: { resolution_note: "Addressed by moderator" },
+      });
+      expect(result).toEqual(flag);
+    });
+  });
+
+  describe("dismissFlag", () => {
+    it("patches /admin/flags/:id/dismiss with token", async () => {
+      const flag = { id: "f1", status: "dismissed" };
+      mockClientMutate.mockResolvedValue(flag);
+
+      const result = await dismissFlag(token, "f1");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/admin/flags/f1/dismiss", {
+        token,
+      });
+      expect(result).toEqual(flag);
     });
   });
 });

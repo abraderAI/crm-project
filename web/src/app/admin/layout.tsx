@@ -10,6 +10,7 @@ import {
   CreditCard,
   Webhook,
   UserCog,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ const ADMIN_TABS = [
   { href: "/admin/billing", label: "Billing", icon: CreditCard, exact: false },
   { href: "/admin/webhooks", label: "Webhooks", icon: Webhook, exact: false },
   { href: "/admin/members", label: "Members", icon: UserCog, exact: false },
+  { href: "/admin/moderation", label: "Moderation", icon: Shield, exact: false },
 ] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }): React.ReactNode {
