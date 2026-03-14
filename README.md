@@ -11,8 +11,8 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Dual authentication** — Clerk JWT or API key (`X-API-Key: deft_live_...`)
 - **Sales CRM** — Configurable pipeline stages, rule-based + LLM lead scoring, automated lead-to-customer provisioning
 - **Billing** — FlexPoint integration behind a swappable `BillingProvider` interface
-- **Community** — Weighted voting, role-based moderation with content flagging
-- **Real-time** — WebSocket channels with RBAC-scoped subscriptions
+- **Community** — Weighted voting, role-based moderation with content flagging, moderation queue
+- **Real-time** — WebSocket channels with RBAC-scoped subscriptions, live message updates, typing indicators
 - **Notifications** — In-app + email (Resend) + digests, behind a `NotificationProvider` interface
 - **Search** — FTS5 full-text search with metadata filters, RBAC scoping, ranked snippets
 - **File uploads** — `StorageProvider` abstraction (local → S3/R2), 100 MB default limit
@@ -93,6 +93,35 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 ├── SPECIFICATION.md            # Full implementation spec
 └── Taskfile.yml                # All build/test/lint commands
 ```
+
+---
+
+## Frontend Routes
+
+| Route | Description |
+|---|---|
+| `/` | Home page |
+| `/crm` | CRM pipeline — Kanban board with drag-drop, filters, pipeline stats |
+| `/crm/leads/[org]/[space]/[board]/[thread]` | Lead detail — enrichment, score breakdown, activity timeline |
+| `/orgs/create` | Create organization |
+| `/orgs/[org]` | Org dashboard |
+| `/orgs/[org]/settings` | Org settings |
+| `/orgs/[org]/spaces/create` | Create space |
+| `/orgs/[org]/spaces/[space]` | Space overview |
+| `/orgs/[org]/spaces/[space]/boards/[board]` | Board — thread list with filters and sorting |
+| `/orgs/[org]/.../threads/[thread]` | Thread detail — real-time messages, typing indicators, voting, flagging, file attachments, revision history |
+| `/orgs/[org]/.../threads/create` | Create thread |
+| `/notifications` | Notification feed |
+| `/notifications/preferences` | Notification preferences (per-type, per-channel) |
+| `/search` | Full-text search |
+| `/admin` | Admin dashboard |
+| `/admin/members` | Membership manager |
+| `/admin/billing` | Billing dashboard |
+| `/admin/webhooks` | Webhook subscriptions + delivery log |
+| `/admin/audit-log` | Platform audit log |
+| `/admin/moderation` | Content moderation queue |
+| `/admin/feature-flags` | Feature flag management |
+| `/admin/users` | User management |
 
 ---
 
@@ -333,7 +362,7 @@ Admin-specific tables: `platform_admins`, `users_shadow`, `system_settings`, `fe
 
 ## Quality
 
-- ≥ 85% test coverage enforced on every PR
+- ≥ 85% test coverage enforced on every PR (895+ frontend tests, comprehensive Go test suite)
 - Race detector enabled on all test runs (`-race`)
 - ≥ 50 fuzz test cases per input entry point
 - `task check` must pass fully before any merge

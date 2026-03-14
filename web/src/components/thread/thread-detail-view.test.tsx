@@ -15,6 +15,31 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mockRefresh }),
 }));
 
+// Mock useWebSocket hook.
+const mockSubscribe = vi.fn();
+const mockUnsubscribe = vi.fn();
+const mockWsSend = vi.fn();
+vi.mock("@/hooks/use-websocket", () => ({
+  useWebSocket: () => ({
+    state: "connected" as const,
+    subscribe: mockSubscribe,
+    unsubscribe: mockUnsubscribe,
+    send: mockWsSend,
+    lastMessage: null,
+  }),
+}));
+
+// Mock useTyping hook.
+const mockHandleLocalTyping = vi.fn();
+const mockHandleRemoteTyping = vi.fn();
+vi.mock("@/hooks/use-typing", () => ({
+  useTyping: () => ({
+    typingUsers: [],
+    handleLocalTyping: mockHandleLocalTyping,
+    handleRemoteTyping: mockHandleRemoteTyping,
+  }),
+}));
+
 // Mock entity-api.
 const mockToggleVote = vi.fn();
 const mockCreateFlag = vi.fn();
@@ -151,6 +176,24 @@ describe("ThreadDetailView", () => {
 
     await waitFor(() => {
       expect(mockCreateFlag).toHaveBeenCalledWith("test-token", "t1", "Spam or misleading");
+    });
+  });
+
+  it("renders RealtimeMessages instead of static MessageTimeline", () => {
+    render(<ThreadDetailView {...defaultProps} />);
+    expect(screen.getByTestId("realtime-messages")).toBeInTheDocument();
+  });
+
+  it("passes initial messages to RealtimeMessages", () => {
+    render(<ThreadDetailView {...defaultProps} />);
+    // RealtimeMessages renders MessageTimeline with initialMessages
+    expect(screen.getByTestId("message-item-m1")).toBeInTheDocument();
+  });
+
+  it("subscribes to thread WS channel via RealtimeMessages", async () => {
+    render(<ThreadDetailView {...defaultProps} />);
+    await waitFor(() => {
+      expect(mockSubscribe).toHaveBeenCalledWith("thread:t1");
     });
   });
 });
