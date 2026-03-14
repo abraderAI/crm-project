@@ -1,6 +1,6 @@
 "use client";
 
-import { parseMetadata } from "@/components/entity/entity-card";
+import { parseMetadata } from "@/lib/utils";
 
 export interface MetadataSidebarProps {
   status?: string;

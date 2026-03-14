@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cn } from "./utils";
+import { cn, parseMetadata } from "./utils";
 
 describe("cn", () => {
   it("merges class names", () => {
@@ -28,5 +28,36 @@ describe("cn", () => {
 
   it("handles objects", () => {
     expect(cn({ foo: true, bar: false, baz: true })).toBe("foo baz");
+  });
+});
+
+describe("parseMetadata", () => {
+  it("returns empty object for undefined", () => {
+    expect(parseMetadata(undefined)).toEqual({});
+  });
+
+  it("returns empty object for empty string", () => {
+    expect(parseMetadata("")).toEqual({});
+  });
+
+  it("returns the object as-is when given a Record", () => {
+    const input = { tier: "pro", count: 5 };
+    expect(parseMetadata(input)).toBe(input);
+  });
+
+  it("parses valid JSON string to object", () => {
+    expect(parseMetadata('{"status":"open"}')).toEqual({ status: "open" });
+  });
+
+  it("returns empty object for invalid JSON", () => {
+    expect(parseMetadata("not-json")).toEqual({});
+  });
+
+  it("returns empty object for JSON array", () => {
+    expect(parseMetadata("[1,2,3]")).toEqual({});
+  });
+
+  it("returns empty object for JSON primitive", () => {
+    expect(parseMetadata("42")).toEqual({});
   });
 });
