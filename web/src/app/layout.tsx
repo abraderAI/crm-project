@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/theme-provider";
-import { NavBar } from "@/components/nav-bar";
+import { AppLayoutWrapper } from "@/components/layout/app-layout-wrapper";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,8 +19,7 @@ export default function RootLayout({
       <html lang="en" suppressHydrationWarning>
         <body className="min-h-screen bg-background font-sans text-foreground antialiased">
           <ThemeProvider>
-            <NavBar />
-            <main>{children}</main>
+            <AppLayoutWrapper>{children}</AppLayoutWrapper>
           </ThemeProvider>
         </body>
       </html>
