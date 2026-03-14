@@ -1,5 +1,6 @@
 import type {
   Board,
+  DigestFrequency,
   Message,
   MessageType,
   Org,
@@ -9,6 +10,7 @@ import type {
   Thread,
   Upload,
 } from "./api-types";
+import type { PreferenceSetting } from "@/components/realtime/notification-preferences";
 import type { EntityFormValues } from "@/components/entities/entity-form";
 import { clientMutate, buildHeaders, buildUrl, parseResponse } from "./api-client";
 
@@ -200,6 +202,27 @@ export async function uploadFile(
 /** Delete an upload by ID. */
 export async function deleteUpload(token: string, uploadId: string): Promise<void> {
   await clientMutate<void>("DELETE", `/uploads/${uploadId}`, { token });
+}
+
+// --- Notification Preferences ---
+
+/** Save notification preference toggles. */
+export async function saveNotificationPreferences(
+  token: string,
+  preferences: PreferenceSetting[],
+): Promise<void> {
+  await clientMutate<void>("PUT", "/notifications/preferences", {
+    token,
+    body: { preferences },
+  });
+}
+
+/** Save digest schedule frequency. */
+export async function saveDigestSchedule(token: string, frequency: DigestFrequency): Promise<void> {
+  await clientMutate<void>("PUT", "/notifications/digest", {
+    token,
+    body: { frequency },
+  });
 }
 
 /** Create a new message within a thread. Defaults type to "comment". */
