@@ -10,6 +10,12 @@ vi.mock("next/navigation", () => ({
 // Mock @clerk/nextjs.
 vi.mock("@clerk/nextjs", () => ({
   UserButton: () => <div data-testid="clerk-user-button" />,
+  useAuth: () => ({ getToken: vi.fn().mockResolvedValue(null) }),
+}));
+
+// Mock NavNotificationBell to isolate NavBar tests.
+vi.mock("./nav-notification-bell", () => ({
+  NavNotificationBell: () => <div data-testid="nav-notification-bell" />,
 }));
 
 // Mock ThemeToggle to isolate NavBar tests.
@@ -31,7 +37,6 @@ describe("NavBar", () => {
     render(<NavBar />);
     expect(screen.getByTestId("nav-link-home")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-crm")).toBeInTheDocument();
-    expect(screen.getByTestId("nav-link-notifications")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-search")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-admin")).toBeInTheDocument();
   });
@@ -63,10 +68,10 @@ describe("NavBar", () => {
     expect(screen.getByTestId("nav-link-home")).not.toHaveClass("bg-accent");
   });
 
-  it("highlights Notifications link when on /notifications", () => {
-    mockPathname = "/notifications";
+  it("renders NavNotificationBell component", () => {
+    mockPathname = "/";
     render(<NavBar />);
-    expect(screen.getByTestId("nav-link-notifications")).toHaveClass("bg-accent");
+    expect(screen.getByTestId("nav-notification-bell")).toBeInTheDocument();
   });
 
   it("highlights Search link when on /search", () => {
