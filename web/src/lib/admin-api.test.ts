@@ -1,0 +1,117 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+// Mock @clerk/nextjs/server before imports.
+const mockGetToken = vi.fn();
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: vi.fn().mockResolvedValue({ getToken: () => mockGetToken() }),
+}));
+
+// Mock api-client functions.
+const mockServerFetch = vi.fn();
+const mockServerFetchPaginated = vi.fn();
+vi.mock("./api-client", () => ({
+  serverFetch: (...args: unknown[]) => mockServerFetch(...args),
+  serverFetchPaginated: (...args: unknown[]) => mockServerFetchPaginated(...args),
+}));
+
+import {
+  fetchAdminStats,
+  fetchAdminUsers,
+  fetchPlatformAdmins,
+  fetchAuditLog,
+  fetchFeatureFlags,
+} from "./admin-api";
+
+describe("admin-api", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetToken.mockResolvedValue("test-token");
+  });
+
+  describe("fetchAdminStats", () => {
+    it("fetches stats with auth token", async () => {
+      const stats = { orgs: { total: 1, last_7d: 0, last_30d: 1 } };
+      mockServerFetch.mockResolvedValue(stats);
+
+      const result = await fetchAdminStats();
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/stats", { token: "test-token" });
+      expect(result).toEqual(stats);
+    });
+
+    it("throws when unauthenticated", async () => {
+      mockGetToken.mockResolvedValue(null);
+
+      await expect(fetchAdminStats()).rejects.toThrow("Unauthenticated");
+    });
+  });
+
+  describe("fetchAdminUsers", () => {
+    it("fetches paginated users", async () => {
+      const response = { data: [{ clerk_user_id: "u1" }], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchAdminUsers({ email: "test" });
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/users",
+        { email: "test" },
+        { token: "test-token" },
+      );
+      expect(result).toEqual(response);
+    });
+
+    it("works without params", async () => {
+      const response = { data: [], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      await fetchAdminUsers();
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/admin/users", undefined, {
+        token: "test-token",
+      });
+    });
+  });
+
+  describe("fetchPlatformAdmins", () => {
+    it("fetches and unwraps data array", async () => {
+      const admins = [{ user_id: "u1", granted_by: "bootstrap", is_active: true }];
+      mockServerFetch.mockResolvedValue({ data: admins });
+
+      const result = await fetchPlatformAdmins();
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/platform-admins", {
+        token: "test-token",
+      });
+      expect(result).toEqual(admins);
+    });
+  });
+
+  describe("fetchAuditLog", () => {
+    it("fetches paginated audit log", async () => {
+      const response = { data: [{ id: "a1" }], page_info: { has_more: true } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchAuditLog({ action: "create" });
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/audit-log",
+        { action: "create" },
+        { token: "test-token" },
+      );
+      expect(result).toEqual(response);
+    });
+  });
+
+  describe("fetchFeatureFlags", () => {
+    it("fetches and unwraps data array", async () => {
+      const flags = [{ key: "community_voting", enabled: true }];
+      mockServerFetch.mockResolvedValue({ data: flags });
+
+      const result = await fetchFeatureFlags();
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/feature-flags", { token: "test-token" });
+      expect(result).toEqual(flags);
+    });
+  });
+});

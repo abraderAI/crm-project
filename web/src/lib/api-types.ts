@@ -221,6 +221,15 @@ export interface Invoice {
   paid_at?: string;
 }
 
+/** Revision history entry for threads/messages. */
+export interface Revision extends BaseEntity {
+  entity_type: string;
+  entity_id: string;
+  version: number;
+  previous_content: string;
+  editor_id: string;
+}
+
 /** Sort option for community thread lists. */
 export type ThreadSortOption = "votes" | "newest" | "oldest";
 
@@ -291,3 +300,53 @@ export interface WSTypingCommand {
 
 /** Union of client-to-server WS commands. */
 export type WSClientCommand = WSSubscribeCommand | WSTypingCommand;
+
+// --- Admin types (matching Go backend admin package) ---
+
+/** Count stats with total and recent counts. */
+export interface CountStats {
+  total: number;
+  last_7d: number;
+  last_30d: number;
+}
+
+/** Platform-wide statistics from GET /v1/admin/stats. */
+export interface PlatformStats {
+  orgs: CountStats;
+  users: CountStats;
+  threads: CountStats;
+  messages: CountStats;
+  db_size_bytes: number;
+  failed_webhooks_24h: number;
+  pending_notifications: number;
+}
+
+/** User shadow — local cache of Clerk user data. */
+export interface UserShadow {
+  clerk_user_id: string;
+  email: string;
+  display_name: string;
+  avatar_url?: string;
+  last_seen_at: string;
+  is_banned: boolean;
+  ban_reason?: string;
+  synced_at: string;
+  banned_at?: string | null;
+  banned_by?: string;
+}
+
+/** Platform admin record. */
+export interface PlatformAdmin {
+  user_id: string;
+  granted_by: string;
+  granted_at: string;
+  is_active: boolean;
+}
+
+/** Feature flag toggle. */
+export interface FeatureFlag {
+  key: string;
+  enabled: boolean;
+  org_scope?: string | null;
+  updated_at: string;
+}
