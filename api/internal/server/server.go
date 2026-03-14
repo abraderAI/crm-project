@@ -13,6 +13,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/auth"
 	"github.com/abraderAI/crm-project/api/internal/billing"
 	"github.com/abraderAI/crm-project/api/internal/board"
+	"github.com/abraderAI/crm-project/api/internal/channel"
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/event"
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
@@ -185,6 +186,9 @@ func NewRouter(cfg Config) http.Handler {
 	provisionHandler := provision.NewHandler(provisionService)
 	// Subscribe provisioning to pipeline stage changes (auto-provision on closed_won).
 	eventBus.Subscribe(event.PipelineStageChanged, provisionService.HandleStageChanged)
+
+	// IO Phase 1: Channel Gateway.
+	channelHandler := channel.NewHandler(channel.NewService(channel.NewRepository(cfg.DB)))
 
 	// API v1 subrouter.
 	r.Route("/v1", func(v1 chi.Router) {
@@ -410,6 +414,16 @@ func NewRouter(cfg Config) http.Handler {
 						})
 					})
 				})
+			})
+
+			// Channel gateway routes.
+			authed.Route("/orgs/{org}/channels", func(ch chi.Router) {
+				ch.Get("/health", channelHandler.GetHealth)
+				ch.Get("/dlq", channelHandler.ListDLQ)
+				ch.Post("/dlq/{id}/retry", channelHandler.RetryDLQ)
+				ch.Post("/dlq/{id}/dismiss", channelHandler.DismissDLQ)
+				ch.Get("/{type}", channelHandler.GetConfig)
+				ch.Put("/{type}", channelHandler.PutConfig)
 			})
 
 			// Pipeline stages route.

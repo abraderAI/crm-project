@@ -87,6 +87,8 @@ tasks:
       - go test -race -fuzz=FuzzExportType -fuzztime=5s ./internal/admin/
       - go test -race -fuzz=FuzzFailedAuthPeriod -fuzztime=5s ./internal/admin/
       - go test -race -fuzz=FuzzImpersonationCreate -fuzztime=5s ./internal/admin/
+      - go test -race -fuzz=FuzzValidateSettings -fuzztime=5s ./internal/channel/
+      - go test -race -fuzz=FuzzInboundEvent -fuzztime=5s ./internal/channel/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)
