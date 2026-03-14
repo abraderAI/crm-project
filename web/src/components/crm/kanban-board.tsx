@@ -26,6 +26,8 @@ export interface KanbanBoardProps {
   onStageChange?: (threadId: string, newStage: PipelineStage) => void;
   /** Base path for constructing lead detail links. */
   basePath?: string;
+  /** Per-thread href overrides (thread id → href). Takes precedence over basePath. */
+  threadHrefs?: Record<string, string>;
   /** Whether the board is in loading state. */
   loading?: boolean;
 }
@@ -37,6 +39,7 @@ export function KanbanBoard({
   onCardClick,
   onStageChange,
   basePath,
+  threadHrefs,
   loading = false,
 }: KanbanBoardProps): React.ReactNode {
   const [filters, setFilters] = useState<KanbanFilterValues>({
@@ -132,7 +135,10 @@ export function KanbanBoard({
                     key={card.thread.id}
                     card={card}
                     onClick={onCardClick}
-                    href={basePath ? `${basePath}/${card.thread.slug}` : undefined}
+                    href={
+                      threadHrefs?.[card.thread.id] ??
+                      (basePath ? `${basePath}/${card.thread.slug}` : undefined)
+                    }
                   />
                 ))}
                 {cards.length === 0 && (
