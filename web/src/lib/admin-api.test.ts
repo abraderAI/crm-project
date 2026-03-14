@@ -21,6 +21,8 @@ import {
   fetchAuditLog,
   fetchFeatureFlags,
   fetchBillingInfo,
+  fetchWebhookSubscriptions,
+  fetchWebhookDeliveries,
 } from "./admin-api";
 
 describe("admin-api", () => {
@@ -130,6 +132,42 @@ describe("admin-api", () => {
 
       expect(mockServerFetch).toHaveBeenCalledWith("/admin/billing", { token: "test-token" });
       expect(result).toEqual(billing);
+    });
+  });
+
+  describe("fetchWebhookSubscriptions", () => {
+    it("fetches paginated webhook subscriptions", async () => {
+      const response = {
+        data: [{ id: "ws1", url: "https://example.com/hook" }],
+        page_info: { has_more: false },
+      };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchWebhookSubscriptions();
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/admin/webhooks", undefined, {
+        token: "test-token",
+      });
+      expect(result).toEqual(response);
+    });
+  });
+
+  describe("fetchWebhookDeliveries", () => {
+    it("fetches paginated webhook deliveries", async () => {
+      const response = {
+        data: [{ id: "d1", event_type: "message.created" }],
+        page_info: { has_more: true },
+      };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchWebhookDeliveries({ cursor: "abc" });
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/webhook-deliveries",
+        { cursor: "abc" },
+        { token: "test-token" },
+      );
+      expect(result).toEqual(response);
     });
   });
 });
