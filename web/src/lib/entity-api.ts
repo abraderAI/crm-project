@@ -1,6 +1,7 @@
 import type {
   Board,
   DigestFrequency,
+  Flag,
   Message,
   MessageType,
   Org,
@@ -309,6 +310,31 @@ export async function toggleVote(
     `/orgs/${orgSlug}/spaces/${spaceSlug}/boards/${boardSlug}/threads/${threadSlug}/vote`,
     { token },
   );
+}
+
+// --- Flag mutations ---
+
+/** Create a content flag for moderation review. */
+export async function createFlag(token: string, threadId: string, reason: string): Promise<Flag> {
+  return clientMutate<Flag>("POST", "/admin/flags", {
+    token,
+    body: { thread_id: threadId, reason },
+  });
+}
+
+/** Resolve a pending flag with an optional note. */
+export async function resolveFlag(token: string, flagId: string, note: string): Promise<Flag> {
+  return clientMutate<Flag>("PATCH", `/admin/flags/${flagId}/resolve`, {
+    token,
+    body: { resolution_note: note },
+  });
+}
+
+/** Dismiss a pending flag. */
+export async function dismissFlag(token: string, flagId: string): Promise<Flag> {
+  return clientMutate<Flag>("PATCH", `/admin/flags/${flagId}/dismiss`, {
+    token,
+  });
 }
 
 /** Create a new message within a thread. Defaults type to "comment". */

@@ -17,12 +17,14 @@ vi.mock("next/navigation", () => ({
 
 // Mock entity-api.
 const mockToggleVote = vi.fn();
+const mockCreateFlag = vi.fn();
 const mockCreateMessage = vi.fn();
 const mockFetchThreadRevisions = vi.fn();
 const mockFetchThreadUploads = vi.fn();
 const mockUploadFile = vi.fn();
 vi.mock("@/lib/entity-api", () => ({
   toggleVote: (...args: unknown[]) => mockToggleVote(...args),
+  createFlag: (...args: unknown[]) => mockCreateFlag(...args),
   createMessage: (...args: unknown[]) => mockCreateMessage(...args),
   fetchThreadRevisions: (...args: unknown[]) => mockFetchThreadRevisions(...args),
   fetchThreadUploads: (...args: unknown[]) => mockFetchThreadUploads(...args),
@@ -76,6 +78,7 @@ describe("ThreadDetailView", () => {
     mockFetchThreadUploads.mockResolvedValue({ data: [], page_info: { has_more: false } });
     mockFetchThreadRevisions.mockResolvedValue({ data: [], page_info: { has_more: false } });
     mockToggleVote.mockResolvedValue({ id: "v1", thread_id: "t1", user_id: "user-1", weight: 1 });
+    mockCreateFlag.mockResolvedValue({ id: "f1", thread_id: "t1", reason: "Spam" });
   });
 
   it("renders VoteButton with correct initial state when hasVoted is true", () => {
@@ -121,5 +124,33 @@ describe("ThreadDetailView", () => {
     render(<ThreadDetailView {...defaultProps} />);
 
     expect(screen.getByTestId("revision-toggle")).toBeInTheDocument();
+  });
+
+  it("shows flag toggle button", () => {
+    render(<ThreadDetailView {...defaultProps} />);
+
+    expect(screen.getByTestId("flag-toggle")).toBeInTheDocument();
+  });
+
+  it("shows FlagForm when flag toggle is clicked", async () => {
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    await user.click(screen.getByTestId("flag-toggle"));
+
+    expect(screen.getByTestId("flag-form")).toBeInTheDocument();
+  });
+
+  it("calls createFlag via entity-api when FlagForm is submitted", async () => {
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    await user.click(screen.getByTestId("flag-toggle"));
+    await user.click(screen.getByTestId("flag-reason-spam-or-misleading"));
+    await user.click(screen.getByTestId("flag-submit-btn"));
+
+    await waitFor(() => {
+      expect(mockCreateFlag).toHaveBeenCalledWith("test-token", "t1", "Spam or misleading");
+    });
   });
 });

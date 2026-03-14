@@ -24,6 +24,7 @@ import {
   fetchWebhookSubscriptions,
   fetchWebhookDeliveries,
   fetchMemberships,
+  fetchFlags,
 } from "./admin-api";
 
 describe("admin-api", () => {
@@ -186,6 +187,36 @@ describe("admin-api", () => {
         token: "test-token",
       });
       expect(result).toEqual(response);
+    });
+  });
+
+  describe("fetchFlags", () => {
+    it("fetches paginated flags", async () => {
+      const response = {
+        data: [{ id: "f1", thread_id: "t1", reason: "Spam", status: "pending" }],
+        page_info: { has_more: false },
+      };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchFlags();
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/admin/flags", undefined, {
+        token: "test-token",
+      });
+      expect(result).toEqual(response);
+    });
+
+    it("passes params through", async () => {
+      const response = { data: [], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      await fetchFlags({ status: "pending" });
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/flags",
+        { status: "pending" },
+        { token: "test-token" },
+      );
     });
   });
 });
