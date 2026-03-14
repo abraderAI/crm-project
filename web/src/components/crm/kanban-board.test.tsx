@@ -134,6 +134,27 @@ describe("KanbanBoard", () => {
     expect(link).toHaveAttribute("href", "/crm/leads/lead-acme");
   });
 
+  it("generates card links from threadHrefs map", () => {
+    const hrefs = { "t-1": "/crm/leads/acme/sales/pipeline/lead-acme" };
+    render(<KanbanBoard threads={[makeThread()]} threadHrefs={hrefs} stages={["new_lead"]} />);
+    const link = screen.getByTestId("kanban-card-link-t-1");
+    expect(link).toHaveAttribute("href", "/crm/leads/acme/sales/pipeline/lead-acme");
+  });
+
+  it("prefers threadHrefs over basePath", () => {
+    const hrefs = { "t-1": "/crm/leads/specific-path" };
+    render(
+      <KanbanBoard
+        threads={[makeThread()]}
+        basePath="/crm/leads"
+        threadHrefs={hrefs}
+        stages={["new_lead"]}
+      />,
+    );
+    const link = screen.getByTestId("kanban-card-link-t-1");
+    expect(link).toHaveAttribute("href", "/crm/leads/specific-path");
+  });
+
   it("handles drag over on column", () => {
     render(<KanbanBoard threads={[]} stages={["new_lead"]} />);
     const column = screen.getByTestId("kanban-column-new_lead");
