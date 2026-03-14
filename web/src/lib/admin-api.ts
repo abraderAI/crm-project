@@ -8,6 +8,8 @@ import type {
   PlatformAdmin,
   PlatformStats,
   UserShadow,
+  WebhookDelivery,
+  WebhookSubscription,
 } from "./api-types";
 import { serverFetch, serverFetchPaginated } from "./api-client";
 
@@ -61,4 +63,20 @@ export async function fetchFeatureFlags(): Promise<FeatureFlag[]> {
 export async function fetchBillingInfo(): Promise<BillingInfo> {
   const token = await getToken();
   return serverFetch<BillingInfo>("/admin/billing", { token });
+}
+
+/** Fetch paginated webhook subscriptions. */
+export async function fetchWebhookSubscriptions(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<WebhookSubscription>> {
+  const token = await getToken();
+  return serverFetchPaginated<WebhookSubscription>("/admin/webhooks", params, { token });
+}
+
+/** Fetch paginated webhook delivery log. */
+export async function fetchWebhookDeliveries(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<WebhookDelivery>> {
+  const token = await getToken();
+  return serverFetchPaginated<WebhookDelivery>("/admin/webhook-deliveries", params, { token });
 }

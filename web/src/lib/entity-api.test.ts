@@ -32,6 +32,10 @@ import {
   deleteUpload,
   saveNotificationPreferences,
   saveDigestSchedule,
+  createWebhook,
+  deleteWebhook,
+  toggleWebhook,
+  replayWebhookDelivery,
 } from "./entity-api";
 
 describe("entity-api", () => {
@@ -377,6 +381,61 @@ describe("entity-api", () => {
           body: { body: "Hi", type: "comment" },
         },
       );
+    });
+  });
+
+  // --- Webhook mutations ---
+
+  describe("createWebhook", () => {
+    it("posts to /admin/webhooks with url and event_filter", async () => {
+      const webhook = { id: "ws1", url: "https://example.com/hook" };
+      mockClientMutate.mockResolvedValue(webhook);
+
+      const result = await createWebhook(token, "https://example.com/hook", "message.created");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/webhooks", {
+        token,
+        body: { url: "https://example.com/hook", event_filter: "message.created" },
+      });
+      expect(result).toEqual(webhook);
+    });
+  });
+
+  describe("deleteWebhook", () => {
+    it("deletes /admin/webhooks/:id with token", async () => {
+      mockClientMutate.mockResolvedValue(undefined);
+
+      await deleteWebhook(token, "ws1");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("DELETE", "/admin/webhooks/ws1", {
+        token,
+      });
+    });
+  });
+
+  describe("toggleWebhook", () => {
+    it("patches /admin/webhooks/:id/toggle with token", async () => {
+      const updated = { id: "ws1", is_active: false };
+      mockClientMutate.mockResolvedValue(updated);
+
+      const result = await toggleWebhook(token, "ws1");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/admin/webhooks/ws1/toggle", {
+        token,
+      });
+      expect(result).toEqual(updated);
+    });
+  });
+
+  describe("replayWebhookDelivery", () => {
+    it("posts to /admin/webhook-deliveries/:id/replay with token", async () => {
+      mockClientMutate.mockResolvedValue(undefined);
+
+      await replayWebhookDelivery(token, "d1");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/webhook-deliveries/d1/replay", {
+        token,
+      });
     });
   });
 });

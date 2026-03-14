@@ -9,6 +9,7 @@ import type {
   Space,
   Thread,
   Upload,
+  WebhookSubscription,
 } from "./api-types";
 import type { PreferenceSetting } from "@/components/realtime/notification-preferences";
 import type { EntityFormValues } from "@/components/entities/entity-form";
@@ -223,6 +224,40 @@ export async function saveDigestSchedule(token: string, frequency: DigestFrequen
     token,
     body: { frequency },
   });
+}
+
+// --- Webhook mutations ---
+
+/** Create a new webhook subscription. */
+export async function createWebhook(
+  token: string,
+  url: string,
+  eventFilter: string,
+): Promise<WebhookSubscription> {
+  return clientMutate<WebhookSubscription>("POST", "/admin/webhooks", {
+    token,
+    body: { url, event_filter: eventFilter },
+  });
+}
+
+/** Delete a webhook subscription by ID. */
+export async function deleteWebhook(token: string, subscriptionId: string): Promise<void> {
+  await clientMutate<void>("DELETE", `/admin/webhooks/${subscriptionId}`, { token });
+}
+
+/** Toggle a webhook subscription active/inactive. */
+export async function toggleWebhook(
+  token: string,
+  subscriptionId: string,
+): Promise<WebhookSubscription> {
+  return clientMutate<WebhookSubscription>("PATCH", `/admin/webhooks/${subscriptionId}/toggle`, {
+    token,
+  });
+}
+
+/** Replay a webhook delivery. */
+export async function replayWebhookDelivery(token: string, deliveryId: string): Promise<void> {
+  await clientMutate<void>("POST", `/admin/webhook-deliveries/${deliveryId}/replay`, { token });
 }
 
 /** Create a new message within a thread. Defaults type to "comment". */
