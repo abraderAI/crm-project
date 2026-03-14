@@ -1,0 +1,85 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+// Mock next/navigation.
+let mockPathname = "/";
+vi.mock("next/navigation", () => ({
+  usePathname: () => mockPathname,
+}));
+
+// Mock @clerk/nextjs.
+vi.mock("@clerk/nextjs", () => ({
+  UserButton: () => <div data-testid="clerk-user-button" />,
+}));
+
+import { NavBar } from "./nav-bar";
+
+describe("NavBar", () => {
+  it("renders the logo", () => {
+    mockPathname = "/";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-logo")).toHaveTextContent("DEFT Evolution");
+  });
+
+  it("renders all nav links", () => {
+    mockPathname = "/";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-link-home")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-crm")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-notifications")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-search")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-admin")).toBeInTheDocument();
+  });
+
+  it("highlights Home link when on /", () => {
+    mockPathname = "/";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-link-home")).toHaveClass("bg-accent");
+    expect(screen.getByTestId("nav-link-admin")).not.toHaveClass("bg-accent");
+  });
+
+  it("highlights Admin link when on /admin", () => {
+    mockPathname = "/admin";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-link-admin")).toHaveClass("bg-accent");
+    expect(screen.getByTestId("nav-link-home")).not.toHaveClass("bg-accent");
+  });
+
+  it("highlights Admin link on admin sub-pages", () => {
+    mockPathname = "/admin/users";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-link-admin")).toHaveClass("bg-accent");
+  });
+
+  it("highlights CRM link when on /crm", () => {
+    mockPathname = "/crm";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-link-crm")).toHaveClass("bg-accent");
+    expect(screen.getByTestId("nav-link-home")).not.toHaveClass("bg-accent");
+  });
+
+  it("highlights Notifications link when on /notifications", () => {
+    mockPathname = "/notifications";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-link-notifications")).toHaveClass("bg-accent");
+  });
+
+  it("highlights Search link when on /search", () => {
+    mockPathname = "/search";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-link-search")).toHaveClass("bg-accent");
+  });
+
+  it("renders the Clerk UserButton", () => {
+    mockPathname = "/";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-user-button")).toBeInTheDocument();
+    expect(screen.getByTestId("clerk-user-button")).toBeInTheDocument();
+  });
+
+  it("renders the nav-bar container", () => {
+    mockPathname = "/";
+    render(<NavBar />);
+    expect(screen.getByTestId("nav-bar")).toBeInTheDocument();
+  });
+});
