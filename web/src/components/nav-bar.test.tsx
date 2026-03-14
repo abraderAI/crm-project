@@ -12,6 +12,11 @@ vi.mock("@clerk/nextjs", () => ({
   UserButton: () => <div data-testid="clerk-user-button" />,
 }));
 
+// Mock ThemeToggle to isolate NavBar tests.
+vi.mock("./theme-toggle", () => ({
+  ThemeToggle: () => <div data-testid="theme-toggle" />,
+}));
+
 import { NavBar } from "./nav-bar";
 
 describe("NavBar", () => {
@@ -81,5 +86,11 @@ describe("NavBar", () => {
     mockPathname = "/";
     render(<NavBar />);
     expect(screen.getByTestId("nav-bar")).toBeInTheDocument();
+  });
+
+  it("renders the ThemeToggle", () => {
+    mockPathname = "/";
+    render(<NavBar />);
+    expect(screen.getByTestId("theme-toggle")).toBeInTheDocument();
   });
 });

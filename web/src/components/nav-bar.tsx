@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { LayoutDashboard, Shield, BarChart3, Bell, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "./theme-toggle";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: LayoutDashboard },
@@ -49,8 +50,11 @@ export function NavBar(): React.ReactNode {
         })}
       </div>
 
-      <div className="ml-auto" data-testid="nav-user-button">
-        <UserButton />
+      <div className="ml-auto flex items-center gap-2">
+        <ThemeToggle />
+        <div data-testid="nav-user-button">
+          <UserButton />
+        </div>
       </div>
     </nav>
   );
