@@ -118,4 +118,28 @@ describe("ThreadDetail", () => {
     render(<ThreadDetail thread={baseThread} messages={[]} />);
     expect(screen.queryByTestId("thread-editor-slot")).not.toBeInTheDocument();
   });
+
+  it("renders messagesSlot when provided instead of default MessageTimeline", () => {
+    render(
+      <ThreadDetail
+        thread={baseThread}
+        messages={[baseMsg]}
+        messagesSlot={<div data-testid="custom-messages">Realtime</div>}
+      />,
+    );
+    expect(screen.getByTestId("custom-messages")).toBeInTheDocument();
+    // Default timeline should NOT render
+    expect(screen.queryByTestId("message-item-m-1")).not.toBeInTheDocument();
+  });
+
+  it("still shows message count header when messagesSlot is provided", () => {
+    render(
+      <ThreadDetail
+        thread={baseThread}
+        messages={[baseMsg]}
+        messagesSlot={<div data-testid="custom-messages">Realtime</div>}
+      />,
+    );
+    expect(screen.getByText("Messages (1)")).toBeInTheDocument();
+  });
 });

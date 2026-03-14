@@ -12,6 +12,8 @@ export interface ThreadDetailProps {
   onNewMessage?: () => void;
   /** Render slot for the message editor. */
   editorSlot?: React.ReactNode;
+  /** Render slot replacing the default MessageTimeline (e.g. RealtimeMessages). */
+  messagesSlot?: React.ReactNode;
 }
 
 /** Full thread detail view: title, body, metadata sidebar, message timeline. */
@@ -22,6 +24,7 @@ export function ThreadDetail({
   onEditMessage,
   onNewMessage,
   editorSlot,
+  messagesSlot,
 }: ThreadDetailProps): React.ReactNode {
   return (
     <div className="flex gap-6" data-testid="thread-detail">
@@ -50,11 +53,13 @@ export function ThreadDetail({
               </button>
             )}
           </div>
-          <MessageTimeline
-            messages={messages}
-            currentUserId={currentUserId}
-            onEdit={onEditMessage}
-          />
+          {messagesSlot ?? (
+            <MessageTimeline
+              messages={messages}
+              currentUserId={currentUserId}
+              onEdit={onEditMessage}
+            />
+          )}
         </div>
 
         {/* Editor slot */}
