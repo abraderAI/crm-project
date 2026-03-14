@@ -196,4 +196,63 @@ describe("ThreadDetailView", () => {
       expect(mockSubscribe).toHaveBeenCalledWith("thread:t1");
     });
   });
+
+  it("shows UploadProgress during file upload", async () => {
+    let resolveUpload!: (value: unknown) => void;
+    mockUploadFile.mockReturnValue(
+      new Promise((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    const file = new File(["content"], "test.txt", { type: "text/plain" });
+    const input = screen.getByTestId("file-input");
+    await user.upload(input, file);
+
+    // UploadProgress should appear while upload is pending
+    await waitFor(() => {
+      expect(screen.getByTestId("upload-progress")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("upload-filename-test.txt")).toHaveTextContent("test.txt");
+    expect(screen.getByTestId("upload-percent-test.txt")).toHaveTextContent("0%");
+
+    // Resolve the upload
+    resolveUpload({
+      id: "u1",
+      org_id: "o1",
+      entity_type: "thread",
+      entity_id: "t1",
+      filename: "test.txt",
+      content_type: "text/plain",
+      size: 7,
+      storage_path: "/uploads/test.txt",
+      uploader_id: "user-1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+
+    // Progress should update to 100%
+    await waitFor(() => {
+      expect(screen.getByTestId("upload-percent-test.txt")).toHaveTextContent("100%");
+    });
+  });
+
+  it("shows upload error in UploadProgress when upload fails", async () => {
+    mockUploadFile.mockRejectedValue(new Error("Network error"));
+
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    const file = new File(["content"], "bad.txt", { type: "text/plain" });
+    const input = screen.getByTestId("file-input");
+    await user.upload(input, file);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("upload-error-bad.txt")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("upload-error-bad.txt")).toHaveTextContent("Network error");
+  });
 });

@@ -69,7 +69,11 @@ describe("AppLayoutWrapper", () => {
   });
 
   it("renders children in the content area", () => {
-    renderWithTheme(<AppLayoutWrapper><div data-testid="child">Hello</div></AppLayoutWrapper>);
+    renderWithTheme(
+      <AppLayoutWrapper>
+        <div data-testid="child">Hello</div>
+      </AppLayoutWrapper>,
+    );
     expect(screen.getByTestId("child")).toBeInTheDocument();
   });
 

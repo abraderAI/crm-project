@@ -12,10 +12,7 @@ export interface CrmPipelineViewProps {
 }
 
 /** Client wrapper rendering KanbanBoard + PipelineStats from server-fetched threads. */
-export function CrmPipelineView({
-  threads,
-  threadHrefs,
-}: CrmPipelineViewProps): React.ReactNode {
+export function CrmPipelineView({ threads, threadHrefs }: CrmPipelineViewProps): React.ReactNode {
   const cards = threadsToLeadCards(threads);
   const stats = computePipelineStats(cards);
 

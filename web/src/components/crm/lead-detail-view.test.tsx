@@ -72,9 +72,7 @@ describe("LeadDetailView", () => {
   });
 
   it("passes score breakdown to LeadDetail", () => {
-    render(
-      <LeadDetailView thread={makeThread()} messages={[]} scoreBreakdown={sampleBreakdown} />,
-    );
+    render(<LeadDetailView thread={makeThread()} messages={[]} scoreBreakdown={sampleBreakdown} />);
     expect(screen.getByTestId("score-breakdown")).toBeInTheDocument();
     expect(screen.getByTestId("score-total")).toHaveTextContent("82");
   });

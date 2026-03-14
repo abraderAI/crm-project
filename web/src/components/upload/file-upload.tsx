@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, X, FileIcon, ImageIcon } from "lucide-react";
+import { Upload as UploadIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { Upload } from "@/lib/api-types";
+import { FilePreview } from "./file-preview";
 
 /** Max file size: 100 MB. */
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
@@ -143,7 +145,7 @@ export function FileUpload({
           disabled && "cursor-not-allowed opacity-50",
         )}
       >
-        <Upload className="h-8 w-8 text-muted-foreground" />
+        <UploadIcon className="h-8 w-8 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
           Drag and drop files here, or click to browse
         </p>
@@ -159,60 +161,51 @@ export function FileUpload({
         />
       </div>
 
-      {/* Staged files */}
+      {/* Staged files rendered via FilePreview */}
       {stagedFiles.length > 0 && (
         <div className="flex flex-col gap-2" data-testid="staged-files">
-          {stagedFiles.map((sf, index) => (
-            <div
-              key={`${sf.file.name}-${index}`}
-              data-testid={`staged-file-${index}`}
-              className={cn(
-                "flex items-center gap-3 rounded-lg border p-3",
-                sf.error ? "border-destructive/50 bg-destructive/5" : "border-border",
-              )}
-            >
-              {/* Preview or icon */}
-              {sf.preview ? (
-                <img
-                  src={sf.preview}
-                  alt={sf.file.name}
-                  data-testid={`file-preview-${index}`}
-                  className="h-10 w-10 shrink-0 rounded object-cover"
+          {stagedFiles.map((sf, index) => {
+            const tempUpload: Upload = {
+              id: `staged-${index}`,
+              org_id: "",
+              entity_type: "",
+              entity_id: "",
+              filename: sf.file.name,
+              content_type: sf.file.type,
+              size: sf.file.size,
+              storage_path: "",
+              uploader_id: "",
+              created_at: "",
+              updated_at: "",
+            };
+            return (
+              <div
+                key={`${sf.file.name}-${index}`}
+                data-testid={`staged-file-${index}`}
+                className={cn(
+                  sf.error && "rounded-md border border-destructive/50 bg-destructive/5 p-1",
+                )}
+              >
+                <FilePreview
+                  upload={tempUpload}
+                  downloadUrl={sf.preview ?? ""}
+                  onDelete={() => removeFile(index)}
                 />
-              ) : (
-                <FileIcon className="h-8 w-8 shrink-0 text-muted-foreground" />
-              )}
-
-              <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">{sf.file.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {(sf.file.size / 1024).toFixed(1)} KB
-                </p>
                 {sf.error && (
-                  <p className="text-xs text-destructive" data-testid={`file-error-${index}`}>
+                  <p
+                    className="px-2 pb-1 text-xs text-destructive"
+                    data-testid={`file-error-${index}`}
+                  >
                     {sf.error}
                   </p>
                 )}
               </div>
-
-              {/* Remove */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeFile(index);
-                }}
-                aria-label={`Remove ${sf.file.name}`}
-                data-testid={`remove-file-${index}`}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-export { isImage, MAX_FILE_SIZE, ALLOWED_TYPES, type ImageIcon };
+export { isImage, MAX_FILE_SIZE, ALLOWED_TYPES };

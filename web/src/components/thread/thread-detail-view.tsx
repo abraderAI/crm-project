@@ -31,6 +31,7 @@ import { MessageEditor } from "@/components/editor/message-editor";
 import { RevisionHistory, type Revision } from "@/components/editor/revision-history";
 import { FileUpload } from "@/components/upload/file-upload";
 import { FileList, type FileItem } from "@/components/upload/file-list";
+import { UploadProgress, type UploadProgressItem } from "@/components/upload/upload-progress";
 
 export interface ThreadDetailViewProps {
   /** Thread data. */
@@ -97,14 +98,18 @@ export function ThreadDetailView({
     void getToken().then((t) => setWsToken(t));
   }, [getToken]);
 
-  const { subscribe, unsubscribe, send: wsSend } = useWebSocket({
+  const {
+    subscribe,
+    unsubscribe,
+    send: wsSend,
+  } = useWebSocket({
     token: wsToken,
     enabled: !!wsToken,
     onEvent: {
       "message.created": (msg) => {
         setWsNewMessages((prev) => [...prev, msg.payload as Message]);
       },
-      "typing": (msg) => {
+      typing: (msg) => {
         handleRemoteTypingRef.current?.(msg as WSMessage<TypingPayload>);
       },
     },
@@ -139,6 +144,7 @@ export function ThreadDetailView({
   // File upload state
   const [files, setFiles] = useState<FileItem[]>([]);
   const [filesLoaded, setFilesLoaded] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressItem[]>([]);
 
   const loadRevisions = useCallback(async (): Promise<void> => {
     if (revisionsLoaded) return;
@@ -187,9 +193,33 @@ export function ThreadDetailView({
   const handleFileUpload = async (selectedFiles: File[]): Promise<void> => {
     const token = await getToken();
     if (!token) return;
-    for (const file of selectedFiles) {
-      const upload = await uploadFile(token, orgSlug, spaceSlug, boardSlug, threadSlug, file);
-      setFiles((prev) => [...prev, toFileItem(upload)]);
+
+    // Initialize progress items for all files.
+    const progressItems: UploadProgressItem[] = selectedFiles.map((file) => ({
+      id: file.name,
+      filename: file.name,
+      progress: 0,
+    }));
+    setUploadProgress(progressItems);
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      if (!file) continue;
+      try {
+        const upload = await uploadFile(token, orgSlug, spaceSlug, boardSlug, threadSlug, file);
+        setFiles((prev) => [...prev, toFileItem(upload)]);
+        setUploadProgress((prev) =>
+          prev.map((item, j) => (j === i ? { ...item, progress: 100 } : item)),
+        );
+      } catch (err) {
+        setUploadProgress((prev) =>
+          prev.map((item, j) =>
+            j === i
+              ? { ...item, error: err instanceof Error ? err.message : "Upload failed" }
+              : item,
+          ),
+        );
+      }
     }
   };
 
@@ -232,6 +262,11 @@ export function ThreadDetailView({
       <div className="mt-3">
         <FileUpload onUpload={handleFileUpload} multiple />
       </div>
+      {uploadProgress.length > 0 && (
+        <div className="mt-3">
+          <UploadProgress items={uploadProgress} />
+        </div>
+      )}
     </div>
   ) : undefined;
 
