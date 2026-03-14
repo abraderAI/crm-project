@@ -40,6 +40,8 @@ func allModels() []any {
 		&models.LoginEvent{},
 		&models.FailedAuth{},
 		&models.LLMUsageLog{},
+		&models.ChannelConfig{},
+		&models.DeadLetterEvent{},
 	}
 }
 
@@ -247,6 +249,9 @@ func createIndexes(db *gorm.DB) error {
 
 		// Notification indexes.
 		"CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read)",
+
+		// Channel DLQ index.
+		"CREATE INDEX IF NOT EXISTS idx_dlq_org_status ON dead_letter_events(org_id, status)",
 	}
 
 	for _, idx := range indexes {
