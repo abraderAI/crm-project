@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Users, ScrollText, ToggleRight } from "lucide-react";
+import { BarChart3, Users, ScrollText, ToggleRight, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ADMIN_TABS = [
@@ -10,6 +10,7 @@ const ADMIN_TABS = [
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, exact: false },
   { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleRight, exact: false },
+  { href: "/admin/billing", label: "Billing", icon: CreditCard, exact: false },
 ] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }): React.ReactNode {

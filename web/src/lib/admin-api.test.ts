@@ -20,6 +20,7 @@ import {
   fetchPlatformAdmins,
   fetchAuditLog,
   fetchFeatureFlags,
+  fetchBillingInfo,
 } from "./admin-api";
 
 describe("admin-api", () => {
@@ -112,6 +113,23 @@ describe("admin-api", () => {
 
       expect(mockServerFetch).toHaveBeenCalledWith("/admin/feature-flags", { token: "test-token" });
       expect(result).toEqual(flags);
+    });
+  });
+
+  describe("fetchBillingInfo", () => {
+    it("fetches billing info with auth token", async () => {
+      const billing = {
+        org_id: "org1",
+        tier: "pro",
+        payment_status: "active",
+        invoices: [],
+      };
+      mockServerFetch.mockResolvedValue(billing);
+
+      const result = await fetchBillingInfo();
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/billing", { token: "test-token" });
+      expect(result).toEqual(billing);
     });
   });
 });
