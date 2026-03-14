@@ -30,6 +30,8 @@ import {
   fetchThreadUploads,
   uploadFile,
   deleteUpload,
+  saveNotificationPreferences,
+  saveDigestSchedule,
 } from "./entity-api";
 
 describe("entity-api", () => {
@@ -300,6 +302,38 @@ describe("entity-api", () => {
 
       expect(mockClientMutate).toHaveBeenCalledWith("DELETE", "/uploads/u1", {
         token,
+      });
+    });
+  });
+
+  // --- Notification Preferences ---
+
+  describe("saveNotificationPreferences", () => {
+    it("puts preferences to /notifications/preferences", async () => {
+      mockClientMutate.mockResolvedValue(undefined);
+      const prefs = [
+        { notificationType: "message" as const, channel: "in_app" as const, enabled: true },
+        { notificationType: "message" as const, channel: "email" as const, enabled: false },
+      ];
+
+      await saveNotificationPreferences(token, prefs);
+
+      expect(mockClientMutate).toHaveBeenCalledWith("PUT", "/notifications/preferences", {
+        token,
+        body: { preferences: prefs },
+      });
+    });
+  });
+
+  describe("saveDigestSchedule", () => {
+    it("puts digest schedule to /notifications/digest", async () => {
+      mockClientMutate.mockResolvedValue(undefined);
+
+      await saveDigestSchedule(token, "weekly");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("PUT", "/notifications/digest", {
+        token,
+        body: { frequency: "weekly" },
       });
     });
   });

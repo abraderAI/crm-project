@@ -2,8 +2,10 @@ import { auth } from "@clerk/nextjs/server";
 
 import type {
   Board,
+  DigestSchedule,
   Message,
   Notification,
+  NotificationPreference,
   Org,
   PaginatedResponse,
   Revision,
@@ -139,6 +141,22 @@ export async function fetchNotifications(
 ): Promise<PaginatedResponse<Notification>> {
   const token = await getToken();
   return serverFetchPaginated<Notification>("/notifications", params, { token });
+}
+
+/** Fetch notification preferences for the current user. */
+export async function fetchNotificationPreferences(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<NotificationPreference>> {
+  const token = await getToken();
+  return serverFetchPaginated<NotificationPreference>("/notifications/preferences", params, {
+    token,
+  });
+}
+
+/** Fetch the digest schedule for the current user. */
+export async function fetchDigestSchedule(): Promise<DigestSchedule> {
+  const token = await getToken();
+  return serverFetch<DigestSchedule>("/notifications/digest", { token });
 }
 
 /** Fetch search results. */

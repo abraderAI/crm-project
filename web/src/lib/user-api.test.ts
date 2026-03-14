@@ -26,6 +26,8 @@ import {
   fetchMessages,
   fetchRevisions,
   fetchNotifications,
+  fetchNotificationPreferences,
+  fetchDigestSchedule,
   fetchSearch,
 } from "./user-api";
 
@@ -263,6 +265,39 @@ describe("user-api", () => {
         { token: "test-token" },
       );
       expect(result).toEqual(response);
+    });
+  });
+
+  describe("fetchNotificationPreferences", () => {
+    it("fetches paginated notification preferences", async () => {
+      const response = {
+        data: [{ notification_type: "message", channel: "in_app", enabled: true }],
+        page_info: { has_more: false },
+      };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchNotificationPreferences();
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/notifications/preferences",
+        undefined,
+        { token: "test-token" },
+      );
+      expect(result).toEqual(response);
+    });
+  });
+
+  describe("fetchDigestSchedule", () => {
+    it("fetches the digest schedule", async () => {
+      const schedule = { user_id: "u1", frequency: "daily" };
+      mockServerFetch.mockResolvedValue(schedule);
+
+      const result = await fetchDigestSchedule();
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/notifications/digest", {
+        token: "test-token",
+      });
+      expect(result).toEqual(schedule);
     });
   });
 
