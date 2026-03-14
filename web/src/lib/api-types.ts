@@ -230,6 +230,11 @@ export interface Revision extends BaseEntity {
   editor_id: string;
 }
 
+/** Whether the current user has voted on a thread. */
+export interface UserVoteStatus {
+  voted: boolean;
+}
+
 /** Sort option for community thread lists. */
 export type ThreadSortOption = "votes" | "newest" | "oldest";
 

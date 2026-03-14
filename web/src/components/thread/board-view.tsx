@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Thread } from "@/lib/api-types";
-import { ThreadFilters, type ThreadFilterValues } from "./thread-filters";
+import type { Thread, ThreadSortOption } from "@/lib/api-types";
+import { ThreadFilters, type ThreadFilterValues, type SortOption } from "./thread-filters";
 import { ThreadList } from "./thread-list";
+import { VoteSort } from "@/components/community/vote-sort";
 
 export interface BoardViewProps {
   /** All threads for this board (fetched server-side). */
@@ -48,7 +49,31 @@ function sortThreads(threads: Thread[], sortBy: ThreadFilterValues["sortBy"]): T
   }
 }
 
-/** Client wrapper rendering ThreadFilters + ThreadList with client-side filter/sort. */
+/** Map SortOption to ThreadSortOption for VoteSort display. */
+function toVoteSortOption(sortBy: SortOption): ThreadSortOption {
+  switch (sortBy) {
+    case "most_votes":
+      return "votes";
+    case "oldest":
+      return "oldest";
+    default:
+      return "newest";
+  }
+}
+
+/** Map ThreadSortOption to SortOption for filter state. */
+function fromVoteSortOption(option: ThreadSortOption): SortOption {
+  switch (option) {
+    case "votes":
+      return "most_votes";
+    case "oldest":
+      return "oldest";
+    default:
+      return "newest";
+  }
+}
+
+/** Client wrapper rendering ThreadFilters + VoteSort + ThreadList with client-side filter/sort. */
 export function BoardView({ threads, basePath }: BoardViewProps): React.ReactNode {
   const [filters, setFilters] = useState<ThreadFilterValues>(DEFAULT_FILTERS);
 
@@ -57,9 +82,14 @@ export function BoardView({ threads, basePath }: BoardViewProps): React.ReactNod
     [threads, filters],
   );
 
+  const handleVoteSortChange = (option: ThreadSortOption): void => {
+    setFilters((prev) => ({ ...prev, sortBy: fromVoteSortOption(option) }));
+  };
+
   return (
     <div className="space-y-4" data-testid="board-view">
       <ThreadFilters values={filters} onChange={setFilters} />
+      <VoteSort value={toVoteSortOption(filters.sortBy)} onChange={handleVoteSortChange} />
       <ThreadList threads={visibleThreads} basePath={basePath} />
     </div>
   );

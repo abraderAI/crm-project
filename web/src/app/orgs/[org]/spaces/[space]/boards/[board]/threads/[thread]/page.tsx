@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
-import { fetchOrg, fetchSpace, fetchBoard, fetchThread, fetchMessages } from "@/lib/user-api";
+import {
+  fetchOrg,
+  fetchSpace,
+  fetchBoard,
+  fetchThread,
+  fetchMessages,
+  fetchUserVote,
+} from "@/lib/user-api";
 import { ThreadDetailView } from "@/components/thread/thread-detail-view";
 
 interface ThreadPageProps {
@@ -10,12 +17,13 @@ interface ThreadPageProps {
 
 export default async function ThreadPage({ params }: ThreadPageProps): Promise<React.ReactNode> {
   const { org: orgSlug, space: spaceSlug, board: boardSlug, thread: threadSlug } = await params;
-  const [org, space, board, thread, { data: messages }] = await Promise.all([
+  const [org, space, board, thread, { data: messages }, voteStatus] = await Promise.all([
     fetchOrg(orgSlug),
     fetchSpace(orgSlug, spaceSlug),
     fetchBoard(orgSlug, spaceSlug, boardSlug),
     fetchThread(orgSlug, spaceSlug, boardSlug, threadSlug),
     fetchMessages(orgSlug, spaceSlug, boardSlug, threadSlug),
+    fetchUserVote(orgSlug, spaceSlug, boardSlug, threadSlug),
   ]);
 
   return (
@@ -51,6 +59,7 @@ export default async function ThreadPage({ params }: ThreadPageProps): Promise<R
         spaceSlug={spaceSlug}
         boardSlug={boardSlug}
         threadSlug={threadSlug}
+        hasVoted={voteStatus.voted}
       />
     </div>
   );

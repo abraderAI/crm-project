@@ -11,6 +11,7 @@ import type {
   Space,
   Thread,
   Upload,
+  Vote,
   WebhookSubscription,
 } from "./api-types";
 import type { PreferenceSetting } from "@/components/realtime/notification-preferences";
@@ -291,6 +292,23 @@ export async function changeMembershipRole(
 /** Remove a membership. */
 export async function removeMembership(token: string, membershipId: string): Promise<void> {
   await clientMutate<void>("DELETE", `/admin/memberships/${membershipId}`, { token });
+}
+
+// --- Vote mutations ---
+
+/** Toggle the current user's vote on a thread. */
+export async function toggleVote(
+  token: string,
+  orgSlug: string,
+  spaceSlug: string,
+  boardSlug: string,
+  threadSlug: string,
+): Promise<Vote> {
+  return clientMutate<Vote>(
+    "POST",
+    `/orgs/${orgSlug}/spaces/${spaceSlug}/boards/${boardSlug}/threads/${threadSlug}/vote`,
+    { token },
+  );
 }
 
 /** Create a new message within a thread. Defaults type to "comment". */

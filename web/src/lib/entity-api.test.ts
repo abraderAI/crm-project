@@ -39,6 +39,7 @@ import {
   addMembership,
   changeMembershipRole,
   removeMembership,
+  toggleVote,
 } from "./entity-api";
 
 describe("entity-api", () => {
@@ -483,6 +484,24 @@ describe("entity-api", () => {
       expect(mockClientMutate).toHaveBeenCalledWith("DELETE", "/admin/memberships/m1", {
         token,
       });
+    });
+  });
+
+  // --- Vote mutations ---
+
+  describe("toggleVote", () => {
+    it("posts to .../threads/:thread/vote with token", async () => {
+      const vote = { id: "v1", thread_id: "t1", user_id: "u1", weight: 1 };
+      mockClientMutate.mockResolvedValue(vote);
+
+      const result = await toggleVote(token, "acme", "sales", "pipeline", "new-lead");
+
+      expect(mockClientMutate).toHaveBeenCalledWith(
+        "POST",
+        "/orgs/acme/spaces/sales/boards/pipeline/threads/new-lead/vote",
+        { token },
+      );
+      expect(result).toEqual(vote);
     });
   });
 });

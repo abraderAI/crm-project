@@ -11,8 +11,10 @@ import {
   fetchThreadRevisions,
   fetchThreadUploads,
   uploadFile,
+  toggleVote,
 } from "@/lib/entity-api";
 import { ThreadDetail } from "./thread-detail";
+import { VoteButton } from "@/components/community/vote-button";
 import { MessageEditor } from "@/components/editor/message-editor";
 import { RevisionHistory, type Revision } from "@/components/editor/revision-history";
 import { FileUpload } from "@/components/upload/file-upload";
@@ -31,6 +33,8 @@ export interface ThreadDetailViewProps {
   boardSlug: string;
   /** Thread slug. */
   threadSlug: string;
+  /** Whether the current user has voted on this thread. */
+  hasVoted?: boolean;
 }
 
 /** Map API revision to component revision. */
@@ -64,10 +68,12 @@ export function ThreadDetailView({
   spaceSlug,
   boardSlug,
   threadSlug,
+  hasVoted = false,
 }: ThreadDetailViewProps): React.ReactNode {
   const router = useRouter();
   const { getToken, userId } = useAuth();
   const [sending, setSending] = useState(false);
+  const [voting, setVoting] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Revision history state
@@ -132,6 +138,18 @@ export function ThreadDetailView({
     }
   };
 
+  const handleToggleVote = async (): Promise<void> => {
+    setVoting(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Unauthenticated");
+      await toggleVote(token, orgSlug, spaceSlug, boardSlug, threadSlug);
+      router.refresh();
+    } finally {
+      setVoting(false);
+    }
+  };
+
   const handleScrollToEditor = (): void => {
     editorRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -152,6 +170,12 @@ export function ThreadDetailView({
 
   return (
     <div className="space-y-4">
+      <VoteButton
+        voteScore={thread.vote_score}
+        hasVoted={hasVoted}
+        onToggle={handleToggleVote}
+        disabled={voting}
+      />
       <ThreadDetail
         thread={thread}
         messages={messages}
