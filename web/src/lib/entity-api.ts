@@ -4,8 +4,10 @@ import type {
   Message,
   MessageType,
   Org,
+  OrgMembership,
   PaginatedResponse,
   Revision,
+  Role,
   Space,
   Thread,
   Upload,
@@ -258,6 +260,37 @@ export async function toggleWebhook(
 /** Replay a webhook delivery. */
 export async function replayWebhookDelivery(token: string, deliveryId: string): Promise<void> {
   await clientMutate<void>("POST", `/admin/webhook-deliveries/${deliveryId}/replay`, { token });
+}
+
+// --- Membership mutations ---
+
+/** Add a membership. */
+export async function addMembership(
+  token: string,
+  userId: string,
+  role: Role,
+): Promise<OrgMembership> {
+  return clientMutate<OrgMembership>("POST", "/admin/memberships", {
+    token,
+    body: { user_id: userId, role },
+  });
+}
+
+/** Change a membership's role. */
+export async function changeMembershipRole(
+  token: string,
+  membershipId: string,
+  newRole: Role,
+): Promise<OrgMembership> {
+  return clientMutate<OrgMembership>("PATCH", `/admin/memberships/${membershipId}`, {
+    token,
+    body: { role: newRole },
+  });
+}
+
+/** Remove a membership. */
+export async function removeMembership(token: string, membershipId: string): Promise<void> {
+  await clientMutate<void>("DELETE", `/admin/memberships/${membershipId}`, { token });
 }
 
 /** Create a new message within a thread. Defaults type to "comment". */

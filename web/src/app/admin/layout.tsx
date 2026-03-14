@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Users, ScrollText, ToggleRight, CreditCard, Webhook } from "lucide-react";
+import {
+  BarChart3,
+  Users,
+  ScrollText,
+  ToggleRight,
+  CreditCard,
+  Webhook,
+  UserCog,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ADMIN_TABS = [
@@ -12,6 +20,7 @@ const ADMIN_TABS = [
   { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleRight, exact: false },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, exact: false },
   { href: "/admin/webhooks", label: "Webhooks", icon: Webhook, exact: false },
+  { href: "/admin/members", label: "Members", icon: UserCog, exact: false },
 ] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }): React.ReactNode {
