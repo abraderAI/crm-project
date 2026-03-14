@@ -29,6 +29,7 @@ import {
   fetchNotificationPreferences,
   fetchDigestSchedule,
   fetchSearch,
+  fetchUserVote,
 } from "./user-api";
 
 describe("user-api", () => {
@@ -330,6 +331,30 @@ describe("user-api", () => {
         { q: "test", type: "thread" },
         { token: "test-token" },
       );
+    });
+  });
+
+  describe("fetchUserVote", () => {
+    it("fetches user vote status for a thread", async () => {
+      const status = { voted: true };
+      mockServerFetch.mockResolvedValue(status);
+
+      const result = await fetchUserVote("org1", "sales", "pipeline", "lead-a");
+
+      expect(mockServerFetch).toHaveBeenCalledWith(
+        "/orgs/org1/spaces/sales/boards/pipeline/threads/lead-a/vote",
+        { token: "test-token" },
+      );
+      expect(result).toEqual(status);
+    });
+
+    it("returns voted false when user has not voted", async () => {
+      const status = { voted: false };
+      mockServerFetch.mockResolvedValue(status);
+
+      const result = await fetchUserVote("org1", "sales", "pipeline", "lead-a");
+
+      expect(result).toEqual({ voted: false });
     });
   });
 });

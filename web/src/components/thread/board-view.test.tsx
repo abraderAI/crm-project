@@ -148,4 +148,34 @@ describe("BoardView", () => {
 
     expect(screen.getByTestId("thread-list-empty")).toBeInTheDocument();
   });
+
+  it("renders VoteSort control", () => {
+    render(<BoardView threads={threads} basePath="/threads" />);
+    expect(screen.getByTestId("vote-sort")).toBeInTheDocument();
+  });
+
+  it("sorts by most votes when VoteSort Top voted is clicked", async () => {
+    const user = userEvent.setup();
+    render(<BoardView threads={threads} basePath="/threads" />);
+
+    await user.click(screen.getByTestId("sort-option-votes"));
+
+    const items = screen.getAllByTestId(/^thread-item-/);
+    expect(items).toHaveLength(3);
+    // Most votes: t2 (25), t1 (10), t3 (5)
+    expect(items[0]).toHaveAttribute("data-testid", "thread-item-t2");
+    expect(items[1]).toHaveAttribute("data-testid", "thread-item-t1");
+    expect(items[2]).toHaveAttribute("data-testid", "thread-item-t3");
+  });
+
+  it("sorts by oldest when VoteSort Oldest is clicked", async () => {
+    const user = userEvent.setup();
+    render(<BoardView threads={threads} basePath="/threads" />);
+
+    await user.click(screen.getByTestId("sort-option-oldest"));
+
+    const items = screen.getAllByTestId(/^thread-item-/);
+    expect(items[0]).toHaveAttribute("data-testid", "thread-item-t2");
+    expect(items[2]).toHaveAttribute("data-testid", "thread-item-t1");
+  });
 });
