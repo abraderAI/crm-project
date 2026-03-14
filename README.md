@@ -76,13 +76,17 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   ├── src/
 │   │   ├── app/                # App Router pages
 │   │   ├── components/
-│   │   │   ├── crm/            # Pipeline, kanban, lead views
-│   │   │   ├── community/      # Voting, moderation
-│   │   │   ├── admin/          # Billing, webhooks, audit log
-│   │   │   ├── realtime/       # WebSocket, notifications
-│   │   │   ├── threads/        # Thread and message UI
-│   │   │   └── upload/         # File upload components
-│   │   └── lib/                # API client, types, hooks
+│   │   │   ├── admin/          # Billing, webhooks, audit log, membership
+│   │   │   ├── community/      # Voting, moderation, flagging
+│   │   │   ├── crm/            # Pipeline, kanban, lead detail, scoring
+│   │   │   ├── editor/         # Message editor, toolbar, revision history
+│   │   │   ├── entities/       # Entity card, form, list, create/settings views
+│   │   │   ├── layout/         # App shell: sidebar, topbar, breadcrumbs
+│   │   │   ├── realtime/       # WebSocket, notifications, typing indicators
+│   │   │   ├── thread/         # Thread list, detail, filters, message timeline
+│   │   │   └── upload/         # File upload, preview, progress
+│   │   ├── hooks/              # useWebSocket, useNotifications, useTyping
+│   │   └── lib/                # API client, types, utils
 │   └── e2e/                    # Playwright smoke tests
 ├── docker/                     # Dockerfiles + docker-compose.yml
 ├── docs/                       # Environment variables, architecture notes
