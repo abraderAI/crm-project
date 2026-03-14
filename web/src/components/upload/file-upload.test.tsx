@@ -98,13 +98,35 @@ describe("FileUpload", () => {
     expect(screen.getByText("test.txt")).toBeInTheDocument();
   });
 
-  it("shows file size", async () => {
+  it("renders FilePreview for staged file", async () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+
+    const file = createMockFile("report.pdf", 2048, "application/pdf");
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+
+    // FilePreview renders with temp upload id "staged-0"
+    expect(screen.getByTestId("file-preview-staged-0")).toBeInTheDocument();
+    expect(screen.getByTestId("file-name-staged-0")).toHaveTextContent("report.pdf");
+    expect(screen.getByTestId("file-size-staged-0")).toHaveTextContent("2.0 KB");
+  });
+
+  it("renders FilePreview download link for staged file", async () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+
+    const file = createMockFile("report.pdf", 1024, "application/pdf");
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+
+    const downloadLink = screen.getByTestId("file-download-staged-0");
+    expect(downloadLink).toHaveAttribute("download", "report.pdf");
+  });
+
+  it("shows file size via FilePreview", async () => {
     render(<FileUpload onUpload={vi.fn()} />);
 
     const file = createMockFile("test.txt", 2048, "text/plain");
     await userEvent.upload(screen.getByTestId("file-input"), file);
 
-    expect(screen.getByText("2.0 KB")).toBeInTheDocument();
+    expect(screen.getByTestId("file-size-staged-0")).toHaveTextContent("2.0 KB");
   });
 
   it("shows error for invalid file", async () => {
@@ -126,16 +148,26 @@ describe("FileUpload", () => {
     expect(onUpload).not.toHaveBeenCalled();
   });
 
-  it("shows image preview for image files", async () => {
+  it("shows image thumbnail via FilePreview for image files", async () => {
     render(<FileUpload onUpload={vi.fn()} />);
 
     const file = createMockFile("photo.png", 1024, "image/png");
     await userEvent.upload(screen.getByTestId("file-input"), file);
 
-    expect(screen.getByTestId("file-preview-0")).toBeInTheDocument();
+    expect(screen.getByTestId("file-thumb-staged-0")).toBeInTheDocument();
+    expect(screen.getByTestId("file-thumb-staged-0")).toHaveAttribute("src", "blob:mock-url");
   });
 
-  it("removes file on remove button click", async () => {
+  it("shows file icon via FilePreview for non-image files", async () => {
+    render(<FileUpload onUpload={vi.fn()} />);
+
+    const file = createMockFile("report.pdf", 1024, "application/pdf");
+    await userEvent.upload(screen.getByTestId("file-input"), file);
+
+    expect(screen.getByTestId("file-icon-staged-0")).toBeInTheDocument();
+  });
+
+  it("removes file via FilePreview delete button", async () => {
     const user = userEvent.setup();
     render(<FileUpload onUpload={vi.fn()} />);
 
@@ -144,7 +176,7 @@ describe("FileUpload", () => {
 
     expect(screen.getByTestId("staged-file-0")).toBeInTheDocument();
 
-    await user.click(screen.getByTestId("remove-file-0"));
+    await user.click(screen.getByTestId("file-delete-staged-0"));
     expect(screen.queryByTestId("staged-file-0")).not.toBeInTheDocument();
   });
 
