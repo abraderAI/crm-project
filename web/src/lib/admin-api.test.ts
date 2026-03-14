@@ -23,6 +23,7 @@ import {
   fetchBillingInfo,
   fetchWebhookSubscriptions,
   fetchWebhookDeliveries,
+  fetchMemberships,
 } from "./admin-api";
 
 describe("admin-api", () => {
@@ -167,6 +168,23 @@ describe("admin-api", () => {
         { cursor: "abc" },
         { token: "test-token" },
       );
+      expect(result).toEqual(response);
+    });
+  });
+
+  describe("fetchMemberships", () => {
+    it("fetches paginated memberships", async () => {
+      const response = {
+        data: [{ id: "m1", user_id: "u1", role: "admin", org_id: "org1" }],
+        page_info: { has_more: false },
+      };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchMemberships();
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/admin/memberships", undefined, {
+        token: "test-token",
+      });
       expect(result).toEqual(response);
     });
   });

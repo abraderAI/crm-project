@@ -4,6 +4,7 @@ import type {
   AuditEntry,
   BillingInfo,
   FeatureFlag,
+  OrgMembership,
   PaginatedResponse,
   PlatformAdmin,
   PlatformStats,
@@ -79,4 +80,12 @@ export async function fetchWebhookDeliveries(
 ): Promise<PaginatedResponse<WebhookDelivery>> {
   const token = await getToken();
   return serverFetchPaginated<WebhookDelivery>("/admin/webhook-deliveries", params, { token });
+}
+
+/** Fetch paginated org memberships. */
+export async function fetchMemberships(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<OrgMembership>> {
+  const token = await getToken();
+  return serverFetchPaginated<OrgMembership>("/admin/memberships", params, { token });
 }

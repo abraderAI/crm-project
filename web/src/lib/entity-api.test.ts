@@ -36,6 +36,9 @@ import {
   deleteWebhook,
   toggleWebhook,
   replayWebhookDelivery,
+  addMembership,
+  changeMembershipRole,
+  removeMembership,
 } from "./entity-api";
 
 describe("entity-api", () => {
@@ -434,6 +437,50 @@ describe("entity-api", () => {
       await replayWebhookDelivery(token, "d1");
 
       expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/webhook-deliveries/d1/replay", {
+        token,
+      });
+    });
+  });
+
+  // --- Membership mutations ---
+
+  describe("addMembership", () => {
+    it("posts to /admin/memberships with user_id and role", async () => {
+      const membership = { id: "m1", user_id: "u1", role: "admin" };
+      mockClientMutate.mockResolvedValue(membership);
+
+      const result = await addMembership(token, "u1", "admin");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/memberships", {
+        token,
+        body: { user_id: "u1", role: "admin" },
+      });
+      expect(result).toEqual(membership);
+    });
+  });
+
+  describe("changeMembershipRole", () => {
+    it("patches /admin/memberships/:id with new role", async () => {
+      const updated = { id: "m1", user_id: "u1", role: "moderator" };
+      mockClientMutate.mockResolvedValue(updated);
+
+      const result = await changeMembershipRole(token, "m1", "moderator");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/admin/memberships/m1", {
+        token,
+        body: { role: "moderator" },
+      });
+      expect(result).toEqual(updated);
+    });
+  });
+
+  describe("removeMembership", () => {
+    it("deletes /admin/memberships/:id with token", async () => {
+      mockClientMutate.mockResolvedValue(undefined);
+
+      await removeMembership(token, "m1");
+
+      expect(mockClientMutate).toHaveBeenCalledWith("DELETE", "/admin/memberships/m1", {
         token,
       });
     });
