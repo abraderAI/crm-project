@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { LayoutDashboard, Shield, BarChart3, Bell, Search } from "lucide-react";
+import { LayoutDashboard, Shield, BarChart3, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NavNotificationBell } from "./nav-notification-bell";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/crm", label: "CRM", icon: BarChart3 },
-  { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/search", label: "Search", icon: Search },
   { href: "/admin", label: "Admin", icon: Shield },
 ] as const;
@@ -49,8 +49,11 @@ export function NavBar(): React.ReactNode {
         })}
       </div>
 
-      <div className="ml-auto" data-testid="nav-user-button">
-        <UserButton />
+      <div className="ml-auto flex items-center gap-2">
+        <NavNotificationBell />
+        <div data-testid="nav-user-button">
+          <UserButton />
+        </div>
       </div>
     </nav>
   );
