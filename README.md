@@ -151,6 +151,8 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/admin/members` | Organization membership manager |
 | `/admin/moderation` | Content moderation queue |
 | `/admin/audit-log` | Platform-wide audit log |
+| `/admin/channels` | IO Channel configuration hub |
+| `/admin/channels/[type]` | Per-channel config, health, and DLQ monitor (`email` \| `voice` \| `chat`) |
 | `/admin/feature-flags` | Feature flag management |
 
 All routes use server components for data fetching with client wrappers for interactivity. The app shell (`AppLayoutWrapper`) provides sidebar navigation, topbar with search and Clerk `UserButton`, and route-aware active states.
@@ -365,7 +367,17 @@ All admin endpoints require platform admin privileges. The first platform admin 
 ```bash
 fly apps create deft-evolution-api
 fly volumes create deft_data --region iad --size 3
-fly secrets set CLERK_SECRET_KEY=... CLERK_ISSUER_URL=... CORS_ORIGINS=... PLATFORM_ADMIN_USER_ID=...
+fly secrets set \
+  CLERK_SECRET_KEY=... \
+  CLERK_ISSUER_URL=... \
+  CORS_ORIGINS=... \
+  PLATFORM_ADMIN_USER_ID=... \
+  CHAT_JWT_SECRET=... \
+  INTERNAL_API_KEY=... \
+  LIVEKIT_URL=... \
+  LIVEKIT_API_KEY=... \
+  LIVEKIT_API_SECRET=... \
+  LIVEKIT_WEBHOOK_TOKEN=...
 fly deploy
 ```
 
