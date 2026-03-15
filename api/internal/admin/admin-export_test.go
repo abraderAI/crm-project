@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 // --- Mock Storage Provider ---
 
 type mockStorage struct {
+	mu    sync.Mutex
 	files map[string][]byte
 }
 
@@ -35,12 +37,16 @@ func (m *mockStorage) Store(filename string, content io.Reader) (string, error) 
 	if err != nil {
 		return "", err
 	}
+	m.mu.Lock()
 	m.files[filename] = data
+	m.mu.Unlock()
 	return filename, nil
 }
 
 func (m *mockStorage) Get(storagePath string) (io.ReadCloser, error) {
+	m.mu.Lock()
 	data, ok := m.files[storagePath]
+	m.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("file not found: %s", storagePath)
 	}
@@ -48,7 +54,9 @@ func (m *mockStorage) Get(storagePath string) (io.ReadCloser, error) {
 }
 
 func (m *mockStorage) Delete(storagePath string) error {
+	m.mu.Lock()
 	delete(m.files, storagePath)
+	m.mu.Unlock()
 	return nil
 }
 

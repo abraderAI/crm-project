@@ -53,7 +53,7 @@ tasks:
       - |
         TOTAL=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         echo "Total coverage: ${TOTAL}%"
-        if [ "$(echo "${TOTAL} < {{.COVERAGE_THRESHOLD}}" | bc -l)" -eq 1 ]; then
+        if [ "$(awk "BEGIN {print (${TOTAL} < {{.COVERAGE_THRESHOLD}})}" )" -eq 1 ]; then
           echo "FAIL: Coverage ${TOTAL}% is below {{.COVERAGE_THRESHOLD}}% threshold"
           exit 1
         fi
@@ -92,6 +92,8 @@ tasks:
       - go test -race -fuzz=FuzzEmailBody -fuzztime=5s ./internal/channel/email/
       - go test -race -fuzz=FuzzMIMEParsing -fuzztime=5s ./internal/channel/email/
       - go test -race -fuzz=FuzzEmailHeaders -fuzztime=5s ./internal/channel/email/
+      - go test -race -fuzz=FuzzWebhookPayload -fuzztime=5s ./internal/channel/voice/
+      - go test -race -fuzz=FuzzTranscriptEvent -fuzztime=5s ./internal/channel/voice/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)
