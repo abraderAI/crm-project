@@ -26,6 +26,17 @@ tasks:
     generates:
       - '../api/bin/server'
 
+  cli:build:
+    desc: Build the CLI binary
+    dir: '{{.API_DIR}}'
+    cmds:
+      - mkdir -p ../api/bin
+      - go build -o ../api/bin/deft ./cmd/cli
+    sources:
+      - '**/*.go'
+    generates:
+      - '../api/bin/deft'
+
   fmt:
     desc: Format Go code
     dir: '{{.API_DIR}}'
@@ -94,6 +105,8 @@ tasks:
       - go test -race -fuzz=FuzzEmailHeaders -fuzztime=5s ./internal/channel/email/
       - go test -race -fuzz=FuzzWebhookPayload -fuzztime=5s ./internal/channel/voice/
       - go test -race -fuzz=FuzzTranscriptEvent -fuzztime=5s ./internal/channel/voice/
+      - go test -race -fuzz=FuzzUserQuery -fuzztime=5s ./internal/cli/agent/
+      - go test -race -fuzz=FuzzAPIResponse -fuzztime=5s ./internal/cli/agent/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)
