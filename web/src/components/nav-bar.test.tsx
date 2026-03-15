@@ -37,6 +37,7 @@ describe("NavBar", () => {
     render(<NavBar />);
     expect(screen.getByTestId("nav-link-home")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-crm")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-reports")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-search")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-admin")).toBeInTheDocument();
   });
