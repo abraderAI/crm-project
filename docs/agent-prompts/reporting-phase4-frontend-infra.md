@@ -10,10 +10,17 @@ coding standards you MUST follow before writing any code.
 Phases 1 and 2 have been merged into `feat/reporting`. The backend exposes:
 - `GET /v1/orgs/{org}/reports/support[/export]` — support metrics + CSV
 - `GET /v1/orgs/{org}/reports/sales[/export]` — sales metrics + CSV
+
+**Phase 3 is being implemented in parallel** and will add:
 - `GET /v1/admin/reports/support[/export]` — platform admin support + CSV
 - `GET /v1/admin/reports/sales[/export]` — platform admin sales + CSV
 
 All accept `?from=YYYY-MM-DD&to=YYYY-MM-DD&assignee=<user_id>`.
+
+Your task is to build the frontend infrastructure for **all** endpoints (org-scoped and
+admin) so that Phases 5, 6, and 7 can build on it immediately after both Phase 3 and
+Phase 4 are merged. The admin API client functions and types should be implemented even
+though the Phase 3 backend endpoints are not yet merged — the type contracts are known.
 
 **YOUR WORKING BRANCH**: check out `feat/reporting` (which contains Phases 1 + 2), then
 create `feat/reporting-phase4-frontend-infra` from it.
