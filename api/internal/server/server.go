@@ -193,11 +193,6 @@ func NewRouter(cfg Config) http.Handler {
 	// Subscribe provisioning to pipeline stage changes (auto-provision on closed_won).
 	eventBus.Subscribe(event.PipelineStageChanged, provisionService.HandleStageChanged)
 
-	// Reporting module.
-	reportRepo := reporting.NewRepository(cfg.DB)
-	reportService := reporting.NewService(reportRepo)
-	reportHandler := reporting.NewHandler(reportService)
-
 	// IO Phase 1: Channel Gateway.
 	channelHandler := channel.NewHandler(channel.NewService(channel.NewRepository(cfg.DB)))
 
@@ -207,6 +202,11 @@ func NewRouter(cfg Config) http.Handler {
 	voiceLKWebhook := voicelk.NewWebhookHandler(voiceLKService, cfg.LiveKitWebhookToken)
 	voiceLKPhone := voicelk.NewPhoneHandler(lkProvider, cfg.DB)
 	voiceLKBridge := voicelk.NewBridgeHandler(voiceLKService, cfg.InternalAPIKey)
+
+	// Reporting.
+	reportRepo := reporting.NewRepository(cfg.DB)
+	reportService := reporting.NewService(reportRepo)
+	reportHandler := reporting.NewHandler(reportService, cfg.DB)
 
 	// IO Phase 4: AI Web Chat Widget.
 	chatJWTSecret := cfg.ChatJWTSecret
@@ -469,9 +469,14 @@ func NewRouter(cfg Config) http.Handler {
 				ch.Post("/voice/numbers/purchase", voiceLKPhone.PurchaseNumber)
 			})
 
-			// Reporting routes.
-			authed.Get("/orgs/{org}/reports/support", reportHandler.GetSupportMetrics)
-			authed.Get("/orgs/{org}/reports/support/export", reportHandler.GetSupportExport)
+			// Reporting routes (admin/owner role required).
+			authed.Route("/orgs/{org}/reports", func(rpt chi.Router) {
+				rpt.Use(reporting.RequireOrgAdminOrOwner(cfg.DB))
+				rpt.Get("/support", reportHandler.GetSupportMetrics)
+				rpt.Get("/support/export", reportHandler.GetSupportExport)
+				rpt.Get("/sales", reportHandler.GetSalesMetrics)
+				rpt.Get("/sales/export", reportHandler.GetSalesExport)
+			})
 
 			// Pipeline stages route.
 			authed.Get("/orgs/{org}/pipeline/stages", pipelineHandler.GetStages)

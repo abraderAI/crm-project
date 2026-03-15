@@ -111,6 +111,8 @@ tasks:
       - go test -race -fuzz=FuzzChatMessage -fuzztime=5s ./internal/channel/chat/
       - go test -race -fuzz=FuzzEmbedKey -fuzztime=5s ./internal/channel/chat/
       - go test -race -fuzz=FuzzFingerprint -fuzztime=5s ./internal/channel/chat/
+      - go test -race -fuzz=FuzzStageName -fuzztime=5s ./internal/reporting/
+      - go test -race -fuzz=FuzzDealValue -fuzztime=5s ./internal/reporting/
       - go test -race -fuzz=FuzzDateParams -fuzztime=5s ./internal/reporting/
       - go test -race -fuzz=FuzzAssigneeParam -fuzztime=5s ./internal/reporting/
 
