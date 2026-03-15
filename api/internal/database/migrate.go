@@ -42,6 +42,8 @@ func allModels() []any {
 		&models.LLMUsageLog{},
 		&models.ChannelConfig{},
 		&models.DeadLetterEvent{},
+		&models.ChatSession{},
+		&models.ChatVisitor{},
 	}
 }
 
