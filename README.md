@@ -29,6 +29,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Voice / LiveKit** — LiveKit room management, webhook ingestion, phone call bridging, transcript storage, and escalation
 - **AI Web Chat Widget** — Embeddable shadow-DOM widget (plain JS/TS, zero deps) with JWT session auth, WebSocket streaming, and LLM-powered responses
 - **Agentic CLI** — `deft` terminal client for natural-language CRM queries via LLM function-calling, interactive REPL, and one-shot mode
+- **Reporting** — Org-scoped support-ticket and sales-pipeline analytics (15 query types): volume-over-time, status/priority breakdowns, assignee distribution, win/loss rates, funnel conversion, deal-value score distribution, avg time-in-stage, and CSV export with date + assignee filtering. Platform admins get cross-org aggregate dashboards with per-org sortable breakdown tables.
 
 ---
 
@@ -45,6 +46,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | Billing | FlexPoint (`BillingProvider` interface) |
 | Voice | [LiveKit](https://livekit.io) (room/webhook/bridge/transcript) |
 | Chat Widget | esbuild IIFE bundle, shadow DOM, zero dependencies |
+| Charts | [Recharts](https://recharts.org) (reporting dashboards) |
 | CLI | [Cobra](https://github.com/spf13/cobra), [lipgloss](https://github.com/charmbracelet/lipgloss), tablewriter |
 | Observability | slog + OpenTelemetry |
 | Testing | Go: testify + httptest · Frontend: Vitest + Playwright |
@@ -82,6 +84,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   │   ├── scoring/            # Lead scoring
 │   │   ├── provision/          # Lead-to-customer provisioning
 │   │   ├── telemetry/          # OpenTelemetry
+│   │   ├── reporting/          # Support + sales metrics, admin aggregates, CSV export
 │   │   ├── channel/            # IO Channel Gateway
 │   │   │   ├── email/          # Inbound email (MIME parsing, threading)
 │   │   │   ├── voice/          # LiveKit voice (rooms, webhooks, transcripts)
@@ -102,6 +105,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   │   │   ├── admin/          # Billing, webhooks, audit log, membership
 │   │   │   ├── community/      # Voting, moderation, flagging
 │   │   │   ├── crm/            # Pipeline, kanban, lead detail, scoring
+│   │   │   ├── reports/        # Shared reporting components + chart components (support/, sales/)
 │   │   │   ├── editor/         # Message editor, toolbar, revision history
 │   │   │   ├── entities/       # Entity card, form, list, create/settings views
 │   │   │   ├── layout/         # App shell: sidebar, topbar, breadcrumbs
@@ -154,6 +158,11 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/admin/channels` | IO Channel configuration hub |
 | `/admin/channels/[type]` | Per-channel config, health, and DLQ monitor (`email` \| `voice` \| `chat`) |
 | `/admin/feature-flags` | Feature flag management |
+| `/reports` | Redirects to `/reports/support` |
+| `/reports/support` | Support tickets dashboard — status breakdown, volume over time, assignee + priority charts, CSV export |
+| `/reports/sales` | Sales pipeline dashboard — funnel, lead velocity, assignee, score distribution, conversion rates, time-in-stage, CSV export |
+| `/admin/reports/support` | Platform-wide support overview + per-org sortable breakdown table |
+| `/admin/reports/sales` | Platform-wide sales overview + per-org sortable breakdown table |
 
 All routes use server components for data fetching with client wrappers for interactivity. The app shell (`AppLayoutWrapper`) provides sidebar navigation, topbar with search and Clerk `UserButton`, and route-aware active states.
 
@@ -276,6 +285,21 @@ task widget:test:coverage # Vitest + enforce ≥85% coverage
 | `GET` | `/v1/orgs/{org}/audit-log` | Audit log |
 | `*` | `/v1/orgs/{org}/billing` | Billing management |
 
+### Reporting Endpoints
+
+All accept `?from=YYYY-MM-DD&to=YYYY-MM-DD&assignee=<user_id>`. Org-scoped routes require `admin` or `owner` org role; admin routes require platform admin.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/orgs/{org}/reports/support` | Org support metrics (7 query types) |
+| `GET` | `/v1/orgs/{org}/reports/support/export` | CSV export of support tickets |
+| `GET` | `/v1/orgs/{org}/reports/sales` | Org sales metrics (8 query types) |
+| `GET` | `/v1/orgs/{org}/reports/sales/export` | CSV export of sales leads |
+| `GET` | `/v1/admin/reports/support` | Platform-wide support metrics + per-org breakdown |
+| `GET` | `/v1/admin/reports/support/export` | Platform-wide support CSV export |
+| `GET` | `/v1/admin/reports/sales` | Platform-wide sales metrics + per-org breakdown |
+| `GET` | `/v1/admin/reports/sales/export` | Platform-wide sales CSV export |
+
 ### IO Channel Endpoints
 
 | Method | Path | Description |
@@ -385,15 +409,17 @@ SQLite is persisted on a Fly volume at `/data/deft.db`. The architecture is Lite
 
 Health checks: `GET /healthz` (liveness) and `GET /readyz` (readiness with DB connectivity).
 
-### Frontend — Vercel
+### Frontend — Fly.io
 
-Connect the repo to Vercel and set the root directory to `web/`. Required environment variables:
+The frontend is deployed as a Docker container to Fly.io. A `fly.web.toml` config is included in the repo root.
 
+```bash
+fly apps create deft-evolution-web
+fly secrets set CLERK_SECRET_KEY=sk_live_... --app deft-evolution-web
+flyctl deploy --config fly.web.toml --app deft-evolution-web
 ```
-NEXT_PUBLIC_API_URL=https://deft-evolution-api.fly.dev
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
-CLERK_SECRET_KEY=sk_live_...
-```
+
+`NEXT_PUBLIC_*` variables (Clerk publishable key, API URL) are baked into the image at build time via Docker build args — update them in `fly.web.toml` before deploying.
 
 ---
 
