@@ -14,6 +14,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/billing"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/channel"
+	"github.com/abraderAI/crm-project/api/internal/channel/chat"
 	voicelk "github.com/abraderAI/crm-project/api/internal/channel/voice"
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/event"
@@ -51,6 +52,7 @@ type Config struct {
 	RBACPolicy          *config.RBACPolicy
 	IssuerURL           string // Clerk issuer URL for JWT validation.
 	WebhookSecret       string // HMAC secret for billing webhook verification.
+	ChatJWTSecret       string // HMAC secret for chat session JWT signing.
 	EventBus            *eventbus.Bus
 	WSHub               *ws.Hub
 	UploadDir           string // Directory for file uploads.
@@ -200,6 +202,15 @@ func NewRouter(cfg Config) http.Handler {
 	voiceLKPhone := voicelk.NewPhoneHandler(lkProvider, cfg.DB)
 	voiceLKBridge := voicelk.NewBridgeHandler(voiceLKService, cfg.InternalAPIKey)
 
+	// IO Phase 4: AI Web Chat Widget.
+	chatJWTSecret := cfg.ChatJWTSecret
+	if chatJWTSecret == "" {
+		chatJWTSecret = "chat-default-secret" // Default for dev; must be overridden in prod.
+	}
+	chatRepo := chat.NewRepository(cfg.DB)
+	chatService := chat.NewService(chatRepo, llmProvider, wsHub, chatJWTSecret)
+	chatHandler := chat.NewHandler(chatService, chatJWTSecret)
+
 	// API v1 subrouter.
 	r.Route("/v1", func(v1 chi.Router) {
 		// Public v1 root (no auth).
@@ -221,6 +232,10 @@ func NewRouter(cfg Config) http.Handler {
 
 		// WebSocket endpoint (auth via query param).
 		v1.Get("/ws", wsHandler.Upgrade)
+
+		// Chat widget endpoints (public — no auth middleware).
+		v1.Post("/chat/session", chatHandler.CreateSession)
+		v1.Post("/chat/message", chatHandler.SendMessage)
 
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {

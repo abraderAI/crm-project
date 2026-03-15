@@ -5,6 +5,7 @@ set: [errexit, nounset, pipefail]
 vars:
   API_DIR: ./api
   WEB_DIR: ./web
+  WIDGET_DIR: ./widget
   BUILD_DIR: ./api/bin
   COVERAGE_THRESHOLD: "85"
 
@@ -107,6 +108,9 @@ tasks:
       - go test -race -fuzz=FuzzTranscriptEvent -fuzztime=5s ./internal/channel/voice/
       - go test -race -fuzz=FuzzUserQuery -fuzztime=5s ./internal/cli/agent/
       - go test -race -fuzz=FuzzAPIResponse -fuzztime=5s ./internal/cli/agent/
+      - go test -race -fuzz=FuzzChatMessage -fuzztime=5s ./internal/channel/chat/
+      - go test -race -fuzz=FuzzEmbedKey -fuzztime=5s ./internal/channel/chat/
+      - go test -race -fuzz=FuzzFingerprint -fuzztime=5s ./internal/channel/chat/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)
@@ -119,6 +123,8 @@ tasks:
       - task: web:lint
       - task: web:typecheck
       - task: web:test:coverage
+      - task: widget:build
+      - task: widget:test:coverage
 
   dev:
     desc: Start development server
@@ -180,9 +186,32 @@ tasks:
     cmds:
       - npx playwright test --grep @smoke
 
+  widget:build:
+    desc: Build chat widget IIFE bundle
+    dir: '{{.WIDGET_DIR}}'
+    cmds:
+      - node esbuild.config.mjs
+    sources:
+      - 'src/**/*.ts'
+    generates:
+      - 'dist/widget.js'
+
+  widget:test:
+    desc: Run widget tests
+    dir: '{{.WIDGET_DIR}}'
+    cmds:
+      - npx vitest run
+
+  widget:test:coverage:
+    desc: Run widget tests with coverage (must be ≥85%)
+    dir: '{{.WIDGET_DIR}}'
+    cmds:
+      - npx vitest run --coverage
+
   clean:
     desc: Remove build artifacts
     cmds:
       - rm -rf {{.BUILD_DIR}}
       - rm -f {{.API_DIR}}/coverage.out
       - rm -rf {{.WEB_DIR}}/.next
+      - rm -rf {{.WIDGET_DIR}}/dist
