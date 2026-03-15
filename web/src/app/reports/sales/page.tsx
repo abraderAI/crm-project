@@ -1,6 +1,7 @@
 "use client";
+export const dynamic = "force-dynamic";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { AlertCircle } from "lucide-react";
@@ -51,8 +52,8 @@ function ChartSkeleton(): React.ReactNode {
   );
 }
 
-/** Sales Pipeline dashboard page. */
-export default function SalesPage(): React.ReactNode {
+/** Sales Pipeline dashboard page inner component. */
+function SalesPageInner(): React.ReactNode {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { getToken, orgId: clerkOrgId } = useAuth();
@@ -307,5 +308,13 @@ export default function SalesPage(): React.ReactNode {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SalesPage(): React.ReactNode {
+  return (
+    <Suspense>
+      <SalesPageInner />
+    </Suspense>
   );
 }

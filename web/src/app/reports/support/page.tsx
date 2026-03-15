@@ -1,6 +1,7 @@
 "use client";
+export const dynamic = "force-dynamic";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { AlertCircle } from "lucide-react";
@@ -43,8 +44,8 @@ function ChartSkeleton(): React.ReactNode {
   );
 }
 
-/** Support dashboard page with filter state synced to URL search params. */
-export default function SupportDashboardPage(): React.ReactNode {
+/** Support dashboard page inner component. */
+function SupportDashboardPageInner(): React.ReactNode {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { getToken } = useAuth();
@@ -221,5 +222,13 @@ export default function SupportDashboardPage(): React.ReactNode {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SupportDashboardPage(): React.ReactNode {
+  return (
+    <Suspense>
+      <SupportDashboardPageInner />
+    </Suspense>
   );
 }

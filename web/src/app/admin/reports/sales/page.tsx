@@ -1,6 +1,7 @@
 "use client";
+export const dynamic = "force-dynamic";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { AlertCircle } from "lucide-react";
@@ -39,8 +40,8 @@ function ChartSkeleton(): React.ReactNode {
   );
 }
 
-/** Platform admin sales dashboard page. */
-export default function AdminSalesPage(): React.ReactNode {
+/** Platform admin sales dashboard page inner component. */
+function AdminSalesPageInner(): React.ReactNode {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { getToken } = useAuth();
@@ -212,5 +213,13 @@ export default function AdminSalesPage(): React.ReactNode {
         ) : null}
       </div>
     </div>
+  );
+}
+
+export default function AdminSalesPage(): React.ReactNode {
+  return (
+    <Suspense>
+      <AdminSalesPageInner />
+    </Suspense>
   );
 }
