@@ -348,6 +348,12 @@ func NewRouter(cfg Config) http.Handler {
 
 				ar.Get("/security/recent-logins", adminHandler.GetRecentLoginsHandler)
 				ar.Get("/security/failed-auths", adminHandler.GetFailedAuthsHandler)
+
+				// Phase 3: Platform admin reporting.
+				ar.Get("/reports/support", reportHandler.GetAdminSupportMetrics)
+				ar.Get("/reports/support/export", reportHandler.GetAdminSupportExport)
+				ar.Get("/reports/sales", reportHandler.GetAdminSalesMetrics)
+				ar.Get("/reports/sales/export", reportHandler.GetAdminSalesExport)
 			})
 			// Webhook routes.
 			authed.Route("/orgs/{org}/webhooks", func(wh chi.Router) {
