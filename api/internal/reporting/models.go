@@ -1,14 +1,16 @@
-// Package reporting provides support reporting metrics, CSV export, and API handlers.
+// Package reporting provides reporting and analytics endpoints for support and sales metrics.
 package reporting
 
 import "time"
 
-// ReportParams holds common query parameters for all report endpoints.
+// ReportParams holds common query params for all report endpoints.
 type ReportParams struct {
 	From     time.Time
 	To       time.Time
 	Assignee string // empty = all assignees
 }
+
+// --- Support Metrics ---
 
 // SupportMetrics is the response for GET /v1/orgs/{org}/reports/support.
 type SupportMetrics struct {
@@ -21,26 +23,83 @@ type SupportMetrics struct {
 	OverdueCount          int64            `json:"overdue_count"`
 }
 
-// DailyCount represents a single day's ticket count.
+// --- Sales Metrics ---
+
+// SalesMetrics is the response for GET /v1/orgs/{org}/reports/sales.
+type SalesMetrics struct {
+	PipelineFunnel       []StageCount      `json:"pipeline_funnel"`
+	LeadVelocity         []DailyCount      `json:"lead_velocity"`
+	WinRate              float64           `json:"win_rate"`
+	LossRate             float64           `json:"loss_rate"`
+	AvgDealValue         *float64          `json:"avg_deal_value"`
+	LeadsByAssignee      []AssigneeCount   `json:"leads_by_assignee"`
+	ScoreDistribution    []BucketCount     `json:"score_distribution"`
+	StageConversionRates []StageConversion `json:"stage_conversion_rates"`
+	AvgTimeInStage       []StageAvgTime    `json:"avg_time_in_stage"`
+}
+
+// --- Shared Types ---
+
+// DailyCount holds a date string and a count, used for time-series data.
 type DailyCount struct {
 	Date  string `json:"date"` // "2026-03-01"
 	Count int64  `json:"count"`
 }
 
-// AssigneeCount represents ticket count for a single assignee.
+// AssigneeCount holds a user ID, display name, and count.
 type AssigneeCount struct {
 	UserID string `json:"user_id"`
 	Name   string `json:"name"`
 	Count  int64  `json:"count"`
 }
 
-// ExportRow represents a single CSV export row.
-type ExportRow struct {
+// --- Sales-specific Types ---
+
+// StageCount holds a pipeline stage name and count.
+type StageCount struct {
+	Stage string `json:"stage"`
+	Count int64  `json:"count"`
+}
+
+// BucketCount holds a score distribution bucket range and count.
+type BucketCount struct {
+	Range string `json:"range"` // "0-20", "20-40", etc.
+	Count int64  `json:"count"`
+}
+
+// StageConversion holds a from→to stage conversion rate.
+type StageConversion struct {
+	FromStage string  `json:"from_stage"`
+	ToStage   string  `json:"to_stage"`
+	Rate      float64 `json:"rate"` // 0.0–1.0
+}
+
+// StageAvgTime holds the average hours a lead spends in a pipeline stage.
+type StageAvgTime struct {
+	Stage    string   `json:"stage"`
+	AvgHours *float64 `json:"avg_hours"` // nil if no data
+}
+
+// --- Export Row Types ---
+
+// SupportExportRow represents one row of the support CSV export.
+type SupportExportRow struct {
 	ID         string
 	Title      string
 	Status     string
 	Priority   string
 	AssignedTo string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	CreatedAt  string
+	UpdatedAt  string
+}
+
+// SalesExportRow represents one row of the sales CSV export.
+type SalesExportRow struct {
+	ID         string
+	Title      string
+	Stage      string
+	AssignedTo string
+	DealValue  string
+	Score      string
+	CreatedAt  string
 }

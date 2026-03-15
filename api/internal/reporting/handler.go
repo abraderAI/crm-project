@@ -6,99 +6,71 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"gorm.io/gorm"
 
 	"github.com/abraderAI/crm-project/api/internal/auth"
+	"github.com/abraderAI/crm-project/api/internal/models"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 	"github.com/abraderAI/crm-project/api/pkg/response"
 )
 
 // Handler provides HTTP handlers for reporting endpoints.
 type Handler struct {
-	service *Service
+	service *ReportingService
+	db      *gorm.DB
 }
 
 // NewHandler creates a new reporting Handler.
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *ReportingService, db *gorm.DB) *Handler {
+	return &Handler{service: service, db: db}
 }
 
-// requireOrgAdmin checks that the authenticated user holds admin or owner role
-// in the org. Writes an error response and returns false when the check fails.
-func (h *Handler) requireOrgAdmin(w http.ResponseWriter, r *http.Request, orgID string) bool {
-	uc := auth.GetUserContext(r.Context())
-	if uc == nil {
-		apierrors.Unauthorized(w, "authentication required")
-		return false
-	}
-	isAdmin, err := h.service.IsOrgAdmin(r.Context(), orgID, uc.UserID)
-	if err != nil {
-		apierrors.InternalError(w, "failed to check permissions")
-		return false
-	}
-	if !isAdmin {
-		apierrors.Forbidden(w, "org admin or owner role required")
-		return false
-	}
-	return true
-}
+// RequireOrgAdminOrOwner is middleware that checks the authenticated user has
+// admin or owner role on the org identified by the {org} URL param.
+func RequireOrgAdminOrOwner(db *gorm.DB) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			uc := auth.GetUserContext(r.Context())
+			if uc == nil {
+				apierrors.Unauthorized(w, "authentication required")
+				return
+			}
 
-// parseReportParams extracts common report query params from the request.
-// Returns false and writes an RFC 7807 error on invalid input.
-func parseReportParams(w http.ResponseWriter, r *http.Request) (ReportParams, bool) {
-	now := time.Now().UTC()
-	params := ReportParams{
-		From:     now.AddDate(0, 0, -30),
-		To:       now,
-		Assignee: r.URL.Query().Get("assignee"),
-	}
+			orgID := chi.URLParam(r, "org")
+			if orgID == "" {
+				apierrors.BadRequest(w, "org ID is required")
+				return
+			}
 
-	if fromStr := r.URL.Query().Get("from"); fromStr != "" {
-		t, err := time.Parse("2006-01-02", fromStr)
-		if err != nil {
-			apierrors.WriteProblem(w, apierrors.ProblemDetail{
-				Type:   "https://httpstatuses.com/400",
-				Title:  "Bad Request",
-				Status: http.StatusBadRequest,
-				Detail: "invalid 'from' date format, expected ISO 8601 date (YYYY-MM-DD)",
-			})
-			return params, false
-		}
-		params.From = t
-	}
+			var membership models.OrgMembership
+			err := db.Where("org_id = ? AND user_id = ?", orgID, uc.UserID).First(&membership).Error
+			if err != nil {
+				apierrors.Forbidden(w, "insufficient permissions for reports")
+				return
+			}
 
-	if toStr := r.URL.Query().Get("to"); toStr != "" {
-		t, err := time.Parse("2006-01-02", toStr)
-		if err != nil {
-			apierrors.WriteProblem(w, apierrors.ProblemDetail{
-				Type:   "https://httpstatuses.com/400",
-				Title:  "Bad Request",
-				Status: http.StatusBadRequest,
-				Detail: "invalid 'to' date format, expected ISO 8601 date (YYYY-MM-DD)",
-			})
-			return params, false
-		}
-		// Include the entire "to" day.
-		params.To = t.Add(24*time.Hour - time.Nanosecond)
-	}
+			if membership.Role != models.RoleAdmin && membership.Role != models.RoleOwner {
+				apierrors.Forbidden(w, "insufficient permissions for reports")
+				return
+			}
 
-	return params, true
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // GetSupportMetrics handles GET /v1/orgs/{org}/reports/support.
 func (h *Handler) GetSupportMetrics(w http.ResponseWriter, r *http.Request) {
 	orgID := chi.URLParam(r, "org")
-	if !h.requireOrgAdmin(w, r, orgID) {
-		return
-	}
-
-	params, ok := parseReportParams(w, r)
-	if !ok {
+	params, err := parseReportParams(r)
+	if err != nil {
+		apierrors.BadRequest(w, err.Error())
 		return
 	}
 
 	metrics, err := h.service.GetSupportMetrics(r.Context(), orgID, params)
 	if err != nil {
-		apierrors.InternalError(w, "failed to generate support metrics")
+		apierrors.InternalError(w, "failed to compute support metrics")
 		return
 	}
 
@@ -106,15 +78,17 @@ func (h *Handler) GetSupportMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSupportExport handles GET /v1/orgs/{org}/reports/support/export.
-// Streams CSV rows directly to the response writer without buffering.
 func (h *Handler) GetSupportExport(w http.ResponseWriter, r *http.Request) {
 	orgID := chi.URLParam(r, "org")
-	if !h.requireOrgAdmin(w, r, orgID) {
+	params, err := parseReportParams(r)
+	if err != nil {
+		apierrors.BadRequest(w, err.Error())
 		return
 	}
 
-	params, ok := parseReportParams(w, r)
-	if !ok {
+	rows, err := h.service.GetSupportExportRows(r.Context(), orgID, params)
+	if err != nil {
+		apierrors.InternalError(w, "failed to export support data")
 		return
 	}
 
@@ -122,26 +96,96 @@ func (h *Handler) GetSupportExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="support-report.csv"`)
 	w.WriteHeader(http.StatusOK)
 
-	csvWriter := csv.NewWriter(w)
-	// Write header row.
-	_ = csvWriter.Write([]string{"id", "title", "status", "priority", "assigned_to", "created_at", "updated_at"})
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{"id", "title", "status", "priority", "assigned_to", "created_at", "updated_at"})
+	for _, row := range rows {
+		_ = cw.Write([]string{row.ID, row.Title, row.Status, row.Priority, row.AssignedTo, row.CreatedAt, row.UpdatedAt})
+	}
+	cw.Flush()
+}
 
-	err := h.service.ScanExportRows(r.Context(), orgID, params, func(row ExportRow) error {
-		return csvWriter.Write([]string{
-			row.ID,
-			row.Title,
-			row.Status,
-			row.Priority,
-			row.AssignedTo,
-			row.CreatedAt.Format(time.RFC3339),
-			row.UpdatedAt.Format(time.RFC3339),
-		})
-	})
+// GetSalesMetrics handles GET /v1/orgs/{org}/reports/sales.
+func (h *Handler) GetSalesMetrics(w http.ResponseWriter, r *http.Request) {
+	orgID := chi.URLParam(r, "org")
+	params, err := parseReportParams(r)
 	if err != nil {
-		// Headers already sent — cannot write RFC 7807. Best-effort flush.
-		csvWriter.Flush()
+		apierrors.BadRequest(w, err.Error())
 		return
 	}
 
-	csvWriter.Flush()
+	metrics, err := h.service.GetSalesMetrics(r.Context(), orgID, params)
+	if err != nil {
+		apierrors.InternalError(w, "failed to compute sales metrics")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, metrics)
+}
+
+// GetSalesExport handles GET /v1/orgs/{org}/reports/sales/export.
+func (h *Handler) GetSalesExport(w http.ResponseWriter, r *http.Request) {
+	orgID := chi.URLParam(r, "org")
+	params, err := parseReportParams(r)
+	if err != nil {
+		apierrors.BadRequest(w, err.Error())
+		return
+	}
+
+	rows, err := h.service.GetSalesExportRows(r.Context(), orgID, params)
+	if err != nil {
+		apierrors.InternalError(w, "failed to export sales data")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", `attachment; filename="sales-report.csv"`)
+	w.WriteHeader(http.StatusOK)
+
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{"id", "title", "stage", "assigned_to", "deal_value", "score", "created_at"})
+	for _, row := range rows {
+		_ = cw.Write([]string{row.ID, row.Title, row.Stage, row.AssignedTo, row.DealValue, row.Score, row.CreatedAt})
+	}
+	cw.Flush()
+}
+
+// parseReportParams extracts from, to, and assignee query params from the request.
+// Defaults: from = 30 days ago, to = end of today (UTC).
+func parseReportParams(r *http.Request) (ReportParams, error) {
+	now := time.Now().UTC()
+	params := ReportParams{
+		From: now.AddDate(0, 0, -30).Truncate(24 * time.Hour),
+		To:   now.Truncate(24 * time.Hour).Add(24*time.Hour - time.Nanosecond),
+	}
+
+	if fromStr := r.URL.Query().Get("from"); fromStr != "" {
+		t, err := time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			return params, &paramError{field: "from", msg: "invalid date format, expected YYYY-MM-DD"}
+		}
+		params.From = t
+	}
+
+	if toStr := r.URL.Query().Get("to"); toStr != "" {
+		t, err := time.Parse("2006-01-02", toStr)
+		if err != nil {
+			return params, &paramError{field: "to", msg: "invalid date format, expected YYYY-MM-DD"}
+		}
+		// Set to end of day to include full day.
+		params.To = t.Add(24*time.Hour - time.Nanosecond)
+	}
+
+	params.Assignee = r.URL.Query().Get("assignee")
+
+	return params, nil
+}
+
+// paramError represents a query parameter validation error.
+type paramError struct {
+	field string
+	msg   string
+}
+
+func (e *paramError) Error() string {
+	return e.field + ": " + e.msg
 }

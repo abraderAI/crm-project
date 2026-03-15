@@ -462,7 +462,7 @@ func FuzzDateParams(f *testing.F) {
 		db := setupTestDB(t)
 		org := createTestOrg(t, db, "fuzz-org")
 		createAdminMembership(t, db, org.ID, "fuzz-user")
-		handler := reporting.NewHandler(reporting.NewService(reporting.NewRepository(db)))
+		handler := reporting.NewHandler(reporting.NewService(reporting.NewRepository(db)), db)
 
 		baseURL := "/v1/orgs/" + org.ID + "/reports/support"
 		req := httptest.NewRequest(http.MethodGet, baseURL, nil)
@@ -498,7 +498,7 @@ func FuzzAssigneeParam(f *testing.F) {
 		db := setupTestDB(t)
 		org := createTestOrg(t, db, "fuzz-assignee-org")
 		createAdminMembership(t, db, org.ID, "fuzz-user")
-		handler := reporting.NewHandler(reporting.NewService(reporting.NewRepository(db)))
+		handler := reporting.NewHandler(reporting.NewService(reporting.NewRepository(db)), db)
 
 		// Build URL safely using net/url to avoid malformed request panics.
 		baseURL := "/v1/orgs/" + org.ID + "/reports/support"
