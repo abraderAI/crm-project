@@ -3,6 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 import type {
   AuditEntry,
   BillingInfo,
+  ChannelConfig,
+  ChannelHealth,
+  ChannelType,
+  DeadLetterEvent,
   FeatureFlag,
   Flag,
   OrgMembership,
@@ -97,4 +101,113 @@ export async function fetchMemberships(
 ): Promise<PaginatedResponse<OrgMembership>> {
   const token = await getToken();
   return serverFetchPaginated<OrgMembership>("/admin/memberships", params, { token });
+}
+
+// --- IO Channel API functions ---
+
+/** Fetch channel configuration for a specific channel type. */
+export async function fetchChannelConfig(
+  org: string,
+  channelType: ChannelType,
+): Promise<ChannelConfig> {
+  const token = await getToken();
+  return serverFetch<ChannelConfig>(`/orgs/${org}/channels/${channelType}`, { token });
+}
+
+/** Update channel configuration. */
+export async function putChannelConfig(
+  org: string,
+  channelType: ChannelType,
+  body: { settings: string; enabled: boolean },
+): Promise<ChannelConfig> {
+  const token = await getToken();
+  const url = `/orgs/${org}/channels/${channelType}`;
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1${url}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to update channel config: ${response.status}`);
+  }
+  return (await response.json()) as ChannelConfig;
+}
+
+/** Fetch channel health status. */
+export async function fetchChannelHealth(
+  org: string,
+  channelType: ChannelType,
+): Promise<ChannelHealth> {
+  const token = await getToken();
+  return serverFetch<ChannelHealth>(`/orgs/${org}/channels/${channelType}/health`, { token });
+}
+
+/** Fetch dead-letter queue events for a channel. */
+export async function fetchDLQEvents(
+  org: string,
+  channelType: ChannelType,
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<DeadLetterEvent>> {
+  const token = await getToken();
+  return serverFetchPaginated<DeadLetterEvent>(`/orgs/${org}/channels/${channelType}/dlq`, params, {
+    token,
+  });
+}
+
+/** Retry a dead-letter queue event. */
+export async function retryDLQEvent(
+  org: string,
+  channelType: ChannelType,
+  eventId: string,
+): Promise<void> {
+  const token = await getToken();
+  const url = `/orgs/${org}/channels/${channelType}/dlq/${eventId}/retry`;
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1${url}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to retry DLQ event: ${response.status}`);
+  }
+}
+
+/** Dismiss a dead-letter queue event. */
+export async function dismissDLQEvent(
+  org: string,
+  channelType: ChannelType,
+  eventId: string,
+): Promise<void> {
+  const token = await getToken();
+  const url = `/orgs/${org}/channels/${channelType}/dlq/${eventId}/dismiss`;
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1${url}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to dismiss DLQ event: ${response.status}`);
+  }
 }
