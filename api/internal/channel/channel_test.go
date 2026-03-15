@@ -1081,7 +1081,7 @@ func TestMaskSettingsSecrets_Voice(t *testing.T) {
 }
 
 func TestMaskSettingsSecrets_Chat_NoSecrets(t *testing.T) {
-	settings := `{"embed_key":"public-key","widget_theme":"dark"}`
+	settings := `{"embed_key":"public-key","widget_theme":{"primary_color":"#3B82F6"}}`
 	masked := MaskSettingsSecrets(models.ChannelTypeChat, settings)
 	assert.Equal(t, settings, masked) // unchanged
 }

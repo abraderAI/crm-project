@@ -1,5 +1,6 @@
 # Build outputs
 api/bin/
+api/cli
 dist/
 build/
 
@@ -12,6 +13,7 @@ build/
 
 # Test
 coverage.out
+cli-coverage.out
 *.test
 
 # Dependencies

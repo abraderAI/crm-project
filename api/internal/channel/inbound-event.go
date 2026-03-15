@@ -126,6 +126,10 @@ type VoiceConfig struct {
 	PhoneNumberIDs    []string `json:"phone_number_ids,omitempty"`
 	RecordingEnabled  bool     `json:"recording_enabled"`
 	EscalationPhone   string   `json:"escalation_phone,omitempty"`
+	AgentDeploymentID string   `json:"agent_deployment_id,omitempty"`
+	DefaultSTTModel   string   `json:"default_stt_model,omitempty"`
+	DefaultTTSModel   string   `json:"default_tts_model,omitempty"`
+	SystemPrompt      string   `json:"system_prompt,omitempty"`
 }
 
 // Validate checks that required VoiceConfig fields are present.
@@ -147,19 +151,51 @@ func (c VoiceConfig) MaskSecrets() VoiceConfig {
 	return c
 }
 
+// WidgetTheme describes the visual appearance of the embeddable chat widget.
+type WidgetTheme struct {
+	// PrimaryColor is the main brand color (hex, e.g. "#3B82F6").
+	PrimaryColor string `json:"primary_color,omitempty"`
+	// LogoURL is an optional URL to the organization logo.
+	LogoURL string `json:"logo_url,omitempty"`
+	// Greeting is the initial greeting message displayed to visitors.
+	Greeting string `json:"greeting,omitempty"`
+}
+
+// OperatingHours defines when the chat channel is active.
+type OperatingHours struct {
+	// Enabled controls whether operating hours restrictions are enforced.
+	Enabled bool `json:"enabled"`
+	// Timezone is the IANA timezone name (e.g. "America/New_York").
+	Timezone string `json:"timezone,omitempty"`
+	// Start is the daily start time in HH:MM 24-hour format.
+	Start string `json:"start,omitempty"`
+	// End is the daily end time in HH:MM 24-hour format.
+	End string `json:"end,omitempty"`
+	// Days lists active weekday numbers (0=Sunday, 6=Saturday).
+	Days []int `json:"days,omitempty"`
+}
+
 // ChatConfig holds validated settings for the embeddable web chat channel.
 type ChatConfig struct {
 	// EmbedKey is the public widget authentication token (auto-generated UUID).
 	EmbedKey string `json:"embed_key"`
-	// WidgetTheme is an optional JSON string describing widget appearance.
-	WidgetTheme       string   `json:"widget_theme,omitempty"`
-	AISystemPrompt    string   `json:"ai_system_prompt,omitempty"`
-	EscalationTimeout int      `json:"escalation_timeout_seconds,omitempty"`
-	AllowedDomains    []string `json:"allowed_domains,omitempty"`
+	// WidgetTheme describes widget appearance.
+	WidgetTheme WidgetTheme `json:"widget_theme,omitempty"`
+	// AISystemPrompt is the system prompt sent to the LLM for this org's chat.
+	AISystemPrompt string `json:"ai_system_prompt,omitempty"`
+	// EscalationTimeoutSeconds is how long to wait for a human agent before AI resumes.
+	EscalationTimeoutSeconds int `json:"escalation_timeout_seconds,omitempty"`
+	// AllowedDomains restricts which domains may embed the widget.
+	AllowedDomains []string `json:"allowed_domains,omitempty"`
+	// OperatingHours defines when the chat channel is active.
+	OperatingHours OperatingHours `json:"operating_hours,omitempty"`
 }
 
 // Validate checks ChatConfig; all fields are optional (embed key is auto-generated).
 func (c *ChatConfig) Validate() error {
+	if c.EscalationTimeoutSeconds < 0 {
+		return fmt.Errorf("escalation_timeout_seconds must be non-negative")
+	}
 	return nil
 }
 
