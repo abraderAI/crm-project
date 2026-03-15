@@ -1,0 +1,188 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.5",
+    "created": "2026-03-15T23:10:00Z",
+    "updated": "2026-03-15T23:10:00Z",
+    "metadata": {
+      "type": "specification",
+      "project": "deft-evolution-rbac-user-tiers",
+      "specOutput": "SPECIFICATION-rbac-user-tiers.md",
+      "prdOutput": "PRD-rbac-user-tiers.md",
+      "parentSpec": "vbrief/specification.vbrief.json"
+    }
+  },
+  "plan": {
+    "id": "rbac-user-tiers-spec",
+    "title": "DEFT Evolution — User Tiers & Role-Based Access Control",
+    "status": "approved",
+    "author": "interview-agent",
+    "narratives": {
+      "Overview": "Implements 6 user tiers with tier-specific home screens, global content spaces, a rule-based access control enforcement layer, an AI chatbot with live agent handoff, and home screen widget customization. All content (docs, forums, support tickets, leads) is modeled as tagged threads in four global spaces (global-docs, global-forum, global-support, global-leads).",
+      "Background": "The platform currently has no RBAC enforcement. All authenticated users see identical interfaces. This module adds server-side tier resolution, route protection, role-aware home screens, and a chatbot that captures anonymous leads and hands off to live agents.",
+      "Constraint": "Tier resolution MUST be server-side. Public routes (global-docs, global-forum reads) MUST NOT require authentication. The chatbot widget MUST load asynchronously. ≥85% test coverage required on all new code.",
+      "Risk": "Clerk anonymous token promotion is novel; requires careful Clerk webhook handling. Cross-org support ticket visibility (global-support filtered by org_id) must not leak data between orgs. Chatbot RAG requires indexing global-docs content.",
+      "Alternative": "Considered separate DEFT orgs per department (rejected: single DEFT org with spaces is simpler). Considered tag-only content model (rejected: four named global spaces gives clearer permission boundaries). Considered user-selectable tier at login (rejected: highest-privilege-wins is simpler and unambiguous)."
+    },
+    "metadata": {
+      "decisions": {
+        "tier_resolution": "highest-privilege-wins, server-side, 6 tiers",
+        "tier_order": "platform_admin > deft_org_member > customer_org_admin > customer_org_member > registered_user > anonymous",
+        "deft_org_structure": "single 'deft' org with three department spaces: deft-sales, deft-support, deft-finance",
+        "cross_org_visibility": "four global spaces with org_id filtering for support tickets; leads visible to DEFT org only",
+        "global_spaces": ["global-docs", "global-forum", "global-support", "global-leads"],
+        "thread_types": ["wiki", "documentation", "tutorial", "forum", "support", "lead"],
+        "visibility_field": "public | org-only | deft-only",
+        "chatbot": "AI-first with live agent handoff via IO channels; Clerk anonymous token for unauthenticated users",
+        "anonymous_identity": "Clerk anonymous session promoted to full account on registration; prior sessions linked",
+        "conversion_paths": ["self-service", "sales-assisted", "admin-override"],
+        "home_screen_customization": "show/hide and reorder widgets; preferences stored server-side per user",
+        "provisioning": "placeholder only in this phase; billing provider deferred",
+        "tier4_home": "department-specific defaults based on deft org space membership"
+      }
+    },
+    "tags": ["rbac", "user-tiers", "home-screens", "chatbot", "global-spaces", "lead-capture"],
+    "items": [
+      {
+        "id": "rbac-phase1",
+        "title": "Phase 1: Data Model & Backend Foundation",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Schema extensions (thread_type, visibility, org_id on threads; user_home_preferences table; anon_session_id on leads), global space seeding, deft org seeding, and tier resolution service with API endpoints."
+        },
+        "subItems": [
+          {"id": "rbac-phase1.thread-type", "title": "Add thread_type enum column to threads table (wiki|documentation|tutorial|forum|support|lead, default: forum)", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.visibility", "title": "Add visibility enum column to threads table (public|org-only|deft-only, default: org-only)", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.org-id-thread", "title": "Add nullable org_id FK column to threads table for support ticket scoping", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.home-prefs-table", "title": "Add user_home_preferences table (user_id PK, tier, layout JSON)", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.anon-session", "title": "Add nullable anon_session_id column with index to leads table", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.global-spaces-seed", "title": "Seed four global spaces: global-docs, global-forum, global-support, global-leads (idempotent)", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.deft-org-seed", "title": "Seed deft org and three department spaces: deft-sales, deft-support, deft-finance (idempotent)", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.tier-resolver", "title": "Implement ResolveTier(userID) Go service covering all 6 tier paths with sub-type detection", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.tier-endpoint", "title": "GET /api/me/tier endpoint returning tier, sub_type, org_id?, deft_department?", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.prefs-endpoint", "title": "GET /api/me/home-preferences and PUT /api/me/home-preferences endpoints", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase1.tests", "title": "Unit tests: TierResolver all 6 paths + edge cases. Integration tests: tier endpoint, home-preferences CRUD. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "rbac-phase2",
+        "title": "Phase 2: Frontend Infrastructure",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Tier resolution React hook, Next.js middleware for route protection, public route group, Widget base component, HomeLayout grid, HomeLayoutEditor (show/hide/reorder), and useHomeLayout hook."
+        },
+        "subItems": [
+          {"id": "rbac-phase2.use-tier", "title": "Create useTier() React hook calling /api/me/tier; anonymous returns tier 1", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase2.middleware", "title": "Update Next.js middleware.ts: block /admin/* for non-platform_admin; protect global-leads; public routes excluded", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase2.public-routes", "title": "Create (public) Next.js route group for /docs/[...slug] and /forum/[...slug] with chatbot widget", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase2.widget-component", "title": "Implement Widget base component and HomeLayout responsive CSS grid", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase2.layout-editor", "title": "Implement HomeLayoutEditor with show/hide toggles and drag-to-reorder; calls PUT /api/me/home-preferences", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase2.use-home-layout", "title": "Implement useHomeLayout(tier) hook: fetches preferences, falls back to static tier default", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase2.tests", "title": "Unit tests: useTier, useHomeLayout, Widget, HomeLayout, middleware routing. E2E: route protection. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "rbac-phase3",
+        "title": "Phase 3: Tier 1 & Tier 2 Home Screens",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Anonymous home screen (docs/forum highlights, GetStarted CTA, chatbot) and registered developer home screen (profile, forum activity, support tickets, upgrade CTA). Plus forum post creation and support ticket creation actions for Tier 2+."
+        },
+        "subItems": [
+          {"id": "rbac-phase3.docs-highlights", "title": "DocsHighlightsWidget: recent global-docs threads, public, no auth", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.forum-highlights", "title": "ForumHighlightsWidget: recent global-forum threads, public, no auth", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.get-started", "title": "GetStartedWidget: CTA with sign-up link, visible to Tier 1 only", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.tier1-home", "title": "Compose Tier 1 home screen at / with default widget layout", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.my-profile", "title": "MyProfileWidget: Clerk profile data, name, email, account status", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.forum-activity", "title": "MyForumActivityWidget: user's recent global-forum posts and replies", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.support-tickets", "title": "MySupportTicketsWidget: user's open global-support tickets with status badges", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.upgrade-cta", "title": "UpgradeCTAWidget: visible to Tier 2 only, links to upgrade flow", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.tier2-home", "title": "Compose Tier 2 home screen with default widget layout", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.forum-create", "title": "Forum post creation for Tier 2+ in global-forum space", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.ticket-create", "title": "Support ticket creation for Tier 2+ in global-support space with org_id", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase3.tests", "title": "Unit tests: all widgets. E2E: Tier 1 home, Tier 2 home, forum create, ticket create. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "rbac-phase4",
+        "title": "Phase 4: Tier 3 & Tier 5 Home Screens",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Paying customer org member home (org overview, org-filtered support tickets) and owner variant (support dashboard, billing stub). Customer org admin home (RBAC controls, member list with role editing)."
+        },
+        "subItems": [
+          {"id": "rbac-phase4.org-overview", "title": "OrgOverviewWidget: org name, member count, plan status stub", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase4.org-support-tickets", "title": "OrgSupportTicketsWidget: global-support filtered by org_id; no cross-org leakage", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase4.billing-status", "title": "BillingStatusWidget (stub): plan, renewal date; visible to org owner only", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase4.org-support-dash", "title": "OrgSupportDashboardWidget: open/closed ticket counts for org; org owner only", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase4.tier3-home", "title": "Compose Tier 3 home screen: member variant and owner variant", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase4.org-access-control", "title": "OrgAccessControlWidget: member list with role badges, edit controls, cannot elevate above own role", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase4.org-rbac-editor", "title": "OrgRBACEditorWidget: space-level role overrides per member", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase4.tier5-home", "title": "Compose Tier 5 home screen: RBAC controls, member list, support dashboard, billing placeholder", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase4.tests", "title": "Unit tests: all widgets. Security: no cross-org ticket leakage. E2E: Tier 3 member/owner views, Tier 5 RBAC controls. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "rbac-phase5",
+        "title": "Phase 5: Tier 4 & Tier 6 Home Screens",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "DEFT employee department-specific home screens (sales: leads pipeline; support: ticket queue; finance: billing overview) and platform admin home screen (system health, audit log, all operational widgets)."
+        },
+        "subItems": [
+          {"id": "rbac-phase5.lead-pipeline", "title": "LeadPipelineWidget: global-leads grouped by status; DEFT sales only", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.recent-leads", "title": "RecentLeadsWidget: last 10 leads with source and anon/registered/converted status", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.conversion-metrics", "title": "ConversionMetricsWidget: Tier 1→2→3 funnel counts (stub data ok)", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.ticket-queue", "title": "TicketQueueWidget: all open global-support tickets; DEFT support only; sortable", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.ticket-stats", "title": "TicketStatsWidget: open/pending/resolved counts; avg response time stub", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.billing-overview", "title": "BillingOverviewWidget: paying org count, MRR stub; DEFT finance only", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.tier4-home", "title": "Compose Tier 4 home screens: sales/support/finance department defaults", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.system-health", "title": "SystemHealthWidget: API uptime, DB status, channel health summary", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.audit-log-widget", "title": "RecentAuditLogWidget: last 10 audit events with actor and action", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.tier6-home", "title": "Compose Tier 6 home screen: system health, audit log, user management link, feature flags link, all T4 widgets", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase5.tests", "title": "Unit tests: all widgets. E2E: Tier 4 sales/support/finance defaults, Tier 6 full view. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "rbac-phase6",
+        "title": "Phase 6: Chatbot",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Async-loading ChatbotWidget with Clerk anonymous token support, POST /api/chat/message endpoint (stubbed AI), lead capture in chat, live agent handoff via IO channels, Clerk anonymous session promotion on registration, and RAG over global-docs."
+        },
+        "subItems": [
+          {"id": "rbac-phase6.chatbot-widget", "title": "ChatbotWidget: async dynamic import, Clerk anon token, floating bubble → panel; renders on all pages", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase6.chat-endpoint", "title": "POST /api/chat/message endpoint: accepts session_id + message + anon_token?; stubbed AI response; session_id persists", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase6.lead-capture", "title": "Lead capture: create/update lead in global-leads when user provides name/email; link anon_session_id; no duplicate leads", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase6.live-agent-handoff", "title": "Live agent handoff: escalation intent → opens IO channels chat session with DEFT support space", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase6.anon-promotion", "title": "Clerk user.created webhook: link anon_session_id to new user_id; update lead status anonymous→registered", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase6.rag", "title": "RAG over global-docs: index threads; retrieve top-k chunks as chatbot context", "status": "pending", "priority": "medium"},
+          {"id": "rbac-phase6.tests", "title": "Unit tests: ChatbotWidget, chat endpoint, lead capture dedup, anon promotion webhook. E2E: chatbot visible anonymously, lead created, handoff opens IO thread. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "rbac-phase7",
+        "title": "Phase 7: Conversion Flows & Home Screen Customization",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Three Tier 2→3 conversion paths (self-service stub, sales-assisted CRM action, admin override). Full home screen customization: drag-and-drop reorder, reset-to-defaults, E2E persistence tests."
+        },
+        "subItems": [
+          {"id": "rbac-phase7.self-service-upgrade", "title": "Self-service upgrade flow stub: Upgrade button → billing stub → creates org → Tier 3 promotion", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase7.sales-conversion", "title": "Sales-assisted conversion: DEFT sales marks lead converted in global-leads → triggers org creation + Tier 3 promotion", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase7.admin-override", "title": "Admin override in /admin/users: platform admin sets user org + paying status; audit-logged", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase7.layout-editor-polish", "title": "Polish HomeLayoutEditor: drag-and-drop reorder with keyboard accessibility, ARIA labels", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase7.reset-defaults", "title": "Reset to defaults button: clears saved preferences, restores tier default layout with dialog confirmation", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase7.customization-e2e", "title": "E2E: widget customization persists across page reload and re-login for Tiers 2, 3, 4, 5, 6", "status": "pending", "priority": "high"},
+          {"id": "rbac-phase7.tests", "title": "Unit tests: all conversion flows. Security: conversion actions are audit-logged; admin override requires platform_admin. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      }
+    ]
+  }
+}
