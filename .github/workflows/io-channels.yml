@@ -1,0 +1,73 @@
+name: IO Channels CI
+
+on:
+  push:
+    branches: [feat/io-phase1-channel-gateway, feat/io-phase*]
+  pull_request:
+    branches: [feat/io-phase1-channel-gateway, main]
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: api/go.sum
+
+      - name: Install task
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+      - name: Install golangci-lint
+        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin
+
+      - run: task fmt
+      - run: task lint
+      - run: task test:coverage
+      - run: task cli:build
+
+  widget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install task
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+      - run: cd widget && npm ci
+      - run: task widget:build
+      - run: task widget:test:coverage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widget-dist
+          path: widget/dist/
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install task
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+      - run: cd web && npm ci
+      - run: task web:fmt:check
+      - run: task web:lint
+      - run: task web:typecheck
+      - run: task web:test:coverage
