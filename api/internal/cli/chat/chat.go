@@ -43,16 +43,16 @@ func (s *Session) Ask(query string) (string, error) {
 func (s *Session) RunREPL() error {
 	scanner := bufio.NewScanner(s.input)
 
-	fmt.Fprintln(s.output, "DEFT CRM AI Assistant")
-	fmt.Fprintln(s.output, "Type your questions in natural language. Type 'exit' or 'quit' to leave.")
-	fmt.Fprintln(s.output)
+	_, _ = fmt.Fprintln(s.output, "DEFT CRM AI Assistant")
+	_, _ = fmt.Fprintln(s.output, "Type your questions in natural language. Type 'exit' or 'quit' to leave.")
+	_, _ = fmt.Fprintln(s.output)
 
 	for {
-		fmt.Fprint(s.output, "deft> ")
+		_, _ = fmt.Fprint(s.output, "deft> ")
 
 		if !scanner.Scan() {
 			// EOF or error.
-			fmt.Fprintln(s.output)
+			_, _ = fmt.Fprintln(s.output)
 			return scanner.Err()
 		}
 
@@ -63,18 +63,18 @@ func (s *Session) RunREPL() error {
 
 		lower := strings.ToLower(query)
 		if lower == "exit" || lower == "quit" {
-			fmt.Fprintln(s.output, "Goodbye!")
+			_, _ = fmt.Fprintln(s.output, "Goodbye!")
 			return nil
 		}
 
 		response, err := s.Ask(query)
 		if err != nil {
-			fmt.Fprintf(s.output, "Error: %s\n\n", err)
+			_, _ = fmt.Fprintf(s.output, "Error: %s\n\n", err)
 			continue
 		}
 
-		fmt.Fprintln(s.output, response)
-		fmt.Fprintln(s.output)
+		_, _ = fmt.Fprintln(s.output, response)
+		_, _ = fmt.Fprintln(s.output)
 	}
 }
 

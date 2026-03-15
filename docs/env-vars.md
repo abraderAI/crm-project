@@ -69,6 +69,26 @@ These variables override Docker Compose defaults when set in `.env` alongside `d
 - `OTEL_ENABLED` — Passed through to API container. Default: `false`.
 - `OTEL_ENDPOINT` — Passed through to API container.
 
+## IO Channels
+
+### Chat Gateway
+
+- `CHAT_JWT_SECRET` — HMAC signing secret for chat widget session JWTs. **Required** in production (must be overridden; minimum 32 characters). Default: `change-me-in-production-min-32-chars`. Example: `$(openssl rand -base64 32)`.
+- `INTERNAL_API_KEY` — Shared secret for internal bridge authentication between services. **Required** in production (must be overridden). Default: `change-me-in-production`. Example: `$(openssl rand -hex 24)`.
+
+### LiveKit (Voice Channel)
+
+These variables are only required when the voice channel is enabled.
+
+- `LIVEKIT_URL` — WebSocket URL for the LiveKit server. **Required for voice**. No default. Example: `wss://your-livekit-server.example.com`.
+- `LIVEKIT_API_KEY` — LiveKit API key for generating access tokens. **Required for voice**. No default. Example: `APIxxxxxxxxxxxxxxx`.
+- `LIVEKIT_API_SECRET` — LiveKit API secret for signing access tokens. **Required for voice**. No default. Example: `your-livekit-api-secret`.
+- `LIVEKIT_WEBHOOK_TOKEN` — Token for validating inbound LiveKit webhook events. **Required for voice**. No default. Example: `your-livekit-webhook-token`.
+
+### Agentic CLI
+
+The CLI stores credentials client-side in `~/.deft-cli.yaml`. No server-side environment variables are required for the CLI itself.
+
 ## Fly.io Secrets
 
 Set via `fly secrets set`:
@@ -77,6 +97,24 @@ Set via `fly secrets set`:
 - `CLERK_PUBLISHABLE_KEY`
 - `CLERK_ISSUER_URL`
 - `CORS_ORIGINS` — Set to production frontend URL.
+- `CHAT_JWT_SECRET` — Min 32 chars. Required.
+- `INTERNAL_API_KEY` — Required.
+- `LIVEKIT_URL` — Required for voice channel.
+- `LIVEKIT_API_KEY` — Required for voice channel.
+- `LIVEKIT_API_SECRET` — Required for voice channel.
+- `LIVEKIT_WEBHOOK_TOKEN` — Required for voice channel.
+
+Set IO secrets via:
+
+```bash
+fly secrets set \
+  CHAT_JWT_SECRET=<secret> \
+  INTERNAL_API_KEY=<secret> \
+  LIVEKIT_URL=<url> \
+  LIVEKIT_API_KEY=<key> \
+  LIVEKIT_API_SECRET=<secret> \
+  LIVEKIT_WEBHOOK_TOKEN=<token>
+```
 
 ## Vercel Environment Variables
 
