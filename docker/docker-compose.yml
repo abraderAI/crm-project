@@ -21,6 +21,12 @@ services:
       - CLERK_ISSUER_URL=${CLERK_ISSUER_URL:-}
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_ENDPOINT=${OTEL_ENDPOINT:-}
+      - CHAT_JWT_SECRET=${CHAT_JWT_SECRET:-change-me-in-production}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-change-me-in-production}
+      - LIVEKIT_URL=${LIVEKIT_URL:-}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-}
+      - LIVEKIT_WEBHOOK_TOKEN=${LIVEKIT_WEBHOOK_TOKEN:-}
     volumes:
       - sqlite-data:/data
       - upload-data:/app/uploads
@@ -54,6 +60,16 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - deft
+
+  widget:
+    image: nginx:alpine
+    ports:
+      - "${WIDGET_PORT:-4000}:80"
+    volumes:
+      - ../widget/dist:/usr/share/nginx/html:ro
+    restart: unless-stopped
     networks:
       - deft
 

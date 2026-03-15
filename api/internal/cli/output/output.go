@@ -33,10 +33,7 @@ type Formatter struct {
 
 // New creates a new Formatter.
 func New(w io.Writer, format Format) *Formatter {
-	color := true
-	if os.Getenv("NO_COLOR") != "" {
-		color = false
-	}
+	color := os.Getenv("NO_COLOR") == ""
 	return &Formatter{writer: w, format: format, color: color}
 }
 
@@ -65,9 +62,9 @@ func (f *Formatter) RenderDetail(entity map[string]any) error {
 func (f *Formatter) RenderText(text string) {
 	if f.color {
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
-		fmt.Fprintln(f.writer, style.Render(text))
+		_, _ = fmt.Fprintln(f.writer, style.Render(text))
 	} else {
-		fmt.Fprintln(f.writer, text)
+		_, _ = fmt.Fprintln(f.writer, text)
 	}
 }
 
@@ -75,9 +72,9 @@ func (f *Formatter) RenderText(text string) {
 func (f *Formatter) RenderError(msg string) {
 	if f.color {
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
-		fmt.Fprintln(f.writer, style.Render("Error: "+msg))
+		_, _ = fmt.Fprintln(f.writer, style.Render("Error: "+msg))
 	} else {
-		fmt.Fprintln(f.writer, "Error: "+msg)
+		_, _ = fmt.Fprintln(f.writer, "Error: "+msg)
 	}
 }
 
@@ -85,9 +82,9 @@ func (f *Formatter) RenderError(msg string) {
 func (f *Formatter) RenderSuccess(msg string) {
 	if f.color {
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-		fmt.Fprintln(f.writer, style.Render(msg))
+		_, _ = fmt.Fprintln(f.writer, style.Render(msg))
 	} else {
-		fmt.Fprintln(f.writer, msg)
+		_, _ = fmt.Fprintln(f.writer, msg)
 	}
 }
 
@@ -99,7 +96,7 @@ func (f *Formatter) renderJSON(data any) error {
 
 func (f *Formatter) renderTable(entities []map[string]any) error {
 	if len(entities) == 0 {
-		fmt.Fprintln(f.writer, "No results found.")
+		_, _ = fmt.Fprintln(f.writer, "No results found.")
 		return nil
 	}
 
@@ -127,7 +124,7 @@ func (f *Formatter) renderTable(entities []map[string]any) error {
 
 func (f *Formatter) renderDetailView(entity map[string]any) error {
 	if len(entity) == 0 {
-		fmt.Fprintln(f.writer, "No data.")
+		_, _ = fmt.Fprintln(f.writer, "No data.")
 		return nil
 	}
 
@@ -147,7 +144,7 @@ func (f *Formatter) renderDetailView(entity map[string]any) error {
 		}
 		val := formatValue(entity[k])
 		padding := strings.Repeat(" ", maxKeyLen-len(k))
-		fmt.Fprintf(f.writer, "%s%s : %s\n", label, padding, val)
+		_, _ = fmt.Fprintf(f.writer, "%s%s : %s\n", label, padding, val)
 	}
 	return nil
 }

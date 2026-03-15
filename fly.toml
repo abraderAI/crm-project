@@ -18,6 +18,14 @@ kill_timeout = "10s"
   UPLOAD_DIR = "/data/uploads"
   UPLOAD_MAX_SIZE = "104857600"
 
+# IO Channels — set via: fly secrets set CHAT_JWT_SECRET=... INTERNAL_API_KEY=...
+# CHAT_JWT_SECRET = ""       # Required: min 32 chars
+# INTERNAL_API_KEY = ""      # Required: internal bridge auth
+# LIVEKIT_URL = ""           # Required for voice channel
+# LIVEKIT_API_KEY = ""       # Required for voice channel
+# LIVEKIT_API_SECRET = ""    # Required for voice channel
+# LIVEKIT_WEBHOOK_TOKEN = "" # Required for voice channel
+
 [http_service]
   internal_port = 8080
   force_https = true

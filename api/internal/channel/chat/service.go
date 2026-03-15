@@ -281,7 +281,7 @@ func (s *Service) generateAIResponse(ctx context.Context, session *ChatSession, 
 		if msg.AuthorID == "ai" {
 			role = "assistant"
 		}
-		history.WriteString(fmt.Sprintf("%s: %s\n", role, msg.Body))
+		fmt.Fprintf(&history, "%s: %s\n", role, msg.Body)
 	}
 
 	// Get system prompt from channel config.
