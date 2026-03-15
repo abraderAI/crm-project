@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { LayoutDashboard, Shield, BarChart3, Search } from "lucide-react";
+import { LayoutDashboard, Shield, BarChart3, Search, FileBarChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavNotificationBell } from "./nav-notification-bell";
 import { ThemeToggle } from "./theme-toggle";
@@ -11,6 +11,7 @@ import { ThemeToggle } from "./theme-toggle";
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/crm", label: "CRM", icon: BarChart3 },
+  { href: "/reports", label: "Reports", icon: FileBarChart },
   { href: "/search", label: "Search", icon: Search },
   { href: "/admin", label: "Admin", icon: Shield },
 ] as const;

@@ -12,6 +12,7 @@ import type { NavItem } from "./sidebar";
 const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", href: "/", type: "org" },
   { id: "crm", label: "CRM Pipeline", href: "/crm", type: "org" },
+  { id: "reports", label: "Reports", href: "/reports", type: "org" },
   { id: "search", label: "Search", href: "/search", type: "org" },
   { id: "admin", label: "Admin", href: "/admin", type: "org" },
 ];

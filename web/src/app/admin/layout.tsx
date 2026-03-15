@@ -12,6 +12,8 @@ import {
   Radio,
   UserCog,
   Shield,
+  Headset,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,8 @@ const ADMIN_TABS = [
   { href: "/admin/channels", label: "Channels", icon: Radio, exact: false },
   { href: "/admin/members", label: "Members", icon: UserCog, exact: false },
   { href: "/admin/moderation", label: "Moderation", icon: Shield, exact: false },
+  { href: "/admin/reports/support", label: "Support Reports", icon: Headset, exact: false },
+  { href: "/admin/reports/sales", label: "Sales Reports", icon: TrendingUp, exact: false },
 ] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }): React.ReactNode {

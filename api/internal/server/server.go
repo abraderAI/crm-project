@@ -30,6 +30,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/org"
 	"github.com/abraderAI/crm-project/api/internal/pipeline"
 	"github.com/abraderAI/crm-project/api/internal/provision"
+	"github.com/abraderAI/crm-project/api/internal/reporting"
 	"github.com/abraderAI/crm-project/api/internal/revision"
 	"github.com/abraderAI/crm-project/api/internal/scoring"
 	"github.com/abraderAI/crm-project/api/internal/search"
@@ -202,6 +203,11 @@ func NewRouter(cfg Config) http.Handler {
 	voiceLKPhone := voicelk.NewPhoneHandler(lkProvider, cfg.DB)
 	voiceLKBridge := voicelk.NewBridgeHandler(voiceLKService, cfg.InternalAPIKey)
 
+	// Reporting.
+	reportRepo := reporting.NewRepository(cfg.DB)
+	reportService := reporting.NewService(reportRepo)
+	reportHandler := reporting.NewHandler(reportService, cfg.DB)
+
 	// IO Phase 4: AI Web Chat Widget.
 	chatJWTSecret := cfg.ChatJWTSecret
 	if chatJWTSecret == "" {
@@ -342,6 +348,12 @@ func NewRouter(cfg Config) http.Handler {
 
 				ar.Get("/security/recent-logins", adminHandler.GetRecentLoginsHandler)
 				ar.Get("/security/failed-auths", adminHandler.GetFailedAuthsHandler)
+
+				// Phase 3: Platform admin reporting.
+				ar.Get("/reports/support", reportHandler.GetAdminSupportMetrics)
+				ar.Get("/reports/support/export", reportHandler.GetAdminSupportExport)
+				ar.Get("/reports/sales", reportHandler.GetAdminSalesMetrics)
+				ar.Get("/reports/sales/export", reportHandler.GetAdminSalesExport)
 			})
 			// Webhook routes.
 			authed.Route("/orgs/{org}/webhooks", func(wh chi.Router) {
@@ -461,6 +473,15 @@ func NewRouter(cfg Config) http.Handler {
 				ch.Get("/voice/numbers", voiceLKPhone.ListNumbers)
 				ch.Post("/voice/numbers/search", voiceLKPhone.SearchNumbers)
 				ch.Post("/voice/numbers/purchase", voiceLKPhone.PurchaseNumber)
+			})
+
+			// Reporting routes (admin/owner role required).
+			authed.Route("/orgs/{org}/reports", func(rpt chi.Router) {
+				rpt.Use(reporting.RequireOrgAdminOrOwner(cfg.DB))
+				rpt.Get("/support", reportHandler.GetSupportMetrics)
+				rpt.Get("/support/export", reportHandler.GetSupportExport)
+				rpt.Get("/sales", reportHandler.GetSalesMetrics)
+				rpt.Get("/sales/export", reportHandler.GetSalesExport)
 			})
 
 			// Pipeline stages route.
