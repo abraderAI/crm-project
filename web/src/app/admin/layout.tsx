@@ -9,6 +9,7 @@ import {
   ToggleRight,
   CreditCard,
   Webhook,
+  Radio,
   UserCog,
   Shield,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const ADMIN_TABS = [
   { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleRight, exact: false },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, exact: false },
   { href: "/admin/webhooks", label: "Webhooks", icon: Webhook, exact: false },
+  { href: "/admin/channels", label: "Channels", icon: Radio, exact: false },
   { href: "/admin/members", label: "Members", icon: UserCog, exact: false },
   { href: "/admin/moderation", label: "Moderation", icon: Shield, exact: false },
 ] as const;
