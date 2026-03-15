@@ -126,6 +126,10 @@ type VoiceConfig struct {
 	PhoneNumberIDs    []string `json:"phone_number_ids,omitempty"`
 	RecordingEnabled  bool     `json:"recording_enabled"`
 	EscalationPhone   string   `json:"escalation_phone,omitempty"`
+	AgentDeploymentID string   `json:"agent_deployment_id,omitempty"`
+	DefaultSTTModel   string   `json:"default_stt_model,omitempty"`
+	DefaultTTSModel   string   `json:"default_tts_model,omitempty"`
+	SystemPrompt      string   `json:"system_prompt,omitempty"`
 }
 
 // Validate checks that required VoiceConfig fields are present.

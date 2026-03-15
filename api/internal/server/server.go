@@ -14,6 +14,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/billing"
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/channel"
+	voicelk "github.com/abraderAI/crm-project/api/internal/channel/voice"
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/event"
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
@@ -55,6 +56,8 @@ type Config struct {
 	UploadDir           string // Directory for file uploads.
 	MaxUpload           int64  // Maximum upload size in bytes.
 	PlatformAdminUserID string // Bootstrap platform admin user ID.
+	LiveKitWebhookToken string // Auth token for LiveKit webhook verification.
+	InternalAPIKey      string // API key for internal bridge endpoints.
 }
 
 // NewRouter creates and configures the Chi router with all middleware and routes.
@@ -190,6 +193,13 @@ func NewRouter(cfg Config) http.Handler {
 	// IO Phase 1: Channel Gateway.
 	channelHandler := channel.NewHandler(channel.NewService(channel.NewRepository(cfg.DB)))
 
+	// IO Phase 3: Voice LiveKit integration.
+	lkProvider := voicelk.NewMockProvider()
+	voiceLKService := voicelk.NewService(cfg.DB, lkProvider, eventBus)
+	voiceLKWebhook := voicelk.NewWebhookHandler(voiceLKService, cfg.LiveKitWebhookToken)
+	voiceLKPhone := voicelk.NewPhoneHandler(lkProvider, cfg.DB)
+	voiceLKBridge := voicelk.NewBridgeHandler(voiceLKService, cfg.InternalAPIKey)
+
 	// API v1 subrouter.
 	r.Route("/v1", func(v1 chi.Router) {
 		// Public v1 root (no auth).
@@ -201,6 +211,13 @@ func NewRouter(cfg Config) http.Handler {
 
 		// Public billing webhook endpoint (HMAC-verified, no JWT).
 		v1.Post("/webhooks/billing", billingHandler.HandleWebhook)
+
+		// Public LiveKit webhook endpoint (token-verified, no JWT).
+		v1.Post("/webhooks/livekit", voiceLKWebhook.HandleWebhook)
+
+		// Internal bridge API (X-Internal-Key auth, no JWT).
+		v1.Get("/internal/contacts/lookup", voiceLKBridge.LookupContact)
+		v1.Get("/internal/threads/{id}/summary", voiceLKBridge.GetThreadSummary)
 
 		// WebSocket endpoint (auth via query param).
 		v1.Get("/ws", wsHandler.Upgrade)
@@ -424,6 +441,11 @@ func NewRouter(cfg Config) http.Handler {
 				ch.Post("/dlq/{id}/dismiss", channelHandler.DismissDLQ)
 				ch.Get("/{type}", channelHandler.GetConfig)
 				ch.Put("/{type}", channelHandler.PutConfig)
+
+				// Voice phone number admin routes.
+				ch.Get("/voice/numbers", voiceLKPhone.ListNumbers)
+				ch.Post("/voice/numbers/search", voiceLKPhone.SearchNumbers)
+				ch.Post("/voice/numbers/purchase", voiceLKPhone.PurchaseNumber)
 			})
 
 			// Pipeline stages route.
