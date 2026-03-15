@@ -1,0 +1,225 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.5",
+    "created": "2026-03-14T22:13:00Z",
+    "updated": "2026-03-14T22:13:00Z",
+    "metadata": {
+      "type": "specification",
+      "project": "deft-evolution-io-channels",
+      "specOutput": "SPECIFICATION-io-channels.md",
+      "parentSpec": "vbrief/specification.vbrief.json"
+    }
+  },
+  "plan": {
+    "id": "io-channels-spec",
+    "title": "DEFT Evolution — IO Channels Add-on Module",
+    "status": "approved",
+    "author": "interview-agent",
+    "planRef": "file://vbrief/specification.vbrief.json#deft-evolution-spec",
+    "narratives": {
+      "Overview": "IO Channels is an add-on module for DEFT Evolution that adds four communication capabilities: (1) inbound email-to-lead conversion via Gmail IMAP IDLE, (2) AI-powered voice calls via LiveKit Agents with LiveKit Phone Numbers, (3) AI web chat via an embeddable widget, and (4) an agentic AI CLI for natural language CRM operations. All inbound channels feed through a unified ChannelGateway service that normalizes events into a common InboundEvent structure before routing to the CRM's thread/message model.",
+      "Background": "The main DEFT Evolution spec (Phases 1–16) provides the CRM/community platform with a stubbed VoiceProvider interface, an event bus, WebSocket hub, and StorageProvider. This add-on replaces the voice stub with a full LiveKit-based implementation and adds email, chat, and CLI channels. All channels leverage existing provider interfaces (StorageProvider, LLMProvider, NotificationProvider) and the thread/message content model.",
+      "Constraint": "This add-on MUST NOT begin until the main spec's backend phases (1–10) are complete. The LiveKit Agent sidecar MUST be Node.js/TypeScript (LiveKit Agents SDK requirement). All Go code MUST follow existing patterns (handler→service→repository, provider interfaces, ≥85% coverage). The CLI MUST NOT include admin operations (org settings, user management, billing).",
+      "Risk": "LiveKit Phone Numbers currently only supports inbound calling (outbound coming soon). Gmail IMAP IDLE requires persistent connections that need careful lifecycle management. Browser fingerprinting has privacy implications (GDPR/CCPA). The Node.js sidecar introduces a second runtime to deploy and monitor.",
+      "Alternative": "Considered Twilio for voice (rejected: LiveKit provides unified voice AI pipeline with lower latency). Considered SendGrid/Mailgun webhooks for email (rejected: Gmail IMAP gives direct mailbox access without DNS changes). Considered LiveKit Rooms for chat transport (rejected: text-only chat doesn't need WebRTC overhead, existing WS hub is sufficient). Considered Python for LiveKit agent (rejected: Node.js/TypeScript aligns with existing frontend tooling)."
+    },
+    "metadata": {
+      "stack_additions": {
+        "voice_orchestration": "LiveKit Agents SDK (Node.js/TypeScript sidecar)",
+        "voice_infrastructure": "LiveKit Cloud + LiveKit Phone Numbers",
+        "voice_models": "LiveKit Inference (provider-swappable STT/TTS)",
+        "voice_go_sdk": "github.com/livekit/server-sdk-go (room management)",
+        "email_inbound": "Gmail IMAP IDLE (net/imap Go library)",
+        "email_auth": "Google OAuth 2.0 Service Account",
+        "chat_widget": "Embeddable <script> tag (vanilla JS/TS bundle)",
+        "chat_fingerprint": "FingerprintJS (browser fingerprinting)",
+        "cli": "Go binary (cmd/cli/), LLM function calling"
+      },
+      "decisions": {
+        "gateway_architecture": "Unified ChannelGateway with normalized InboundEvent",
+        "email_provider": "Gmail IMAP (not webhook-based)",
+        "email_polling": "IMAP IDLE (push-like)",
+        "voice_provider": "LiveKit Agents + LiveKit Phone Numbers (replaces Twilio)",
+        "chat_ai": "Server-side LLM via existing LLMProvider",
+        "chat_delivery": "Embeddable <script> tag",
+        "chat_escalation": "Existing WebSocket hub for human handoff",
+        "cli_location": "Go binary in cmd/cli/",
+        "cli_nl_queries": "LLM function calling against REST API",
+        "email_thread_matching": "Email address + In-Reply-To/References headers",
+        "call_flow": "AI-first with human escalation",
+        "gmail_auth": "Google OAuth 2.0 Service Account",
+        "stt_tts": "LiveKit Inference (unified gateway, swap providers via config)",
+        "voice_architecture": "LiveKit Agents (Node.js sidecar) + LiveKit Phone Numbers (no Twilio)",
+        "chat_widget_auth": "Anonymous session token + browser fingerprint",
+        "email_attachments": "Store in StorageProvider + link to thread as Upload records",
+        "call_recordings": "LiveKit recording → StorageProvider + transcript as thread message",
+        "cli_scope": "Read-heavy CRUD + search (no admin ops)",
+        "channel_config": "channel_configs table with polymorphic JSONB settings per org+channel_type",
+        "error_handling": "Exponential backoff + dead letter queue (DB-backed, admin UI)",
+        "testing_strategy": "Interface mocks + integration test tags (//go:build integration)",
+        "agent_runtime": "Node.js/TypeScript for LiveKit Agent sidecar",
+        "chat_transport": "Text-only via existing WebSocket hub"
+      }
+    },
+    "tags": ["io-channels", "email", "voice", "livekit", "chat", "cli", "add-on"],
+    "items": [
+      {
+        "id": "io-phase1",
+        "title": "Phase 1: Channel Gateway & Infrastructure",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Establish the unified ChannelGateway service, channel_configs table, InboundEvent normalization, error handling with exponential backoff and dead letter queue, and channel health tracking. This phase creates the shared foundation that all four channels depend on.",
+          "Constraint": "Depends on main spec Phases 1–10 being complete (event bus, WebSocket hub, StorageProvider, thread/message models all available)."
+        },
+        "subItems": [
+          {"id": "io-phase1.channel-config-model", "title": "channel_configs model: OrgID FK, ChannelType enum (email/voice/chat), Settings JSONB, Enabled bool, CreatedAt, UpdatedAt, DeletedAt. Composite unique (OrgID, ChannelType). Go structs per channel type for JSONB validation (EmailConfig, VoiceConfig, ChatConfig).", "status": "pending", "priority": "high"},
+          {"id": "io-phase1.channel-config-api", "title": "Channel config CRUD: GET/PUT /v1/orgs/{org}/channels/{type}. Admin-only. Validates Settings JSONB against channel-specific Go struct. Returns masked secrets.", "status": "pending", "priority": "high"},
+          {"id": "io-phase1.inbound-event", "title": "InboundEvent struct: ID (UUIDv7), ChannelType, OrgID, ExternalID, SenderIdentifier, Subject, Body, Metadata JSONB, Attachments []AttachmentRef, ReceivedAt. Normalization interface per channel.", "status": "pending", "priority": "high"},
+          {"id": "io-phase1.channel-gateway", "title": "ChannelGateway service: accepts InboundEvent from any channel adapter, resolves org from channel config, matches to existing thread or creates new lead thread, creates message (type per channel: email/call_log/comment), publishes to event bus.", "status": "pending", "priority": "high"},
+          {"id": "io-phase1.dlq-model", "title": "Dead letter queue model: ID, OrgID, ChannelType, EventPayload JSONB, ErrorMessage, Attempts int, LastAttemptAt, Status enum (failed/retrying/resolved/dismissed), CreatedAt. Index on (OrgID, Status).", "status": "pending", "priority": "high"},
+          {"id": "io-phase1.retry-engine", "title": "Retry engine: exponential backoff (1s, 2s, 4s, 8s, 16s cap) with jitter. Max 5 retries. On exhaustion, insert into DLQ. Channel health status tracked per org (healthy/degraded/down) based on recent failure rate.", "status": "pending", "priority": "high"},
+          {"id": "io-phase1.dlq-api", "title": "DLQ admin API: GET /v1/orgs/{org}/channels/dlq (list, filter by channel/status), POST /v1/orgs/{org}/channels/dlq/{id}/retry, POST /v1/orgs/{org}/channels/dlq/{id}/dismiss. Admin-only.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase1.health-api", "title": "Channel health API: GET /v1/orgs/{org}/channels/health — returns per-channel status (healthy/degraded/down), last event time, error count. Subscribes to event bus for real-time status.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase1.tests", "title": "Phase 1 tests: channel_configs CRUD, InboundEvent normalization, gateway routing (match existing thread, create new lead), retry engine (verify backoff timing, DLQ insertion after max retries), DLQ API lifecycle. Fuzzing ≥50 per (Settings JSONB, InboundEvent payload). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "io-phase2",
+        "title": "Phase 2: Inbound Email Channel",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Gmail IMAP IDLE integration for real-time inbound email processing. Emails are parsed, matched to existing threads via In-Reply-To/References headers and sender email, attachments extracted to StorageProvider, and unmatched emails create new lead threads.",
+          "Constraint": "Requires Google OAuth 2.0 Service Account credentials per org. IMAP IDLE connections are persistent and MUST be managed with lifecycle hooks (connect, reconnect, graceful shutdown)."
+        },
+        "subItems": [
+          {"id": "io-phase2.imap-provider", "title": "IMAPProvider interface: Connect(config), StartIDLE(mailbox, handler), FetchMessage(uid), Close(). GmailIMAPProvider implementation using go-imap library. Connection pooling per org.", "status": "pending", "priority": "high"},
+          {"id": "io-phase2.google-auth", "title": "Google OAuth 2.0 Service Account integration: load credentials from channel_configs, obtain IMAP XOAUTH2 token, auto-refresh before expiry. Store refresh token encrypted in channel_configs Settings JSONB.", "status": "pending", "priority": "high"},
+          {"id": "io-phase2.idle-manager", "title": "IMAP IDLE connection manager: per-org goroutine, IDLE on INBOX, reconnect with exponential backoff on disconnect, graceful shutdown on org config change or server stop. Health reporting to channel gateway.", "status": "pending", "priority": "high"},
+          {"id": "io-phase2.email-parser", "title": "Email parser: extract From, To, Subject, plain text + HTML body (prefer plain, fallback HTML→text), In-Reply-To, References, Message-ID headers. Handle multipart MIME. Normalize to InboundEvent.", "status": "pending", "priority": "high"},
+          {"id": "io-phase2.thread-matcher", "title": "Thread matcher: (1) check In-Reply-To/References against stored Message-IDs on thread metadata, (2) fallback to sender email address match against existing contact/lead threads, (3) no match → create new lead thread with sender email in metadata.", "status": "pending", "priority": "high"},
+          {"id": "io-phase2.attachment-handler", "title": "Attachment handler: extract MIME attachments, upload each to StorageProvider, create Upload records linked to the message. Size limit per main spec (100MB). Skip inline images unless >10KB.", "status": "pending", "priority": "high"},
+          {"id": "io-phase2.email-metadata", "title": "Email metadata storage: store Message-ID, In-Reply-To, References, original From/To/CC in message metadata JSONB. Store thread-level email_address and message_ids array for future matching.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase2.tests", "title": "Phase 2 tests: mock IMAPProvider with realistic email fixtures (plain, HTML, multipart, attachments, reply chains). Thread matching (by headers, by email, no match → new lead). Attachment extraction lifecycle. IDLE reconnect behavior. Google auth token refresh. Fuzzing ≥50 per (email body, MIME parsing, headers). Integration tests behind //go:build integration tag for real Gmail. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "io-phase3",
+        "title": "Phase 3: Voice Channel — LiveKit Integration",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Full voice call support via LiveKit. The Go backend manages LiveKit rooms and phone number provisioning via LiveKit's Go server SDK. A Node.js/TypeScript sidecar runs the LiveKit Agent with an STT→LLM→TTS voice pipeline. Calls are recorded, transcribed, and stored as thread messages with audio uploads. AI handles calls first with human escalation support.",
+          "Constraint": "LiveKit Phone Numbers currently only supports inbound calling (US local + toll-free). Outbound calling deferred until LiveKit adds support. Agent sidecar MUST be Node.js/TypeScript (LiveKit Agents SDK requirement)."
+        },
+        "subItems": [
+          {"id": "io-phase3.livekit-go-sdk", "title": "LiveKit Go server SDK integration: room creation, participant management, SIP dispatch rule management, phone number provisioning (search, purchase, assign dispatch rule), recording start/stop. Behind LiveKitProvider interface for testability.", "status": "pending", "priority": "high"},
+          {"id": "io-phase3.voice-config", "title": "Voice channel config (in channel_configs JSONB): LiveKit API key/secret, project URL, phone number IDs, agent deployment ID, default STT/TTS models, recording enabled flag, escalation phone number.", "status": "pending", "priority": "high"},
+          {"id": "io-phase3.call-lifecycle", "title": "Call lifecycle management: inbound call → LiveKit dispatch rule routes to agent room → Go backend notified via LiveKit webhook → create thread + call_log message → update metadata on call events (answered, transferred, ended). Store call duration, participant info.", "status": "pending", "priority": "high"},
+          {"id": "io-phase3.agent-sidecar", "title": "LiveKit Agent sidecar (Node.js/TypeScript): AgentSession with configurable STT (via LiveKit Inference), LLM (via CRM's LLMProvider API endpoint), TTS (via LiveKit Inference). System prompt loaded from org's voice channel config. Tool functions for CRM data lookup (contacts, threads, pipeline status).", "status": "pending", "priority": "high"},
+          {"id": "io-phase3.agent-crm-bridge", "title": "Agent-CRM bridge API: internal endpoints for the LiveKit agent to query CRM data. GET /v1/internal/contacts/lookup?email=&phone=, GET /v1/internal/threads/{id}/summary. Authenticated via internal API key. Agent calls these during conversation for context.", "status": "pending", "priority": "high"},
+          {"id": "io-phase3.escalation", "title": "Human escalation: agent detects escalation intent (keyword or LLM decision) → LiveKit transfers participant to human agent room → Go backend updates thread metadata (escalated=true, escalated_to, escalated_at). WebSocket notification to CRM UI for human agent.", "status": "pending", "priority": "high"},
+          {"id": "io-phase3.recording", "title": "Call recording: LiveKit room-level recording (composite audio). On call end, export recording to StorageProvider, create Upload record linked to thread. Store recording URL in call_log message metadata.", "status": "pending", "priority": "high"},
+          {"id": "io-phase3.transcript", "title": "Transcript storage: LiveKit agent emits transcript events during call. On call end, compile full transcript as a message (type: call_log) on the thread. Include speaker labels (agent/caller) and timestamps.", "status": "pending", "priority": "high"},
+          {"id": "io-phase3.phone-admin", "title": "Phone number admin API: GET /v1/orgs/{org}/channels/voice/numbers (list org's numbers), POST /v1/orgs/{org}/channels/voice/numbers/search (search available), POST /v1/orgs/{org}/channels/voice/numbers/purchase. Admin-only. Proxies to LiveKit Phone Number API.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase3.tests", "title": "Phase 3 tests: mock LiveKitProvider for all Go-side tests. Agent sidecar tested with LiveKit's console mode (local audio I/O). Call lifecycle (inbound → agent → transcript → recording → thread). Escalation flow. Phone number provisioning. Fuzzing ≥50 per (webhook payloads, transcript events). Integration tests (//go:build integration) with real LiveKit Cloud sandbox. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "io-phase4",
+        "title": "Phase 4: AI Web Chat",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Embeddable AI chat widget delivered via <script> tag. Anonymous visitors authenticated with session tokens and browser fingerprints for returning visitor recognition. Chat messages routed through the existing WebSocket hub. AI responses generated server-side via the existing LLMProvider. Human escalation via WebSocket channel handoff.",
+          "Constraint": "Widget MUST be a single self-contained JS bundle with no external dependencies beyond the host page. Fingerprinting MUST comply with privacy policy disclosure requirements."
+        },
+        "subItems": [
+          {"id": "io-phase4.widget-bundle", "title": "Chat widget: TypeScript bundle compiled to single IIFE JS file. Renders floating chat button → expandable chat panel. Styled with Shadow DOM (no CSS conflicts with host page). Configurable via data attributes on script tag (org embed key, theme, position).", "status": "pending", "priority": "high"},
+          {"id": "io-phase4.session-auth", "title": "Anonymous session auth: widget requests POST /v1/chat/session with org embed key → returns short-lived JWT (24h). Embed key validated against channel_configs. JWT stored in localStorage. Auto-refresh before expiry.", "status": "pending", "priority": "high"},
+          {"id": "io-phase4.fingerprint", "title": "Browser fingerprinting: integrate FingerprintJS in widget. Send fingerprint hash with session request. Server stores fingerprint → visitor_id mapping. On returning visit with same fingerprint, merge into existing lead/thread. Privacy notice displayed in widget.", "status": "pending", "priority": "high"},
+          {"id": "io-phase4.chat-ws", "title": "Chat WebSocket integration: widget connects to existing WS hub (/v1/ws) with chat session JWT. Subscribes to chat:{session_id} channel. Sends/receives chat messages. Server-side handler creates thread (if new session) and messages on the CRM thread.", "status": "pending", "priority": "high"},
+          {"id": "io-phase4.ai-responder", "title": "AI chat responder: on inbound chat message, invoke LLMProvider with conversation history + org-specific system prompt (from chat channel config). Stream response tokens back via WebSocket. Store both user and AI messages on the CRM thread.", "status": "pending", "priority": "high"},
+          {"id": "io-phase4.lead-capture", "title": "Lead capture: if visitor provides name/email during chat (detected by LLM or explicit form), update the thread's lead metadata (contact_email, contact_name). Merge with fingerprint-matched existing lead if applicable.", "status": "pending", "priority": "high"},
+          {"id": "io-phase4.human-escalation", "title": "Human escalation: AI detects escalation intent → server marks thread as escalated → WebSocket notification to CRM UI agent dashboard → human agent joins the WS channel → visitor sees 'connecting to agent' status. If no human available within timeout, AI continues with apology.", "status": "pending", "priority": "high"},
+          {"id": "io-phase4.chat-config", "title": "Chat channel config (in channel_configs JSONB): embed key (auto-generated UUID), widget theme (colors, logo URL, greeting message), AI system prompt, escalation timeout seconds, allowed domains (CORS), operating hours.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase4.tests", "title": "Phase 4 tests: widget bundle builds and renders (Vitest + jsdom). Session auth flow (valid/invalid/expired embed key). Fingerprint matching (new visitor, returning visitor, merge). WS chat message round-trip. AI responder with mocked LLM. Lead capture detection. Human escalation flow. Fuzzing ≥50 per (chat message, embed key, fingerprint). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "io-phase5",
+        "title": "Phase 5: Agentic AI CLI",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Go binary CLI tool (cmd/cli/) that provides a natural language interface to the CRM. Uses LLM function calling to translate user queries into REST API calls. Supports read-heavy CRUD and search across all CRM entities. Authenticated via API key or JWT.",
+          "Constraint": "CLI MUST NOT include admin operations (org settings, user management, role assignments, billing). MUST use existing REST API endpoints — no direct database access."
+        },
+        "subItems": [
+          {"id": "io-phase5.cli-scaffold", "title": "CLI scaffold: Go binary in cmd/cli/ using cobra. Config file (~/.deft-cli.yaml) for API URL, API key, default org. Environment variable overrides (DEFT_API_URL, DEFT_API_KEY). Version command.", "status": "pending", "priority": "high"},
+          {"id": "io-phase5.auth", "title": "CLI auth: 'deft login' command — interactive API key entry (stored securely in OS keychain via go-keyring). 'deft login --token' for JWT. Validate credentials via GET /healthz with auth header. 'deft logout' to clear.", "status": "pending", "priority": "high"},
+          {"id": "io-phase5.api-client", "title": "CLI API client: typed Go HTTP client wrapping all REST endpoints used by CLI (leads, contacts, deals, threads, messages, search, activities). Handles pagination, error formatting, auth header injection.", "status": "pending", "priority": "high"},
+          {"id": "io-phase5.llm-functions", "title": "LLM function calling: define tool functions matching CLI operations (search_leads, get_thread, create_lead, update_deal_stage, list_activities, search_contacts, etc.). Send user's natural language query + tools to LLMProvider. Execute returned function calls against API client. Format results for terminal output.", "status": "pending", "priority": "high"},
+          {"id": "io-phase5.interactive", "title": "Interactive mode: 'deft chat' enters REPL. Maintains conversation context across queries. Supports follow-up queries ('now show me their deals'). Exit with Ctrl+C or 'exit'. Non-interactive mode: 'deft ask \"show me all leads from this week\"'.", "status": "pending", "priority": "high"},
+          {"id": "io-phase5.output-format", "title": "Output formatting: table output (default for lists), JSON output (--json flag), single-record detail view. Colored terminal output via lipgloss. Respects NO_COLOR env var. Pagination: auto-fetch all pages or --limit flag.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase5.tests", "title": "Phase 5 tests: CLI scaffold (config loading, auth flow with mocked keyring). API client (all endpoints mocked). LLM function calling (mock LLM returns tool calls, verify correct API calls made). Interactive mode (simulated stdin/stdout). Output formatting. Fuzzing ≥50 per (user query, API response). Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "io-phase6",
+        "title": "Phase 6: Channel Admin UI",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Frontend views for managing IO channel configurations, monitoring channel health, reviewing the dead letter queue, and configuring/previewing the chat widget. Extends the existing Next.js admin views.",
+          "Constraint": "MUST follow existing frontend patterns (shadcn/ui components, Vitest tests, ≥85% coverage)."
+        },
+        "subItems": [
+          {"id": "io-phase6.channel-settings", "title": "Channel settings page: /settings/channels — tabbed view (Email, Voice, Chat, CLI). Per-channel enable/disable toggle. Channel-specific config forms (Gmail OAuth connect flow, LiveKit API keys, chat widget theme editor). Save validates via API.", "status": "pending", "priority": "high"},
+          {"id": "io-phase6.health-dashboard", "title": "Channel health dashboard: /settings/channels/health — real-time status per channel (healthy/degraded/down). Last event timestamp. Error count (24h). Sparkline chart of event volume. Auto-refresh via WebSocket.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase6.dlq-viewer", "title": "Dead letter queue viewer: /settings/channels/dlq — table of failed events (channel, error, timestamp, attempts). Filter by channel/status. Retry and dismiss actions. Event payload detail modal.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase6.widget-preview", "title": "Chat widget preview: in chat channel settings, live preview of widget appearance (colors, logo, greeting). Copy embed code snippet. Test chat in preview mode (sends to test thread).", "status": "pending", "priority": "medium"},
+          {"id": "io-phase6.phone-management", "title": "Phone number management UI: /settings/channels/voice/numbers — list org's numbers, search available numbers by area code, purchase flow, assign to dispatch rule. Status indicators.", "status": "pending", "priority": "medium"},
+          {"id": "io-phase6.tests", "title": "Phase 6 tests: component tests for all settings forms, health dashboard, DLQ viewer. Playwright E2E: navigate to channel settings → configure email → verify saved. Widget preview renders. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "io-phase7",
+        "title": "Phase 7: Integration Testing & Deployment",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Cross-channel integration tests, LiveKit Agent sidecar deployment configuration, CI/CD pipeline updates, and end-to-end smoke tests covering all four IO channels.",
+          "Constraint": "Integration tests MUST verify the full flow from external event source through ChannelGateway to CRM thread/message creation."
+        },
+        "subItems": [
+          {"id": "io-phase7.cross-channel", "title": "Cross-channel integration tests: email arrives → creates lead → same lead calls via phone → thread matched → chat from same contact → thread matched. Verify single unified thread with all message types.", "status": "pending", "priority": "high"},
+          {"id": "io-phase7.agent-deploy", "title": "LiveKit Agent sidecar deployment: Dockerfile for Node.js agent. Docker Compose service (agent alongside Go API). Fly.io deployment config (separate process group or machine). Environment variables for LiveKit credentials.", "status": "pending", "priority": "high"},
+          {"id": "io-phase7.ci-update", "title": "CI/CD updates: GitHub Actions workflow adds Node.js agent lint+test step. Widget bundle build step. CLI binary build (multi-arch). Integration test job with //go:build integration tag (requires LiveKit sandbox credentials in CI secrets).", "status": "pending", "priority": "high"},
+          {"id": "io-phase7.smoke", "title": "E2E smoke tests: (1) send test email → verify lead thread created with attachments, (2) inbound call → verify transcript + recording on thread, (3) chat widget session → verify AI response + lead capture, (4) CLI 'deft ask' → verify correct data returned. Run against local Docker stack.", "status": "pending", "priority": "high"},
+          {"id": "io-phase7.docs", "title": "Documentation: update README with IO channels overview, setup guides (Gmail OAuth, LiveKit Cloud, widget embed), CLI installation instructions. Update PROJECT.md with new dependencies.", "status": "pending", "priority": "medium"}
+        ]
+      }
+    ],
+    "edges": [
+      {"from": "io-phase1", "to": "io-phase2", "type": "blocks"},
+      {"from": "io-phase1", "to": "io-phase3", "type": "blocks"},
+      {"from": "io-phase1", "to": "io-phase4", "type": "blocks"},
+      {"from": "io-phase1", "to": "io-phase5", "type": "blocks"},
+      {"from": "io-phase2", "to": "io-phase6", "type": "blocks"},
+      {"from": "io-phase3", "to": "io-phase6", "type": "blocks"},
+      {"from": "io-phase4", "to": "io-phase6", "type": "blocks"},
+      {"from": "io-phase2", "to": "io-phase7", "type": "blocks"},
+      {"from": "io-phase3", "to": "io-phase7", "type": "blocks"},
+      {"from": "io-phase4", "to": "io-phase7", "type": "blocks"},
+      {"from": "io-phase5", "to": "io-phase7", "type": "blocks"},
+      {"from": "io-phase6", "to": "io-phase7", "type": "blocks"},
+      {"from": "io-phase2", "to": "io-phase3", "type": "informs"},
+      {"from": "io-phase2", "to": "io-phase4", "type": "informs"},
+      {"from": "io-phase3", "to": "io-phase4", "type": "informs"}
+    ],
+    "created": "2026-03-14T22:13:00Z",
+    "updated": "2026-03-14T22:13:00Z"
+  }
+}
