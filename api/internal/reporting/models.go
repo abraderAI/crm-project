@@ -80,6 +80,43 @@ type StageAvgTime struct {
 	AvgHours *float64 `json:"avg_hours"` // nil if no data
 }
 
+// --- Admin Response Types ---
+
+// AdminSupportMetrics is the response for GET /v1/admin/reports/support.
+type AdminSupportMetrics struct {
+	SupportMetrics
+	OrgBreakdown []OrgSupportSummary `json:"org_breakdown"`
+}
+
+// AdminSalesMetrics is the response for GET /v1/admin/reports/sales.
+type AdminSalesMetrics struct {
+	SalesMetrics
+	OrgBreakdown []OrgSalesSummary `json:"org_breakdown"`
+}
+
+// OrgSupportSummary holds per-org support metrics for the admin breakdown.
+type OrgSupportSummary struct {
+	OrgID                 string   `json:"org_id"`
+	OrgName               string   `json:"org_name"`
+	OrgSlug               string   `json:"org_slug"`
+	OpenCount             int64    `json:"open_count"`
+	OverdueCount          int64    `json:"overdue_count"`
+	AvgResolutionHours    *float64 `json:"avg_resolution_hours"`
+	AvgFirstResponseHours *float64 `json:"avg_first_response_hours"`
+	TotalInRange          int64    `json:"total_in_range"`
+}
+
+// OrgSalesSummary holds per-org sales metrics for the admin breakdown.
+type OrgSalesSummary struct {
+	OrgID             string   `json:"org_id"`
+	OrgName           string   `json:"org_name"`
+	OrgSlug           string   `json:"org_slug"`
+	TotalLeads        int64    `json:"total_leads"`
+	WinRate           float64  `json:"win_rate"`
+	AvgDealValue      *float64 `json:"avg_deal_value"`
+	OpenPipelineCount int64    `json:"open_pipeline_count"`
+}
+
 // --- Export Row Types ---
 
 // SupportExportRow represents one row of the support CSV export.
@@ -102,4 +139,18 @@ type SalesExportRow struct {
 	DealValue  string
 	Score      string
 	CreatedAt  string
+}
+
+// AdminSupportExportRow extends SupportExportRow with org context.
+type AdminSupportExportRow struct {
+	OrgID   string
+	OrgSlug string
+	SupportExportRow
+}
+
+// AdminSalesExportRow extends SalesExportRow with org context.
+type AdminSalesExportRow struct {
+	OrgID   string
+	OrgSlug string
+	SalesExportRow
 }
