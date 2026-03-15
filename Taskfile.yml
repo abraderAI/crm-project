@@ -89,6 +89,9 @@ tasks:
       - go test -race -fuzz=FuzzImpersonationCreate -fuzztime=5s ./internal/admin/
       - go test -race -fuzz=FuzzValidateSettings -fuzztime=5s ./internal/channel/
       - go test -race -fuzz=FuzzInboundEvent -fuzztime=5s ./internal/channel/
+      - go test -race -fuzz=FuzzEmailBody -fuzztime=5s ./internal/channel/email/
+      - go test -race -fuzz=FuzzMIMEParsing -fuzztime=5s ./internal/channel/email/
+      - go test -race -fuzz=FuzzEmailHeaders -fuzztime=5s ./internal/channel/email/
 
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)
