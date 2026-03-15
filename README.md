@@ -24,6 +24,11 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Voice** — Stubbed `VoiceProvider` interface with thread-based logging and escalation
 - **App shell** — Sidebar navigation, topbar with search + user menu, breadcrumbs, dark/light theme toggle
 - **File preview** — Rich staged file previews (image thumbnails, icons, size) with upload progress indicators
+- **IO Channel Gateway** — Pluggable inbound channel processing with per-channel config, dead-letter queue (DLQ), and exponential-backoff retry engine
+- **Inbound Email** — MIME parsing, thread deduplication by Message-ID / In-Reply-To, lead-thread auto-creation
+- **Voice / LiveKit** — LiveKit room management, webhook ingestion, phone call bridging, transcript storage, and escalation
+- **AI Web Chat Widget** — Embeddable shadow-DOM widget (plain JS/TS, zero deps) with JWT session auth, WebSocket streaming, and LLM-powered responses
+- **Agentic CLI** — `deft` terminal client for natural-language CRM queries via LLM function-calling, interactive REPL, and one-shot mode
 
 ---
 
@@ -38,6 +43,9 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | Real-time | `coder/websocket` |
 | Email | [Resend](https://resend.com) + React Email |
 | Billing | FlexPoint (`BillingProvider` interface) |
+| Voice | [LiveKit](https://livekit.io) (room/webhook/bridge/transcript) |
+| Chat Widget | esbuild IIFE bundle, shadow DOM, zero dependencies |
+| CLI | [Cobra](https://github.com/spf13/cobra), [lipgloss](https://github.com/charmbracelet/lipgloss), tablewriter |
 | Observability | slog + OpenTelemetry |
 | Testing | Go: testify + httptest · Frontend: Vitest + Playwright |
 | CI/CD | GitHub Actions |
@@ -50,7 +58,9 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 ```
 /
 ├── api/                        # Go backend
-│   ├── cmd/server/             # Entry point
+│   ├── cmd/
+│   │   ├── server/             # API server entry point
+│   │   └── cli/                # deft CLI entry point
 │   ├── config/                 # rbac-policy.yaml, pipeline config
 │   ├── internal/
 │   │   ├── admin/              # Administration console (platform admin)
@@ -72,6 +82,17 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   │   ├── scoring/            # Lead scoring
 │   │   ├── provision/          # Lead-to-customer provisioning
 │   │   ├── telemetry/          # OpenTelemetry
+│   │   ├── channel/            # IO Channel Gateway
+│   │   │   ├── email/          # Inbound email (MIME parsing, threading)
+│   │   │   ├── voice/          # LiveKit voice (rooms, webhooks, transcripts)
+│   │   │   └── chat/           # AI chat session handler
+│   │   ├── cli/                # CLI internals
+│   │   │   ├── agent/          # LLM function-calling agent
+│   │   │   ├── auth/           # Credential store (keyring)
+│   │   │   ├── chat/           # REPL + one-shot session
+│   │   │   ├── client/         # Typed HTTP client for the CRM API
+│   │   │   ├── config/         # CLI config (file + env overrides)
+│   │   │   └── output/         # Table / JSON formatter (lipgloss)
 │   │   └── server/             # Router configuration
 │   └── pkg/                    # Shared: pagination, errors, slugs, response
 ├── web/                        # Next.js frontend
@@ -90,6 +111,9 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   │   ├── hooks/              # useWebSocket, useNotifications, useTyping
 │   │   └── lib/                # API client, types, utils
 │   └── e2e/                    # Playwright smoke tests
+├── widget/                     # Embeddable chat widget (esbuild, shadow DOM)
+│   └── src/                    # widget.ts, chat.ts, ui.ts, fingerprint.ts
+├── agent/                      # TypeScript AI agent (function-calling wrapper)
 ├── docker/                     # Dockerfiles + docker-compose.yml
 ├── docs/                       # Environment variables, architecture notes
 ├── SPECIFICATION.md            # Full implementation spec
@@ -199,12 +223,13 @@ All commands are defined in `Taskfile.yml` and run from the repo root.
 
 ```bash
 task build             # Compile the API binary
+task cli:build         # Compile the deft CLI binary (→ api/bin/deft)
 task fmt               # Format Go code (gofmt)
 task lint              # Lint Go code (golangci-lint)
 task test              # Run all Go tests (race detector)
 task test:coverage     # Go tests + enforce ≥85% coverage
 task test:fuzz         # Run fuzz tests (5s each)
-task check             # Full pre-commit suite (fmt + lint + test + coverage + web checks)
+task check             # Full pre-commit suite (fmt + lint + test + coverage + web + widget checks)
 
 task web:fmt           # Format frontend (Prettier)
 task web:fmt:check     # Check frontend formatting
@@ -215,6 +240,10 @@ task web:test:coverage # Vitest + enforce ≥85% coverage
 task web:build         # Next.js production build
 task web:e2e           # Playwright E2E tests
 task web:e2e:smoke     # Playwright smoke tests only (@smoke tag)
+
+task widget:build         # esbuild → dist/widget.js (IIFE bundle)
+task widget:test          # Vitest widget unit tests
+task widget:test:coverage # Vitest + enforce ≥85% coverage
 ```
 
 ---
@@ -244,6 +273,22 @@ task web:e2e:smoke     # Playwright smoke tests only (@smoke tag)
 | `*` | `/v1/orgs/{org}/webhooks` | Webhook subscriptions |
 | `GET` | `/v1/orgs/{org}/audit-log` | Audit log |
 | `*` | `/v1/orgs/{org}/billing` | Billing management |
+
+### IO Channel Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/orgs/{org}/channels/{type}` | Get channel config (`email` \| `voice` \| `chat`) |
+| `PUT` | `/v1/orgs/{org}/channels/{type}` | Upsert channel config |
+| `GET` | `/v1/orgs/{org}/channels/{type}/health` | Channel health check |
+| `GET` | `/v1/orgs/{org}/channels/{type}/dlq` | List dead-letter queue events |
+| `POST` | `/v1/orgs/{org}/channels/{type}/dlq/{id}/retry` | Retry a DLQ event |
+| `POST` | `/v1/orgs/{org}/channels/{type}/dlq/{id}/dismiss` | Dismiss a DLQ event |
+| `POST` | `/v1/chat/session` | Create anonymous chat session (JWT issued) |
+| `POST` | `/v1/chat/message` | Send a chat message (WebSocket streaming) |
+| `POST` | `/v1/webhooks/livekit` | LiveKit webhook ingestion (token-verified) |
+| `GET` | `/v1/internal/contacts/lookup` | Internal bridge: contact lookup by phone |
+| `GET` | `/v1/internal/threads/{id}/summary` | Internal bridge: thread summary for voice |
 
 ### Administration Console (`/v1/admin/*`)
 
@@ -353,6 +398,8 @@ All external integrations are behind interfaces, making them testable and swappa
 | `NotificationProvider` | In-app + Resend | Slack, Teams, SMS |
 | `LLMProvider` | Grok | OpenAI / Anthropic |
 | `VoiceProvider` | Stub | Bland.ai / Retell / Twilio |
+| `LiveKitProvider` | Mock (testing) | LiveKit Cloud / self-hosted |
+| `Keyring` (CLI) | In-memory (testing) | OS keyring (`go-keyring`) |
 
 ### RBAC
 
@@ -365,6 +412,47 @@ Platform admins exist outside the Org-scoped RBAC hierarchy. They are stored in 
 SQLite in WAL mode with FTS5 virtual tables for full-text search, JSON-extracted generated columns for hot filter paths, and soft delete on all entities. No CGo — uses `modernc.org/sqlite`.
 
 Admin-specific tables: `platform_admins`, `users_shadow`, `system_settings`, `feature_flags`, `admin_exports`, `api_usage_stats`, `login_events`.
+
+IO channel tables: `channel_configs` (per-org, per-type config with masked secrets), `dead_letter_events` (DLQ with status, retry count, next-retry timestamp).
+
+### IO Channel Gateway
+
+All inbound channels share a common processing pipeline:
+
+1. **Normalise** — each channel implements `Normalizer` to produce a typed `InboundEvent`
+2. **Process** — the `Gateway` resolves or creates a lead thread, appends the message, and fires domain events
+3. **Retry** — `RetryEngine` wraps processing with exponential backoff (`1s → 2s → 4s … 30s max`); on exhaustion the event is written to the DLQ
+4. **DLQ** — operators can inspect, retry, or dismiss failed events via the channel health API
+
+### Embeddable Chat Widget
+
+The widget (`widget/dist/widget.js`) is a single self-contained IIFE bundle built with esbuild. It attaches a shadow DOM to avoid CSS leakage and has zero external runtime dependencies. Embed with:
+
+```html
+<script src="/widget.js"></script>
+<script>CRMChatWidget.init({ orgId: "my-org", apiUrl: "https://api.example.com" });</script>
+```
+
+### Agentic CLI
+
+The `deft` CLI ships as a single binary. It uses LLM function-calling to map natural-language queries to typed CRM API calls, with multi-step tool-use chains and a full conversation history.
+
+```bash
+# Build
+task cli:build        # → api/bin/deft
+
+# One-shot query
+deft ask "show me all leads from last week"
+
+# Interactive REPL
+deft chat
+
+# Auth
+deft login --token <api-key-or-jwt>
+deft whoami
+```
+
+Config is read from `~/.deft-cli.yaml` with env var overrides (`DEFT_API_URL`, `DEFT_API_KEY`, `DEFT_ORG`).
 
 ---
 
