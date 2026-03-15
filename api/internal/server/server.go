@@ -30,6 +30,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/org"
 	"github.com/abraderAI/crm-project/api/internal/pipeline"
 	"github.com/abraderAI/crm-project/api/internal/provision"
+	"github.com/abraderAI/crm-project/api/internal/reporting"
 	"github.com/abraderAI/crm-project/api/internal/revision"
 	"github.com/abraderAI/crm-project/api/internal/scoring"
 	"github.com/abraderAI/crm-project/api/internal/search"
@@ -191,6 +192,11 @@ func NewRouter(cfg Config) http.Handler {
 	provisionHandler := provision.NewHandler(provisionService)
 	// Subscribe provisioning to pipeline stage changes (auto-provision on closed_won).
 	eventBus.Subscribe(event.PipelineStageChanged, provisionService.HandleStageChanged)
+
+	// Reporting module.
+	reportRepo := reporting.NewRepository(cfg.DB)
+	reportService := reporting.NewService(reportRepo)
+	reportHandler := reporting.NewHandler(reportService)
 
 	// IO Phase 1: Channel Gateway.
 	channelHandler := channel.NewHandler(channel.NewService(channel.NewRepository(cfg.DB)))
@@ -462,6 +468,10 @@ func NewRouter(cfg Config) http.Handler {
 				ch.Post("/voice/numbers/search", voiceLKPhone.SearchNumbers)
 				ch.Post("/voice/numbers/purchase", voiceLKPhone.PurchaseNumber)
 			})
+
+			// Reporting routes.
+			authed.Get("/orgs/{org}/reports/support", reportHandler.GetSupportMetrics)
+			authed.Get("/orgs/{org}/reports/support/export", reportHandler.GetSupportExport)
 
 			// Pipeline stages route.
 			authed.Get("/orgs/{org}/pipeline/stages", pipelineHandler.GetStages)
