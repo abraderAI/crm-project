@@ -178,6 +178,114 @@ func (r *Repository) UpdateThreadMetadata(ctx context.Context, threadID, metadat
 	return nil
 }
 
+// CreateOrUpdateLead creates a new lead record or updates an existing one identified by visitor ID.
+// This ensures duplicate sessions do not create duplicate leads.
+func (r *Repository) CreateOrUpdateLead(ctx context.Context, visitorID, email, name, source string) (*models.Lead, error) {
+	anonSessionID := visitorID // Use visitor ID as the anon session identifier.
+	var lead models.Lead
+	err := r.db.WithContext(ctx).Where("anon_session_id = ?", anonSessionID).First(&lead).Error
+	if err == nil {
+		// Update existing lead.
+		if email != "" && lead.Email == "" {
+			lead.Email = email
+		}
+		if name != "" && lead.Name == "" {
+			lead.Name = name
+		}
+		if err := r.db.WithContext(ctx).Save(&lead).Error; err != nil {
+			return nil, fmt.Errorf("updating lead: %w", err)
+		}
+		return &lead, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("finding lead: %w", err)
+	}
+
+	// Create new lead.
+	lead = models.Lead{
+		Email:         email,
+		Name:          name,
+		Source:        source,
+		Status:        models.LeadStatusAnonymous,
+		AnonSessionID: &anonSessionID,
+		Metadata:      "{}",
+	}
+	if err := r.db.WithContext(ctx).Create(&lead).Error; err != nil {
+		return nil, fmt.Errorf("creating lead: %w", err)
+	}
+	return &lead, nil
+}
+
+// FindLeadByAnonSession retrieves a lead by its anonymous session ID.
+// Returns nil, nil when no record exists.
+func (r *Repository) FindLeadByAnonSession(ctx context.Context, anonSessionID string) (*models.Lead, error) {
+	var lead models.Lead
+	err := r.db.WithContext(ctx).Where("anon_session_id = ?", anonSessionID).First(&lead).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("finding lead by anon session: %w", err)
+	}
+	return &lead, nil
+}
+
+// PromoteAnonymousSession links an anonymous session's lead record to a registered user.
+// It sets the user_id and changes the status from anonymous to registered.
+func (r *Repository) PromoteAnonymousSession(ctx context.Context, anonSessionID, userID string) error {
+	result := r.db.WithContext(ctx).
+		Model(&models.Lead{}).
+		Where("anon_session_id = ? AND status = ?", anonSessionID, models.LeadStatusAnonymous).
+		Updates(map[string]any{
+			"user_id": userID,
+			"status":  models.LeadStatusRegistered,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("promoting anonymous session: %w", result.Error)
+	}
+	return nil
+}
+
+// FindGlobalSupportBoard retrieves the first board in the global-support space.
+// Returns nil, nil when no board exists.
+func (r *Repository) FindGlobalSupportBoard(ctx context.Context) (*models.Board, error) {
+	var board models.Board
+	err := r.db.WithContext(ctx).
+		Joins("JOIN spaces ON spaces.id = boards.space_id AND spaces.deleted_at IS NULL").
+		Where("spaces.slug = ? AND boards.deleted_at IS NULL", "global-support").
+		First(&board).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("finding global-support board: %w", err)
+	}
+	return &board, nil
+}
+
+// SearchGlobalDocs performs a text search over threads in the global-docs space.
+// Returns up to `limit` matching threads ordered by relevance.
+func (r *Repository) SearchGlobalDocs(ctx context.Context, query string, limit int) ([]models.Thread, error) {
+	if query == "" || limit <= 0 {
+		return nil, nil
+	}
+
+	var threads []models.Thread
+	likeQuery := "%" + query + "%"
+	err := r.db.WithContext(ctx).
+		Joins("JOIN boards ON boards.id = threads.board_id AND boards.deleted_at IS NULL").
+		Joins("JOIN spaces ON spaces.id = boards.space_id AND spaces.deleted_at IS NULL").
+		Where("spaces.slug = ? AND threads.deleted_at IS NULL AND (threads.title LIKE ? OR threads.body LIKE ?)",
+			"global-docs", likeQuery, likeQuery).
+		Order("threads.created_at DESC").
+		Limit(limit).
+		Find(&threads).Error
+	if err != nil {
+		return nil, fmt.Errorf("searching global-docs: %w", err)
+	}
+	return threads, nil
+}
+
 // FindFirstBoardInOrg finds the first board in the org's CRM space (or any space).
 func (r *Repository) FindFirstBoardInOrg(ctx context.Context, orgID string) (*models.Board, error) {
 	var board models.Board

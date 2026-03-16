@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/abraderAI/crm-project/api/internal/auth"
 	"github.com/abraderAI/crm-project/api/internal/database"
 	"github.com/abraderAI/crm-project/api/internal/llm"
 	"github.com/abraderAI/crm-project/api/internal/models"
@@ -957,6 +958,507 @@ func FuzzEmbedKey(f *testing.F) {
 		// CreateSessionInput validation must not panic.
 		input := CreateSessionInput{EmbedKey: embedKey, FingerprintHash: "test-fp"}
 		_ = input.EmbedKey // Just access; actual validation is in service.
+	})
+}
+
+// --- Phase 6: Lead record creation tests ---
+
+func TestService_LeadCapture_CreatesLeadRecord(t *testing.T) {
+	db := setupTestDB(t)
+	org := createTestOrg(t, db, "lead-record-org")
+	createTestSpaceAndBoard(t, db, org.ID, models.SpaceTypeCRM)
+	createChatChannelConfig(t, db, org.ID, "lead-rec-key")
+
+	svc := newTestService(t, db)
+	ctx := context.Background()
+
+	output, err := svc.CreateSession(ctx, CreateSessionInput{EmbedKey: "lead-rec-key", FingerprintHash: "fp-lead-rec"})
+	require.NoError(t, err)
+
+	claims, err := ValidateSessionToken(testSecret, output.Token)
+	require.NoError(t, err)
+
+	// Send a message with email to trigger lead capture.
+	_, err = svc.HandleChatMessage(ctx, claims, "My email is lead@example.com")
+	require.NoError(t, err)
+
+	// Verify lead record was created with anon_session_id.
+	lead, err := svc.repo.FindLeadByAnonSession(ctx, output.VisitorID)
+	require.NoError(t, err)
+	require.NotNil(t, lead)
+	assert.Equal(t, "lead@example.com", lead.Email)
+	assert.Equal(t, models.LeadStatusAnonymous, lead.Status)
+	assert.NotNil(t, lead.AnonSessionID)
+	assert.Equal(t, output.VisitorID, *lead.AnonSessionID)
+}
+
+func TestService_LeadCapture_NoDuplicateLeads(t *testing.T) {
+	db := setupTestDB(t)
+	org := createTestOrg(t, db, "lead-dedup-org")
+	createTestSpaceAndBoard(t, db, org.ID, models.SpaceTypeCRM)
+	createChatChannelConfig(t, db, org.ID, "lead-dedup-key")
+
+	svc := newTestService(t, db)
+	ctx := context.Background()
+
+	output, err := svc.CreateSession(ctx, CreateSessionInput{EmbedKey: "lead-dedup-key", FingerprintHash: "fp-lead-dedup"})
+	require.NoError(t, err)
+
+	claims, err := ValidateSessionToken(testSecret, output.Token)
+	require.NoError(t, err)
+
+	// First message with email.
+	_, err = svc.HandleChatMessage(ctx, claims, "My email is dedup@example.com")
+	require.NoError(t, err)
+
+	// Second message with name (should update, not create duplicate).
+	_, err = svc.HandleChatMessage(ctx, claims, "My name is Dedup User")
+	require.NoError(t, err)
+
+	// Count leads with this anon_session_id.
+	var count int64
+	err = db.Model(&models.Lead{}).Where("anon_session_id = ?", output.VisitorID).Count(&count).Error
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), count) // Only one lead, not duplicated.
+
+	// Verify lead has both email and name.
+	lead, err := svc.repo.FindLeadByAnonSession(ctx, output.VisitorID)
+	require.NoError(t, err)
+	require.NotNil(t, lead)
+	assert.Equal(t, "dedup@example.com", lead.Email)
+	assert.Equal(t, "Dedup User", lead.Name)
+}
+
+func TestRepository_CreateOrUpdateLead_NewLead(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	lead, err := repo.CreateOrUpdateLead(ctx, "vis-new-lead", "new@example.com", "New Lead", "chatbot")
+	require.NoError(t, err)
+	require.NotNil(t, lead)
+	assert.NotEmpty(t, lead.ID)
+	assert.Equal(t, "new@example.com", lead.Email)
+	assert.Equal(t, "New Lead", lead.Name)
+	assert.Equal(t, models.LeadStatusAnonymous, lead.Status)
+	assert.Equal(t, "chatbot", lead.Source)
+}
+
+func TestRepository_CreateOrUpdateLead_UpdateExisting(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	// Create initial lead with email only.
+	lead1, err := repo.CreateOrUpdateLead(ctx, "vis-update-lead", "update@example.com", "", "chatbot")
+	require.NoError(t, err)
+
+	// Update with name.
+	lead2, err := repo.CreateOrUpdateLead(ctx, "vis-update-lead", "", "Updated Name", "chatbot")
+	require.NoError(t, err)
+	assert.Equal(t, lead1.ID, lead2.ID)
+	assert.Equal(t, "update@example.com", lead2.Email)
+	assert.Equal(t, "Updated Name", lead2.Name)
+}
+
+func TestRepository_FindLeadByAnonSession_NotFound(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+
+	lead, err := repo.FindLeadByAnonSession(context.Background(), "nonexistent")
+	require.NoError(t, err)
+	assert.Nil(t, lead)
+}
+
+// --- Phase 6: Escalation support thread tests ---
+
+func createGlobalSupportSpaceAndBoard(t *testing.T, db *gorm.DB) (*models.Space, *models.Board) {
+	t.Helper()
+	// Find the system org.
+	var systemOrg models.Org
+	err := db.Where("slug = ?", "_system").First(&systemOrg).Error
+	if err != nil {
+		// Create system org if it doesn't exist.
+		systemOrg = models.Org{Name: "System", Slug: "_system", Metadata: "{}"}
+		require.NoError(t, db.Create(&systemOrg).Error)
+	}
+
+	// Create or find global-support space.
+	var space models.Space
+	err = db.Where("slug = ?", "global-support").First(&space).Error
+	if err != nil {
+		space = models.Space{OrgID: systemOrg.ID, Name: "Support", Slug: "global-support", Type: models.SpaceTypeSupport, Metadata: "{}"}
+		require.NoError(t, db.Create(&space).Error)
+	}
+
+	// Create a board in the space.
+	board := &models.Board{SpaceID: space.ID, Name: "Support Board", Slug: "support-board", Metadata: "{}"}
+	require.NoError(t, db.Create(board).Error)
+
+	return &space, board
+}
+
+func TestService_Escalation_CreatesSupportThread(t *testing.T) {
+	db := setupTestDB(t)
+	org := createTestOrg(t, db, "esc-thread-org")
+	createTestSpaceAndBoard(t, db, org.ID, models.SpaceTypeCRM)
+	createChatChannelConfig(t, db, org.ID, "esc-thread-key")
+	createGlobalSupportSpaceAndBoard(t, db)
+
+	svc := newTestService(t, db)
+	ctx := context.Background()
+
+	output, err := svc.CreateSession(ctx, CreateSessionInput{EmbedKey: "esc-thread-key", FingerprintHash: "fp-esc-thread"})
+	require.NoError(t, err)
+
+	claims, err := ValidateSessionToken(testSecret, output.Token)
+	require.NoError(t, err)
+
+	// First message to create the chat thread.
+	_, err = svc.HandleChatMessage(ctx, claims, "I need help with billing")
+	require.NoError(t, err)
+
+	// Escalation request.
+	resp, err := svc.HandleChatMessage(ctx, claims, "I want to speak to a human agent")
+	require.NoError(t, err)
+	assert.Equal(t, "escalation", resp.Type)
+
+	// Verify a support thread was created in global-support.
+	var supportThread models.Thread
+	err = db.Where("thread_type = ? AND visibility = ?",
+		models.ThreadTypeSupport, models.ThreadVisibilityDeftOnly).
+		First(&supportThread).Error
+	require.NoError(t, err)
+	assert.Contains(t, supportThread.Title, "Chat escalation")
+	assert.Contains(t, supportThread.Metadata, "chat_escalation")
+	assert.Equal(t, org.ID, *supportThread.OrgID)
+}
+
+func TestRepository_FindGlobalSupportBoard_NoBoard(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+
+	board, err := repo.FindGlobalSupportBoard(context.Background())
+	require.NoError(t, err)
+	assert.Nil(t, board)
+}
+
+func TestRepository_FindGlobalSupportBoard_Found(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	createGlobalSupportSpaceAndBoard(t, db)
+
+	board, err := repo.FindGlobalSupportBoard(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, board)
+	assert.Equal(t, "Support Board", board.Name)
+}
+
+// --- Phase 6: Session promotion tests ---
+
+func TestService_PromoteSession(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	// Create a lead with anonymous status.
+	anonID := "vis-promote-test"
+	lead, err := repo.CreateOrUpdateLead(ctx, anonID, "promote@example.com", "Promote User", "chatbot")
+	require.NoError(t, err)
+	assert.Equal(t, models.LeadStatusAnonymous, lead.Status)
+
+	// Promote the session.
+	err = repo.PromoteAnonymousSession(ctx, anonID, "user-123")
+	require.NoError(t, err)
+
+	// Verify the lead was updated.
+	var updatedLead models.Lead
+	err = db.Where("anon_session_id = ?", anonID).First(&updatedLead).Error
+	require.NoError(t, err)
+	assert.Equal(t, models.LeadStatusRegistered, updatedLead.Status)
+	require.NotNil(t, updatedLead.UserID)
+	assert.Equal(t, "user-123", *updatedLead.UserID)
+}
+
+func TestService_PromoteSession_NoMatchingLead(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	// Promoting a non-existent session should not error (no-op).
+	err := repo.PromoteAnonymousSession(ctx, "nonexistent-session", "user-999")
+	require.NoError(t, err)
+}
+
+func TestService_PromoteSession_ViaService(t *testing.T) {
+	db := setupTestDB(t)
+	svc := newTestService(t, db)
+	ctx := context.Background()
+
+	// Create a lead.
+	_, err := svc.repo.CreateOrUpdateLead(ctx, "vis-svc-promote", "svc@example.com", "", "chatbot")
+	require.NoError(t, err)
+
+	// Promote via service.
+	err = svc.PromoteSession("vis-svc-promote", "user-svc-456")
+	require.NoError(t, err)
+
+	// Verify.
+	lead, err := svc.repo.FindLeadByAnonSession(ctx, "vis-svc-promote")
+	require.NoError(t, err)
+	require.NotNil(t, lead)
+	assert.Equal(t, models.LeadStatusRegistered, lead.Status)
+}
+
+// --- Phase 6: Handler promotion endpoint tests ---
+
+func TestHandler_SessionPromotion_Success(t *testing.T) {
+	db := setupTestDB(t)
+	svc := newTestService(t, db)
+	h := NewHandler(svc, testSecret)
+	ctx := context.Background()
+
+	// Create a lead first.
+	_, err := svc.repo.CreateOrUpdateLead(ctx, "vis-hdl-promote", "hdl@example.com", "", "chatbot")
+	require.NoError(t, err)
+
+	body := `{"anon_session_id":"vis-hdl-promote","user_id":"user-hdl-789"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/promote", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(setTestAuth(req.Context(), "user-hdl-789"))
+	w := httptest.NewRecorder()
+	h.HandleSessionPromotion(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "promoted", resp["status"])
+}
+
+func TestHandler_SessionPromotion_Unauthenticated(t *testing.T) {
+	db := setupTestDB(t)
+	svc := newTestService(t, db)
+	h := NewHandler(svc, testSecret)
+
+	body := `{"anon_session_id":"vis-1","user_id":"user-1"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/promote", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleSessionPromotion(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestHandler_SessionPromotion_MissingFields(t *testing.T) {
+	db := setupTestDB(t)
+	svc := newTestService(t, db)
+	h := NewHandler(svc, testSecret)
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"missing anon_session_id", `{"anon_session_id":"","user_id":"u1"}`},
+		{"missing user_id", `{"anon_session_id":"s1","user_id":""}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/promote", strings.NewReader(tt.body))
+			req = req.WithContext(setTestAuth(req.Context(), "test-user"))
+			w := httptest.NewRecorder()
+			h.HandleSessionPromotion(w, req)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+		})
+	}
+}
+
+func TestHandler_SessionPromotion_InvalidBody(t *testing.T) {
+	db := setupTestDB(t)
+	svc := newTestService(t, db)
+	h := NewHandler(svc, testSecret)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/promote", strings.NewReader("not-json"))
+	req = req.WithContext(setTestAuth(req.Context(), "test-user"))
+	w := httptest.NewRecorder()
+	h.HandleSessionPromotion(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// --- Phase 6: RAG context retrieval tests ---
+
+func createGlobalDocsContent(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	// Find or create system org.
+	var systemOrg models.Org
+	err := db.Where("slug = ?", "_system").First(&systemOrg).Error
+	if err != nil {
+		systemOrg = models.Org{Name: "System", Slug: "_system", Metadata: "{}"}
+		require.NoError(t, db.Create(&systemOrg).Error)
+	}
+
+	// Create global-docs space.
+	var docsSpace models.Space
+	err = db.Where("slug = ?", "global-docs").First(&docsSpace).Error
+	if err != nil {
+		docsSpace = models.Space{OrgID: systemOrg.ID, Name: "Documentation", Slug: "global-docs", Type: models.SpaceTypeKnowledgeBase, Metadata: "{}"}
+		require.NoError(t, db.Create(&docsSpace).Error)
+	}
+
+	// Create a board.
+	board := &models.Board{SpaceID: docsSpace.ID, Name: "Docs Board", Slug: "docs-board", Metadata: "{}"}
+	require.NoError(t, db.Create(board).Error)
+
+	// Create some documentation threads.
+	threads := []models.Thread{
+		{BoardID: board.ID, Title: "Getting Started Guide", Body: "Welcome to our platform. Here is how to get started with your account setup and configuration.", Slug: "getting-started", AuthorID: "system", Metadata: "{}", ThreadType: models.ThreadTypeDocumentation, Visibility: models.ThreadVisibilityPublic},
+		{BoardID: board.ID, Title: "API Authentication", Body: "Learn how to authenticate API requests using JWT tokens and API keys.", Slug: "api-auth", AuthorID: "system", Metadata: "{}", ThreadType: models.ThreadTypeDocumentation, Visibility: models.ThreadVisibilityPublic},
+		{BoardID: board.ID, Title: "Billing FAQ", Body: "Frequently asked questions about billing, invoices, and payment methods.", Slug: "billing-faq", AuthorID: "system", Metadata: "{}", ThreadType: models.ThreadTypeDocumentation, Visibility: models.ThreadVisibilityPublic},
+	}
+	for i := range threads {
+		require.NoError(t, db.Create(&threads[i]).Error)
+	}
+}
+
+func TestRepository_SearchGlobalDocs_Found(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	createGlobalDocsContent(t, db)
+
+	results, err := repo.SearchGlobalDocs(context.Background(), "billing", 5)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, "Billing FAQ", results[0].Title)
+}
+
+func TestRepository_SearchGlobalDocs_MultipleResults(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	createGlobalDocsContent(t, db)
+
+	// Search for "API" which should match the API auth thread.
+	results, err := repo.SearchGlobalDocs(context.Background(), "API", 5)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(results), 1)
+}
+
+func TestRepository_SearchGlobalDocs_NoResults(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	createGlobalDocsContent(t, db)
+
+	results, err := repo.SearchGlobalDocs(context.Background(), "zyxwv-nonexistent", 5)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+func TestRepository_SearchGlobalDocs_EmptyQuery(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+
+	results, err := repo.SearchGlobalDocs(context.Background(), "", 5)
+	require.NoError(t, err)
+	assert.Nil(t, results)
+}
+
+func TestRepository_SearchGlobalDocs_ZeroLimit(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+
+	results, err := repo.SearchGlobalDocs(context.Background(), "test", 0)
+	require.NoError(t, err)
+	assert.Nil(t, results)
+}
+
+func TestService_RAG_NoLLM_WithDocs(t *testing.T) {
+	db := setupTestDB(t)
+	org := createTestOrg(t, db, "rag-nollm-org")
+	createTestSpaceAndBoard(t, db, org.ID, models.SpaceTypeCRM)
+	createChatChannelConfig(t, db, org.ID, "rag-nollm-key")
+	createGlobalDocsContent(t, db)
+
+	svc := newTestServiceNoLLM(t, db)
+	ctx := context.Background()
+
+	output, err := svc.CreateSession(ctx, CreateSessionInput{EmbedKey: "rag-nollm-key", FingerprintHash: "fp-rag-nollm"})
+	require.NoError(t, err)
+
+	claims, err := ValidateSessionToken(testSecret, output.Token)
+	require.NoError(t, err)
+
+	// Ask about billing — should get RAG response.
+	resp, err := svc.HandleChatMessage(ctx, claims, "Tell me about billing please")
+	require.NoError(t, err)
+	assert.Contains(t, resp.Message, "Based on our documentation")
+	assert.Contains(t, resp.Message, "Billing FAQ")
+}
+
+func TestService_RAG_NoLLM_NoDocs(t *testing.T) {
+	db := setupTestDB(t)
+	org := createTestOrg(t, db, "rag-nodocs-org")
+	createTestSpaceAndBoard(t, db, org.ID, models.SpaceTypeCRM)
+	createChatChannelConfig(t, db, org.ID, "rag-nodocs-key")
+
+	svc := newTestServiceNoLLM(t, db)
+	ctx := context.Background()
+
+	output, err := svc.CreateSession(ctx, CreateSessionInput{EmbedKey: "rag-nodocs-key", FingerprintHash: "fp-rag-nodocs"})
+	require.NoError(t, err)
+
+	claims, err := ValidateSessionToken(testSecret, output.Token)
+	require.NoError(t, err)
+
+	// No docs available — should get default response.
+	resp, err := svc.HandleChatMessage(ctx, claims, "Hello")
+	require.NoError(t, err)
+	assert.Contains(t, resp.Message, "How can I help you today")
+}
+
+// --- Phase 6: truncate helper tests ---
+
+func TestTruncate(t *testing.T) {
+	assert.Equal(t, "hello", truncate("hello", 10))
+	assert.Equal(t, "hello...", truncate("hello world", 5))
+	assert.Equal(t, "", truncate("", 5))
+	assert.Equal(t, "ab...", truncate("abcdef", 2))
+}
+
+// --- Phase 6: buildRAGContext tests ---
+
+func TestBuildRAGContext_EmptyQuery(t *testing.T) {
+	db := setupTestDB(t)
+	svc := newTestServiceNoLLM(t, db)
+	ctx := context.Background()
+
+	result := svc.buildRAGContext(ctx, "")
+	assert.Empty(t, result)
+}
+
+func TestBuildRAGContext_ShortWords(t *testing.T) {
+	db := setupTestDB(t)
+	svc := newTestServiceNoLLM(t, db)
+	ctx := context.Background()
+
+	// All words are shorter than 3 chars.
+	result := svc.buildRAGContext(ctx, "a b c")
+	assert.Empty(t, result)
+}
+
+func TestBuildRAGContext_WithDocs(t *testing.T) {
+	db := setupTestDB(t)
+	createGlobalDocsContent(t, db)
+	svc := newTestServiceNoLLM(t, db)
+	ctx := context.Background()
+
+	result := svc.buildRAGContext(ctx, "billing invoices")
+	assert.NotEmpty(t, result)
+	assert.Contains(t, result, "Billing FAQ")
+}
+
+// setTestAuth sets authentication context for handler tests.
+func setTestAuth(ctx context.Context, userID string) context.Context {
+	return auth.SetUserContext(ctx, &auth.UserContext{
+		UserID:     userID,
+		AuthMethod: auth.AuthMethodJWT,
 	})
 }
 

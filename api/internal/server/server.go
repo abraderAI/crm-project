@@ -249,6 +249,12 @@ func NewRouter(cfg Config) http.Handler {
 		v1.Post("/chat/session", chatHandler.CreateSession)
 		v1.Post("/chat/message", chatHandler.SendMessage)
 
+		// Chat session promotion (authenticated — called on user registration).
+		v1.Group(func(promoteRouter chi.Router) {
+			promoteRouter.Use(auth.DualAuth(jwtValidator, apiKeyService))
+			promoteRouter.Post("/chat/promote", chatHandler.HandleSessionPromotion)
+		})
+
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {
 			authed.Use(auth.DualAuth(jwtValidator, apiKeyService))
