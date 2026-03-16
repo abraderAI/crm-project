@@ -31,6 +31,7 @@ export default defineConfig({
         "src/app/crm/**",
         "src/app/notifications/**",
         "src/app/reports/**",
+        "src/app/upgrade/**",
         "src/app/search/**",
         "src/components/thread/thread-create-view.tsx",
         "src/components/thread/thread-detail-view.tsx",
