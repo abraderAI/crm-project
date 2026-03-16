@@ -44,6 +44,8 @@ func allModels() []any {
 		&models.DeadLetterEvent{},
 		&models.ChatSession{},
 		&models.ChatVisitor{},
+		&models.UserHomePreferences{},
+		&models.Lead{},
 	}
 }
 
@@ -254,6 +256,11 @@ func createIndexes(db *gorm.DB) error {
 
 		// Channel DLQ index.
 		"CREATE INDEX IF NOT EXISTS idx_dlq_org_status ON dead_letter_events(org_id, status)",
+
+		// Thread type and visibility indexes.
+		"CREATE INDEX IF NOT EXISTS idx_threads_thread_type ON threads(thread_type) WHERE thread_type IS NOT NULL",
+		"CREATE INDEX IF NOT EXISTS idx_threads_visibility ON threads(visibility) WHERE visibility IS NOT NULL",
+		"CREATE INDEX IF NOT EXISTS idx_threads_org_id ON threads(org_id) WHERE org_id IS NOT NULL",
 	}
 
 	for _, idx := range indexes {

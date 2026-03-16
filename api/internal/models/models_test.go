@@ -605,6 +605,222 @@ func TestCallLog_OrgCascadeDelete(t *testing.T) {
 	assert.Zero(t, count)
 }
 
+// --- ThreadType ---
+
+func TestThreadType_IsValid(t *testing.T) {
+	for _, tt := range models.ValidThreadTypes() {
+		assert.True(t, tt.IsValid())
+	}
+	assert.False(t, models.ThreadType("invalid").IsValid())
+	assert.False(t, models.ThreadType("").IsValid())
+}
+
+func TestThreadVisibility_IsValid(t *testing.T) {
+	for _, v := range models.ValidThreadVisibilities() {
+		assert.True(t, v.IsValid())
+	}
+	assert.False(t, models.ThreadVisibility("invalid").IsValid())
+	assert.False(t, models.ThreadVisibility("").IsValid())
+}
+
+func TestThread_NewFields(t *testing.T) {
+	db := testDB(t)
+	org := &models.Org{Name: "O", Slug: "thread-new-fields-org", Metadata: "{}"}
+	require.NoError(t, db.Create(org).Error)
+	space := &models.Space{OrgID: org.ID, Name: "S", Slug: "thread-new-fields-space", Type: models.SpaceTypeGeneral, Metadata: "{}"}
+	require.NoError(t, db.Create(space).Error)
+	board := &models.Board{SpaceID: space.ID, Name: "B", Slug: "thread-new-fields-board", Metadata: "{}"}
+	require.NoError(t, db.Create(board).Error)
+
+	// Thread with explicit ThreadType and Visibility.
+	orgID := org.ID
+	thread := &models.Thread{
+		BoardID:    board.ID,
+		Title:      "Support Thread",
+		Slug:       "support-thread",
+		AuthorID:   "user-1",
+		Metadata:   "{}",
+		ThreadType: models.ThreadTypeSupport,
+		Visibility: models.ThreadVisibilityPublic,
+		OrgID:      &orgID,
+	}
+	require.NoError(t, db.Create(thread).Error)
+
+	var found models.Thread
+	require.NoError(t, db.First(&found, "id = ?", thread.ID).Error)
+	assert.Equal(t, models.ThreadTypeSupport, found.ThreadType)
+	assert.Equal(t, models.ThreadVisibilityPublic, found.Visibility)
+	assert.NotNil(t, found.OrgID)
+	assert.Equal(t, org.ID, *found.OrgID)
+}
+
+func TestThread_DefaultsForNewFields(t *testing.T) {
+	db := testDB(t)
+	org := &models.Org{Name: "O", Slug: "thread-defaults-org", Metadata: "{}"}
+	require.NoError(t, db.Create(org).Error)
+	space := &models.Space{OrgID: org.ID, Name: "S", Slug: "thread-defaults-space", Type: models.SpaceTypeGeneral, Metadata: "{}"}
+	require.NoError(t, db.Create(space).Error)
+	board := &models.Board{SpaceID: space.ID, Name: "B", Slug: "thread-defaults-board", Metadata: "{}"}
+	require.NoError(t, db.Create(board).Error)
+
+	// Thread without setting new fields should get defaults.
+	thread := &models.Thread{
+		BoardID:  board.ID,
+		Title:    "Default Thread",
+		Slug:     "default-thread",
+		AuthorID: "user-1",
+		Metadata: "{}",
+	}
+	require.NoError(t, db.Create(thread).Error)
+
+	// Read back via raw SQL to check DB-level defaults.
+	var row struct {
+		ThreadType string
+		Visibility string
+		OrgID      *string
+	}
+	require.NoError(t, db.Raw(
+		"SELECT thread_type, visibility, org_id FROM threads WHERE id = ?", thread.ID,
+	).Scan(&row).Error)
+	assert.Equal(t, "forum", row.ThreadType)
+	assert.Equal(t, "org-only", row.Visibility)
+	assert.Nil(t, row.OrgID)
+}
+
+// --- UserHomePreferences ---
+
+func TestUserHomePreferences_CRUD(t *testing.T) {
+	db := testDB(t)
+
+	prefs := &models.UserHomePreferences{
+		UserID: "user-prefs",
+		Tier:   2,
+		Layout: `[{"widget_id":"profile","visible":true}]`,
+	}
+	require.NoError(t, db.Create(prefs).Error)
+
+	var found models.UserHomePreferences
+	require.NoError(t, db.Where("user_id = ?", "user-prefs").First(&found).Error)
+	assert.Equal(t, 2, found.Tier)
+	assert.Contains(t, found.Layout, "profile")
+}
+
+func TestUserHomePreferences_Upsert(t *testing.T) {
+	db := testDB(t)
+
+	prefs := &models.UserHomePreferences{
+		UserID: "user-upsert",
+		Tier:   2,
+		Layout: `[{"widget_id":"a","visible":true}]`,
+	}
+	require.NoError(t, db.Save(prefs).Error)
+
+	// Update.
+	prefs.Tier = 3
+	prefs.Layout = `[{"widget_id":"b","visible":false}]`
+	require.NoError(t, db.Save(prefs).Error)
+
+	var found models.UserHomePreferences
+	require.NoError(t, db.Where("user_id = ?", "user-upsert").First(&found).Error)
+	assert.Equal(t, 3, found.Tier)
+	assert.Contains(t, found.Layout, "b")
+
+	// Should be exactly one record.
+	var count int64
+	require.NoError(t, db.Model(&models.UserHomePreferences{}).Where("user_id = ?", "user-upsert").Count(&count).Error)
+	assert.Equal(t, int64(1), count)
+}
+
+// --- Lead ---
+
+func TestLeadStatus_IsValid(t *testing.T) {
+	for _, s := range models.ValidLeadStatuses() {
+		assert.True(t, s.IsValid())
+	}
+	assert.False(t, models.LeadStatus("invalid").IsValid())
+	assert.False(t, models.LeadStatus("").IsValid())
+}
+
+func TestLead_CRUD(t *testing.T) {
+	db := testDB(t)
+
+	anonSession := "anon-session-123"
+	lead := &models.Lead{
+		Email:         "lead@example.com",
+		Name:          "Test Lead",
+		Source:        "chatbot",
+		Status:        models.LeadStatusAnonymous,
+		AnonSessionID: &anonSession,
+		Metadata:      "{}",
+	}
+	require.NoError(t, db.Create(lead).Error)
+	assert.NotEmpty(t, lead.ID)
+
+	var found models.Lead
+	require.NoError(t, db.First(&found, "id = ?", lead.ID).Error)
+	assert.Equal(t, "lead@example.com", found.Email)
+	assert.NotNil(t, found.AnonSessionID)
+	assert.Equal(t, "anon-session-123", *found.AnonSessionID)
+	assert.Nil(t, found.UserID)
+}
+
+func TestLead_NullableFields(t *testing.T) {
+	db := testDB(t)
+
+	// Lead with no anon session and no user ID.
+	lead := &models.Lead{
+		Source:   "manual",
+		Status:   models.LeadStatusRegistered,
+		Metadata: "{}",
+	}
+	require.NoError(t, db.Create(lead).Error)
+
+	var found models.Lead
+	require.NoError(t, db.First(&found, "id = ?", lead.ID).Error)
+	assert.Nil(t, found.AnonSessionID)
+	assert.Nil(t, found.UserID)
+}
+
+func TestLead_AnonSessionIndex(t *testing.T) {
+	db := testDB(t)
+
+	session1 := "session-abc"
+	session2 := "session-def"
+	require.NoError(t, db.Create(&models.Lead{Source: "chatbot", Status: models.LeadStatusAnonymous, AnonSessionID: &session1, Metadata: "{}"}).Error)
+	require.NoError(t, db.Create(&models.Lead{Source: "chatbot", Status: models.LeadStatusAnonymous, AnonSessionID: &session2, Metadata: "{}"}).Error)
+
+	// Query by anon_session_id.
+	var found models.Lead
+	require.NoError(t, db.Where("anon_session_id = ?", "session-abc").First(&found).Error)
+	assert.Equal(t, "session-abc", *found.AnonSessionID)
+}
+
+func TestLead_PromoteToRegistered(t *testing.T) {
+	db := testDB(t)
+
+	anonSession := "promote-session"
+	lead := &models.Lead{
+		Source:        "chatbot",
+		Status:        models.LeadStatusAnonymous,
+		AnonSessionID: &anonSession,
+		Metadata:      "{}",
+	}
+	require.NoError(t, db.Create(lead).Error)
+
+	// Promote: set user_id, change status.
+	userID := "user-promoted"
+	require.NoError(t, db.Model(lead).Updates(map[string]interface{}{
+		"user_id": userID,
+		"status":  models.LeadStatusRegistered,
+	}).Error)
+
+	var found models.Lead
+	require.NoError(t, db.First(&found, "id = ?", lead.ID).Error)
+	assert.NotNil(t, found.UserID)
+	assert.Equal(t, "user-promoted", *found.UserID)
+	assert.Equal(t, models.LeadStatusRegistered, found.Status)
+}
+
 // --- Fuzzing ---
 
 func FuzzMetadataJSON(f *testing.F) {
