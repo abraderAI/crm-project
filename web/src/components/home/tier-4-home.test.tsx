@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Tier4HomeScreen } from "./tier4-home-screen";
+import { Tier4HomeScreen } from "./tier-4-home";
 import { getDefaultLayout } from "@/lib/default-layouts";
 
 // Mock all widget components to avoid network calls in unit tests.
