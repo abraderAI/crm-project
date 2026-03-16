@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { Settings } from "lucide-react";
 
 import { useNotifications } from "@/hooks/use-notifications";
+import { TierProvider } from "@/hooks/use-tier";
 import { AppLayout } from "./app-layout";
 import type { NavItem } from "./sidebar";
 
@@ -65,6 +66,7 @@ export function AppLayoutWrapper({ children }: AppLayoutWrapperProps): React.Rea
   );
 
   return (
+    <TierProvider token={token}>
     <AppLayout
       navItems={NAV_ITEMS}
       currentPath={pathname}
@@ -81,5 +83,6 @@ export function AppLayoutWrapper({ children }: AppLayoutWrapperProps): React.Rea
       {children}
       <ChatbotWidget />
     </AppLayout>
+    </TierProvider>
   );
 }

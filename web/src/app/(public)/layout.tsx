@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 
-/** Dynamically load ChatbotWidget without SSR to avoid hydration mismatches. */
-const ChatbotWidget = dynamic(
-  () => import("@/components/chatbot-widget").then((mod) => mod.ChatbotWidget),
-  { ssr: false },
-);
+import { ChatbotWidgetLoader } from "@/components/chatbot-widget-loader";
 
 /**
  * Public layout for unauthenticated routes (/docs, /forum).
@@ -33,7 +28,7 @@ export default function PublicLayout({ children }: { children: ReactNode }): Rea
         </nav>
       </header>
       <main className="mx-auto max-w-5xl p-6">{children}</main>
-      <ChatbotWidget />
+      <ChatbotWidgetLoader />
     </div>
   );
 }
