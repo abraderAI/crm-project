@@ -7,6 +7,7 @@ import type {
   ChannelHealth,
   ChannelType,
   DeadLetterEvent,
+  EffectivePolicy,
   FeatureFlag,
   Flag,
   OrgMembership,
@@ -134,6 +135,12 @@ export async function fetchFailedAuths(
   return serverFetchPaginated<SecurityLogEntry>("/admin/security/failed-auths", params, {
     token,
   });
+}
+
+/** Fetch effective RBAC policy. */
+export async function fetchRBACPolicy(): Promise<EffectivePolicy> {
+  const token = await getToken();
+  return serverFetch<EffectivePolicy>("/admin/rbac-policy", { token });
 }
 
 // --- IO Channel API functions ---
