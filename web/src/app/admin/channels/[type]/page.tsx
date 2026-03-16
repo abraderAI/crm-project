@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Phone } from "lucide-react";
 import { fetchChannelConfig, fetchChannelHealth } from "@/lib/admin-api";
 import { ChannelConfigForm } from "@/components/admin/channel-config-form";
 import { ChannelHealthBadge } from "@/components/admin/channel-health-badge";
@@ -58,6 +59,18 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
           <span className="text-sm text-muted-foreground">Health:</span>
           <ChannelHealthBadge status={healthData.status} />
         </div>
+      )}
+
+      {/* Manage Numbers link for voice channel */}
+      {channelType === "voice" && (
+        <Link
+          href="/admin/channels/voice/numbers"
+          data-testid="manage-numbers-link"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent"
+        >
+          <Phone className="h-4 w-4" />
+          Manage Numbers
+        </Link>
       )}
 
       {/* Layout: side-by-side for chat, stacked for others */}
