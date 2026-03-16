@@ -28,8 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: recursive
+
+      - name: Init deft submodule (with fallback to latest)
+        run: |
+          git submodule update --init --depth=1 deft 2>/dev/null || \
+          (rm -rf deft && git clone --depth=1 https://github.com/visionik/deft deft)
 
       - uses: actions/setup-go@v6
         with:
