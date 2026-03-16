@@ -18,6 +18,7 @@ type PlatformStats struct {
 	Threads              CountStats `json:"threads"`
 	Messages             CountStats `json:"messages"`
 	DBSizeBytes          int64      `json:"db_size_bytes"`
+	ApiUptimePct         float64    `json:"api_uptime_pct"`
 	FailedWebhooks24h    int64      `json:"failed_webhooks_24h"`
 	PendingNotifications int64      `json:"pending_notifications"`
 }
@@ -80,6 +81,18 @@ func (s *Service) GetPlatformStats(ctx context.Context) (*PlatformStats, error) 
 	s.db.WithContext(ctx).Model(&models.Notification{}).
 		Where("is_read = ?", false).
 		Count(&stats.PendingNotifications)
+
+	// API uptime: derive from webhook delivery success rate (24h), fallback 100.
+	var totalDeliveries, failedDeliveries int64
+	s.db.WithContext(ctx).Model(&models.WebhookDelivery{}).
+		Where("created_at >= ?", d24h).
+		Count(&totalDeliveries)
+	failedDeliveries = stats.FailedWebhooks24h
+	if totalDeliveries > 0 {
+		stats.ApiUptimePct = 100.0 * float64(totalDeliveries-failedDeliveries) / float64(totalDeliveries)
+	} else {
+		stats.ApiUptimePct = 100.0
+	}
 
 	return stats, nil
 }

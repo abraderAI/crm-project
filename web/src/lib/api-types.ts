@@ -322,6 +322,7 @@ export interface PlatformStats {
   threads: CountStats;
   messages: CountStats;
   db_size_bytes: number;
+  api_uptime_pct: number;
   failed_webhooks_24h: number;
   pending_notifications: number;
 }

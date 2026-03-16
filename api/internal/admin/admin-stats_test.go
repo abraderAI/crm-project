@@ -33,6 +33,7 @@ func TestService_GetPlatformStats(t *testing.T) {
 	assert.Equal(t, int64(2), stats.Orgs.Total)
 	assert.Equal(t, int64(3), stats.Users.Total)
 	assert.True(t, stats.DBSizeBytes > 0)
+	assert.Equal(t, 100.0, stats.ApiUptimePct) // No deliveries → 100%.
 }
 
 func TestService_GetPlatformStats_Empty(t *testing.T) {
@@ -43,7 +44,8 @@ func TestService_GetPlatformStats_Empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), stats.Orgs.Total)
 	assert.Equal(t, int64(0), stats.Users.Total)
-	assert.True(t, stats.DBSizeBytes > 0) // DB always has some pages.
+	assert.True(t, stats.DBSizeBytes > 0)      // DB always has some pages.
+	assert.Equal(t, 100.0, stats.ApiUptimePct) // No deliveries → 100%.
 }
 
 func TestHandler_GetStats(t *testing.T) {
@@ -56,6 +58,7 @@ func TestHandler_GetStats(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "orgs")
 	assert.Contains(t, w.Body.String(), "db_size_bytes")
+	assert.Contains(t, w.Body.String(), "api_uptime_pct")
 }
 
 func TestHandler_GetStats_Error(t *testing.T) {
@@ -99,4 +102,6 @@ func TestService_GetPlatformStats_WithWebhooksAndNotifications(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), stats.FailedWebhooks24h)
 	assert.Equal(t, int64(1), stats.PendingNotifications)
+	// 2 total deliveries, 1 failed → 50% uptime.
+	assert.Equal(t, 50.0, stats.ApiUptimePct)
 }

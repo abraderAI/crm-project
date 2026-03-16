@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { fetchAdminStats } from "@/lib/admin-api";
 import type { CountStats } from "@/lib/api-types";
+import { PlatformStats } from "@/components/admin/platform-stats";
 
 /** Format bytes into a human-readable string. */
 function formatBytes(bytes: number): string {
@@ -50,6 +51,9 @@ export default async function AdminOverviewPage(): Promise<React.ReactNode> {
 
   return (
     <div data-testid="admin-overview" className="flex flex-col gap-6">
+      {/* Platform KPIs */}
+      <PlatformStats stats={stats} />
+
       {/* Entity stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Organizations" stats={stats.orgs} icon={Building2} />
