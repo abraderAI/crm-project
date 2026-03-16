@@ -381,6 +381,15 @@ export interface ImpersonationResponse {
   expires_at: string;
 }
 
+/** Security log entry from GET /v1/admin/security/recent-logins or failed-auths. */
+export interface SecurityLogEntry {
+  id: string;
+  user_id: string;
+  ip_address: string;
+  user_agent: string;
+  timestamp: string;
+}
+
 // --- IO Channel types (matching Go backend models/channel-config.go) ---
 
 /** Channel type enum matching backend channel types. */

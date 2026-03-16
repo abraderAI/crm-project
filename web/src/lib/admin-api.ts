@@ -13,6 +13,7 @@ import type {
   PaginatedResponse,
   PlatformAdmin,
   PlatformStats,
+  SecurityLogEntry,
   UserShadow,
   WebhookDelivery,
   WebhookSubscription,
@@ -113,6 +114,26 @@ export async function fetchMemberships(
 ): Promise<PaginatedResponse<OrgMembership>> {
   const token = await getToken();
   return serverFetchPaginated<OrgMembership>("/admin/memberships", params, { token });
+}
+
+/** Fetch paginated recent login events. */
+export async function fetchRecentLogins(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<SecurityLogEntry>> {
+  const token = await getToken();
+  return serverFetchPaginated<SecurityLogEntry>("/admin/security/recent-logins", params, {
+    token,
+  });
+}
+
+/** Fetch paginated failed authentication events. */
+export async function fetchFailedAuths(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<SecurityLogEntry>> {
+  const token = await getToken();
+  return serverFetchPaginated<SecurityLogEntry>("/admin/security/failed-auths", params, {
+    token,
+  });
 }
 
 // --- IO Channel API functions ---
