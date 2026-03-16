@@ -43,6 +43,12 @@ export async function fetchAdminUsers(
   return serverFetchPaginated<UserShadow>("/admin/users", params, { token });
 }
 
+/** Fetch a single user by ID. */
+export async function fetchAdminUser(userId: string): Promise<UserShadow> {
+  const token = await getToken();
+  return serverFetch<UserShadow>(`/admin/users/${userId}`, { token });
+}
+
 /** Fetch list of platform admins. */
 export async function fetchPlatformAdmins(): Promise<PlatformAdmin[]> {
   const token = await getToken();

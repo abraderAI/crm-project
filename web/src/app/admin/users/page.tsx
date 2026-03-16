@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { fetchAdminUsers } from "@/lib/admin-api";
 
 /** Format a date string for display. */
@@ -36,9 +37,10 @@ export default async function AdminUsersPage(): Promise<React.ReactNode> {
           data-testid="user-list"
         >
           {users.map((user) => (
-            <div
+            <Link
               key={user.clerk_user_id}
-              className="flex items-center gap-4 px-4 py-3"
+              href={`/admin/users/${user.clerk_user_id}`}
+              className="flex items-center gap-4 px-4 py-3 hover:bg-muted/50 transition-colors"
               data-testid={`user-row-${user.clerk_user_id}`}
             >
               <div className="flex flex-col">
@@ -60,7 +62,7 @@ export default async function AdminUsersPage(): Promise<React.ReactNode> {
                   Banned
                 </span>
               )}
-            </div>
+            </Link>
           ))}
         </div>
       )}
