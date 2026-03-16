@@ -31,6 +31,11 @@ vi.mock("@/hooks/use-notifications", () => ({
   }),
 }));
 
+// Mock ChatbotWidget loaded via next/dynamic.
+vi.mock("@/components/chatbot-widget", () => ({
+  ChatbotWidget: () => <div data-testid="chatbot-widget">ChatbotWidget</div>,
+}));
+
 import { AppLayoutWrapper } from "./app-layout-wrapper";
 
 /** Render helper wrapping component in ThemeProvider. */
