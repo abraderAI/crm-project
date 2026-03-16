@@ -419,3 +419,19 @@ export interface DeadLetterEvent {
   status: DLQStatus;
   created_at: string;
 }
+
+/** Owned phone number from LiveKit. */
+export interface PhoneNumber {
+  phone_number: string;
+  status: string;
+  dispatch_rule_id: string;
+  purchased_at: string;
+}
+
+/** Available phone number from search results. */
+export interface PhoneNumberSearchResult {
+  phone_number: string;
+  country: string;
+  area_code: string;
+  monthly_cost: string;
+}
