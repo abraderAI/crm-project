@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { fetchChannelConfig, fetchChannelHealth } from "@/lib/admin-api";
 import { ChannelConfigForm } from "@/components/admin/channel-config-form";
 import { ChannelHealthBadge } from "@/components/admin/channel-health-badge";
+import { ChatChannelPanel } from "@/components/admin/chat-channel-panel";
 import { ChannelDetailDLQ } from "./channel-detail-dlq";
 import type { ChannelType } from "@/lib/api-types";
 
@@ -59,14 +60,32 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
         </div>
       )}
 
-      {/* Config form */}
-      <ChannelConfigForm
-        channelType={channelType}
-        initialConfig={configData}
-        onSave={async () => {
-          "use server";
-        }}
-      />
+      {/* Layout: side-by-side for chat, stacked for others */}
+      {channelType === "chat" ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2" data-testid="chat-layout">
+          <div className="flex flex-col gap-6">
+            {/* Config form */}
+            <ChannelConfigForm
+              channelType={channelType}
+              initialConfig={configData}
+              onSave={async () => {
+                "use server";
+              }}
+            />
+          </div>
+
+          {/* Right-side preview panel */}
+          <ChatChannelPanel embedKey={configData?.org_id ?? DEFAULT_ORG} />
+        </div>
+      ) : (
+        <ChannelConfigForm
+          channelType={channelType}
+          initialConfig={configData}
+          onSave={async () => {
+            "use server";
+          }}
+        />
+      )}
 
       {/* DLQ monitor (client component) */}
       <ChannelDetailDLQ org={DEFAULT_ORG} channelType={channelType} />
