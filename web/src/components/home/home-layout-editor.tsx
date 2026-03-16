@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { ArrowUp, ArrowDown, Eye, EyeOff, RotateCcw, Save } from "lucide-react";
+import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { ArrowUp, ArrowDown, Eye, EyeOff, GripVertical, RotateCcw, Save } from "lucide-react";
 import type { WidgetConfig } from "@/lib/tier-types";
 import type { WidgetRegistry } from "./home-layout";
+import { ResetConfirmDialog } from "./reset-confirm-dialog";
 
 export interface HomeLayoutEditorProps {
   /** Current layout to edit. */
@@ -29,6 +30,10 @@ export function HomeLayoutEditor({
   const [editableLayout, setEditableLayout] = useState<WidgetConfig[]>(() => [...layout]);
   const [isSaving, setIsSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const toggleVisibility = (index: number): void => {
     setEditableLayout((prev) => {
@@ -41,7 +46,7 @@ export function HomeLayoutEditor({
     });
   };
 
-  const moveUp = (index: number): void => {
+  const moveUp = useCallback((index: number): void => {
     if (index <= 0) return;
     setEditableLayout((prev) => {
       const next = [...prev];
@@ -53,9 +58,9 @@ export function HomeLayoutEditor({
       }
       return next;
     });
-  };
+  }, []);
 
-  const moveDown = (index: number): void => {
+  const moveDown = useCallback((index: number): void => {
     setEditableLayout((prev) => {
       if (index >= prev.length - 1) return prev;
       const next = [...prev];
@@ -67,7 +72,7 @@ export function HomeLayoutEditor({
       }
       return next;
     });
-  };
+  }, []);
 
   const handleSave = async (): Promise<void> => {
     setIsSaving(true);
@@ -78,7 +83,12 @@ export function HomeLayoutEditor({
     }
   };
 
-  const handleReset = async (): Promise<void> => {
+  const handleResetClick = (): void => {
+    setShowResetDialog(true);
+  };
+
+  const handleResetConfirm = async (): Promise<void> => {
+    setShowResetDialog(false);
     setIsResetting(true);
     try {
       await onReset();
@@ -86,6 +96,72 @@ export function HomeLayoutEditor({
       setIsResetting(false);
     }
   };
+
+  const handleResetCancel = (): void => {
+    setShowResetDialog(false);
+  };
+
+  // Drag-and-drop handlers.
+  const handleDragStart = (index: number): void => {
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number): void => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === index) return;
+    setEditableLayout((prev) => {
+      const next = [...prev];
+      const dragged = next[dragIndex];
+      if (!dragged) return prev;
+      next.splice(dragIndex, 1);
+      next.splice(index, 0, dragged);
+      return next;
+    });
+    setDragIndex(index);
+  };
+
+  const handleDragEnd = (): void => {
+    setDragIndex(null);
+  };
+
+  // Keyboard navigation for list items.
+  const handleKeyDown = (e: KeyboardEvent<HTMLLIElement>, index: number): void => {
+    switch (e.key) {
+      case "ArrowUp":
+        e.preventDefault();
+        if (e.altKey && index > 0) {
+          moveUp(index);
+          setFocusedIndex(index - 1);
+        } else if (index > 0) {
+          setFocusedIndex(index - 1);
+        }
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        if (e.altKey && index < editableLayout.length - 1) {
+          moveDown(index);
+          setFocusedIndex(index + 1);
+        } else if (index < editableLayout.length - 1) {
+          setFocusedIndex(index + 1);
+        }
+        break;
+      case " ":
+      case "Enter":
+        e.preventDefault();
+        toggleVisibility(index);
+        break;
+    }
+  };
+
+  // Focus management: when focusedIndex changes, focus the item.
+  const focusItem = useCallback(
+    (el: HTMLLIElement | null, index: number) => {
+      if (el && index === focusedIndex) {
+        el.focus();
+      }
+    },
+    [focusedIndex],
+  );
 
   return (
     <div data-testid="home-layout-editor" className="space-y-4">
@@ -95,7 +171,7 @@ export function HomeLayoutEditor({
           {isCustomized && (
             <button
               data-testid="editor-reset"
-              onClick={handleReset}
+              onClick={handleResetClick}
               disabled={isResetting}
               className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent/50 disabled:opacity-50"
             >
@@ -115,16 +191,43 @@ export function HomeLayoutEditor({
         </div>
       </div>
 
-      <ul data-testid="editor-widget-list" className="space-y-2">
+      <ul
+        ref={listRef}
+        data-testid="editor-widget-list"
+        role="listbox"
+        aria-label="Widget order"
+        className="space-y-2"
+      >
         {editableLayout.map((item, index) => {
           const entry = registry[item.widget_id];
           const title = entry?.title ?? item.widget_id;
           return (
             <li
               key={item.widget_id}
+              ref={(el) => focusItem(el, index)}
               data-testid={`editor-item-${item.widget_id}`}
-              className="flex items-center gap-2 rounded-md border border-border p-2"
+              role="option"
+              aria-selected={index === focusedIndex}
+              aria-grabbed={dragIndex === index}
+              aria-label={`${title}${item.visible ? "" : " (hidden)"}`}
+              tabIndex={index === focusedIndex || (focusedIndex === -1 && index === 0) ? 0 : -1}
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragEnd={handleDragEnd}
+              onKeyDown={(e) => handleKeyDown(e, index)}
+              onFocus={() => setFocusedIndex(index)}
+              className={`flex items-center gap-2 rounded-md border p-2 outline-none focus:ring-2 focus:ring-primary/50 ${
+                dragIndex === index ? "border-primary bg-primary/5" : "border-border"
+              }`}
             >
+              <span
+                className="cursor-grab text-muted-foreground"
+                aria-hidden="true"
+                data-testid={`drag-handle-${item.widget_id}`}
+              >
+                <GripVertical className="h-4 w-4" />
+              </span>
               <button
                 data-testid={`toggle-${item.widget_id}`}
                 onClick={() => toggleVisibility(index)}
@@ -160,6 +263,12 @@ export function HomeLayoutEditor({
           );
         })}
       </ul>
+
+      <ResetConfirmDialog
+        open={showResetDialog}
+        onConfirm={handleResetConfirm}
+        onCancel={handleResetCancel}
+      />
     </div>
   );
 }

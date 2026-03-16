@@ -17,6 +17,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/channel/chat"
 	voicelk "github.com/abraderAI/crm-project/api/internal/channel/voice"
 	"github.com/abraderAI/crm-project/api/internal/config"
+	"github.com/abraderAI/crm-project/api/internal/conversion"
 	"github.com/abraderAI/crm-project/api/internal/event"
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/gdpr"
@@ -214,6 +215,10 @@ func NewRouter(cfg Config) http.Handler {
 	tierService := tier.NewService(tierRepo)
 	tierHandler := tier.NewHandler(tierService)
 
+	// Conversion service (Tier 2→3 upgrade flows).
+	conversionService := conversion.NewService(cfg.DB)
+	conversionHandler := conversion.NewHandler(conversionService, auditService)
+
 	// IO Phase 4: AI Web Chat Widget.
 	chatJWTSecret := cfg.ChatJWTSecret
 	if chatJWTSecret == "" {
@@ -269,6 +274,12 @@ func NewRouter(cfg Config) http.Handler {
 			authed.Get("/me/tier", tierHandler.GetTier)
 			authed.Get("/me/home-preferences", tierHandler.GetHomePreferences)
 			authed.Put("/me/home-preferences", tierHandler.PutHomePreferences)
+
+			// Conversion: self-service upgrade (Tier 2→3).
+			authed.Post("/me/upgrade", conversionHandler.SelfServiceUpgrade)
+
+			// Conversion: sales-assisted lead conversion (DEFT members only, checked in handler).
+			authed.Post("/leads/{lead_id}/convert", conversionHandler.SalesConvert)
 
 			// Search endpoint.
 			authed.Get("/search", searchHandler.Search)
@@ -352,6 +363,9 @@ func NewRouter(cfg Config) http.Handler {
 				ar.Get("/webhooks/deliveries", adminHandler.ListWebhookDeliveries)
 
 				ar.Get("/integrations/status", adminHandler.GetIntegrationHealth)
+
+				// Conversion: platform admin user promotion (Tier 2→3).
+				ar.Post("/users/{user_id}/promote", conversionHandler.AdminPromote)
 
 				// Phase C: Advanced Admin Features.
 				ar.Post("/users/{user_id}/impersonate", adminHandler.ImpersonateHandler)
