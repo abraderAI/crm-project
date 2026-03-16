@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Headset,
   TrendingUp,
+  FileDown,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ const ADMIN_TABS = [
   { href: "/admin/reports/sales", label: "Sales Reports", icon: TrendingUp, exact: false },
   { href: "/admin/api-usage", label: "API Usage", icon: Activity, exact: false },
   { href: "/admin/llm-usage", label: "LLM Usage", icon: BrainCircuit, exact: false },
+  { href: "/admin/exports", label: "Exports", icon: FileDown, exact: false },
   { href: "/admin/settings", label: "Settings", icon: Settings, exact: false },
 ] as const;
 

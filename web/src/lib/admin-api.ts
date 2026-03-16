@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 
 import type {
+  AdminExport,
   ApiUsagePeriod,
   ApiUsageResponse,
   AuditEntry,
@@ -170,6 +171,14 @@ export async function fetchApiUsage(period: ApiUsagePeriod = "24h"): Promise<Api
 export async function fetchLlmUsage(): Promise<LlmUsageResponse> {
   const token = await getToken();
   return serverFetch<LlmUsageResponse>("/admin/llm-usage", { token });
+}
+
+/** Fetch paginated admin data exports. */
+export async function fetchExports(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<AdminExport>> {
+  const token = await getToken();
+  return serverFetchPaginated<AdminExport>("/admin/exports", params, { token });
 }
 
 // --- IO Channel API functions ---
