@@ -11,7 +11,7 @@ beforeEach(() => {
 });
 
 describe("fetchApiKeys", () => {
-  it("calls GET /v1/auth/api-keys with auth header", async () => {
+  it("calls GET /v1/orgs/default/api-keys with auth header", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -31,7 +31,7 @@ describe("fetchApiKeys", () => {
 
     expect(mockFetch).toHaveBeenCalledOnce();
     const [url, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/v1/auth/api-keys");
+    expect(url).toContain("/v1/orgs/default/api-keys");
     expect(opts.method).toBe("GET");
     expect(opts.headers).toHaveProperty("Authorization", "Bearer test-token");
     expect(keys).toHaveLength(1);
@@ -64,7 +64,7 @@ describe("fetchApiKeys", () => {
 });
 
 describe("createApiKey", () => {
-  it("calls POST /v1/auth/api-keys with name in body", async () => {
+  it("calls POST /v1/orgs/default/api-keys with name in body", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -80,7 +80,7 @@ describe("createApiKey", () => {
 
     expect(mockFetch).toHaveBeenCalledOnce();
     const [url, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/v1/auth/api-keys");
+    expect(url).toContain("/v1/orgs/default/api-keys");
     expect(opts.method).toBe("POST");
     expect(opts.body).toBe(JSON.stringify({ name: "My Key" }));
     expect(result.key).toBe("deft_live_xyz_full_secret_key");
@@ -104,7 +104,7 @@ describe("createApiKey", () => {
 });
 
 describe("revokeApiKey", () => {
-  it("calls DELETE /v1/auth/api-keys/{keyId}", async () => {
+  it("calls DELETE /v1/orgs/default/api-keys/{keyId}", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({}),
@@ -114,7 +114,7 @@ describe("revokeApiKey", () => {
 
     expect(mockFetch).toHaveBeenCalledOnce();
     const [url, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/v1/auth/api-keys/key-1");
+    expect(url).toContain("/v1/orgs/default/api-keys/key-1");
     expect(opts.method).toBe("DELETE");
     expect(opts.headers).toHaveProperty("Authorization", "Bearer test-token");
   });

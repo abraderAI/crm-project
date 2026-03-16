@@ -63,9 +63,12 @@ export function WebhookView({
     async (deliveryId: string) => {
       const token = await getToken();
       if (!token) return;
-      await replayWebhookDelivery(token, deliveryId);
+      // Backend requires both webhookId (subscription_id) and deliveryId.
+      const delivery = deliveries.find((d) => d.id === deliveryId);
+      if (!delivery) return;
+      await replayWebhookDelivery(token, delivery.subscription_id, deliveryId);
     },
-    [getToken],
+    [getToken, deliveries],
   );
 
   return (

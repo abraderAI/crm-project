@@ -102,12 +102,13 @@ describe("WebhookView", () => {
     expect(mockToggleWebhook).toHaveBeenCalledWith("test-token", "ws1");
   });
 
-  it("calls replayWebhookDelivery via entity-api on replay", async () => {
+  it("calls replayWebhookDelivery via entity-api on replay with subscription_id", async () => {
     const user = userEvent.setup();
     render(<WebhookView initialSubscriptions={[]} initialDeliveries={[delivery1]} />);
 
     await user.click(screen.getByTestId("delivery-replay-d1"));
 
-    expect(mockReplayWebhookDelivery).toHaveBeenCalledWith("test-token", "d1");
+    // delivery1.subscription_id = "ws1", delivery1.id = "d1"
+    expect(mockReplayWebhookDelivery).toHaveBeenCalledWith("test-token", "ws1", "d1");
   });
 });

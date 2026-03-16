@@ -120,20 +120,16 @@ export async function fetchMessages(
   );
 }
 
-/** Fetch paginated revisions for a thread. */
+/** Fetch paginated revisions for an entity.
+ * entityType is e.g. "thread", entityId is the entity UUID.
+ */
 export async function fetchRevisions(
-  orgSlug: string,
-  spaceSlug: string,
-  boardSlug: string,
-  threadSlug: string,
+  entityType: string,
+  entityId: string,
   params?: Record<string, string>,
 ): Promise<PaginatedResponse<Revision>> {
   const token = await getToken();
-  return serverFetchPaginated<Revision>(
-    `/orgs/${orgSlug}/spaces/${spaceSlug}/boards/${boardSlug}/threads/${threadSlug}/revisions`,
-    params,
-    { token },
-  );
+  return serverFetchPaginated<Revision>(`/revisions/${entityType}/${entityId}`, params, { token });
 }
 
 /** Fetch paginated notifications for the current user. */
@@ -154,24 +150,38 @@ export async function fetchNotificationPreferences(
   });
 }
 
-/** Fetch the digest schedule for the current user. */
+/** Fetch the digest schedule for the current user.
+ * NOTE: No backend endpoint exists for this. Returns a default schedule.
+ */
 export async function fetchDigestSchedule(): Promise<DigestSchedule> {
-  const token = await getToken();
-  return serverFetch<DigestSchedule>("/notifications/digest", { token });
+  return {
+    id: "",
+    user_id: "",
+    frequency: "none",
+    created_at: "",
+    updated_at: "",
+  };
 }
 
-/** Fetch whether the current user has voted on a thread. */
+/** Fetch whether the current user has voted on a thread.
+ * NOTE: No GET endpoint exists in the backend (only POST toggle).
+ * Returns voted:false as a safe fallback on any error.
+ */
 export async function fetchUserVote(
   orgSlug: string,
   spaceSlug: string,
   boardSlug: string,
   threadSlug: string,
 ): Promise<UserVoteStatus> {
-  const token = await getToken();
-  return serverFetch<UserVoteStatus>(
-    `/orgs/${orgSlug}/spaces/${spaceSlug}/boards/${boardSlug}/threads/${threadSlug}/vote`,
-    { token },
-  );
+  try {
+    const token = await getToken();
+    return await serverFetch<UserVoteStatus>(
+      `/orgs/${orgSlug}/spaces/${spaceSlug}/boards/${boardSlug}/threads/${threadSlug}/vote`,
+      { token },
+    );
+  } catch {
+    return { voted: false };
+  }
 }
 
 /** Fetch search results. */

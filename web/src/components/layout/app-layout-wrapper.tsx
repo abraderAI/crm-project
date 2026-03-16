@@ -67,22 +67,22 @@ export function AppLayoutWrapper({ children }: AppLayoutWrapperProps): React.Rea
 
   return (
     <TierProvider token={token}>
-    <AppLayout
-      navItems={NAV_ITEMS}
-      currentPath={pathname}
-      unreadCount={unreadCount}
-      userMenu={
-        <UserButton>
-          <UserButton.MenuItems>
-            <UserButton.Link label="Settings" labelIcon={<SettingsIcon />} href="/settings" />
-          </UserButton.MenuItems>
-        </UserButton>
-      }
-      onSearch={handleSearch}
-    >
-      {children}
-      <ChatbotWidget />
-    </AppLayout>
+      <AppLayout
+        navItems={NAV_ITEMS}
+        currentPath={pathname}
+        unreadCount={unreadCount}
+        userMenu={
+          <UserButton>
+            <UserButton.MenuItems>
+              <UserButton.Link label="Settings" labelIcon={<SettingsIcon />} href="/settings" />
+            </UserButton.MenuItems>
+          </UserButton>
+        }
+        onSearch={handleSearch}
+      >
+        {children}
+        <ChatbotWidget />
+      </AppLayout>
     </TierProvider>
   );
 }

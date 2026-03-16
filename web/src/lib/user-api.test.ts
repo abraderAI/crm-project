@@ -251,17 +251,17 @@ describe("user-api", () => {
   });
 
   describe("fetchRevisions", () => {
-    it("fetches paginated revisions for a thread", async () => {
+    it("fetches paginated revisions via /revisions/{entityType}/{entityId}", async () => {
       const response = {
         data: [{ id: "r1", version: 1, editor_id: "u1" }],
         page_info: { has_more: false },
       };
       mockServerFetchPaginated.mockResolvedValue(response);
 
-      const result = await fetchRevisions("org1", "sales", "pipeline", "lead-a");
+      const result = await fetchRevisions("thread", "t1-uuid");
 
       expect(mockServerFetchPaginated).toHaveBeenCalledWith(
-        "/orgs/org1/spaces/sales/boards/pipeline/threads/lead-a/revisions",
+        "/revisions/thread/t1-uuid",
         undefined,
         { token: "test-token" },
       );
@@ -289,16 +289,11 @@ describe("user-api", () => {
   });
 
   describe("fetchDigestSchedule", () => {
-    it("fetches the digest schedule", async () => {
-      const schedule = { user_id: "u1", frequency: "daily" };
-      mockServerFetch.mockResolvedValue(schedule);
-
+    it("returns a default schedule without making an API call (no backend endpoint)", async () => {
       const result = await fetchDigestSchedule();
 
-      expect(mockServerFetch).toHaveBeenCalledWith("/notifications/digest", {
-        token: "test-token",
-      });
-      expect(result).toEqual(schedule);
+      expect(mockServerFetch).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ frequency: "none" });
     });
   });
 
@@ -335,7 +330,7 @@ describe("user-api", () => {
   });
 
   describe("fetchUserVote", () => {
-    it("fetches user vote status for a thread", async () => {
+    it("attempts to fetch vote status and returns the result when successful", async () => {
       const status = { voted: true };
       mockServerFetch.mockResolvedValue(status);
 
@@ -346,6 +341,14 @@ describe("user-api", () => {
         { token: "test-token" },
       );
       expect(result).toEqual(status);
+    });
+
+    it("returns {voted:false} as fallback when endpoint errors (no GET in backend)", async () => {
+      mockServerFetch.mockRejectedValue(new Error("405 Method Not Allowed"));
+
+      const result = await fetchUserVote("org1", "sales", "pipeline", "lead-a");
+
+      expect(result).toEqual({ voted: false });
     });
 
     it("returns voted false when user has not voted", async () => {

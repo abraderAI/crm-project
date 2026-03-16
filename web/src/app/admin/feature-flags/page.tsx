@@ -1,5 +1,6 @@
 import { ToggleRight } from "lucide-react";
-import { fetchFeatureFlags } from "@/lib/admin-api";
+import { revalidatePath } from "next/cache";
+import { fetchFeatureFlags, patchFeatureFlag } from "@/lib/admin-api";
 
 /** Format a date string for display. */
 function formatDate(dateStr: string): string {
@@ -18,6 +19,12 @@ function formatDate(dateStr: string): string {
 
 export default async function AdminFeatureFlagsPage(): Promise<React.ReactNode> {
   const flags = await fetchFeatureFlags();
+
+  async function toggleFlag(key: string, currentEnabled: boolean) {
+    "use server";
+    await patchFeatureFlag(key, !currentEnabled);
+    revalidatePath("/admin/feature-flags");
+  }
 
   return (
     <div data-testid="admin-feature-flags" className="flex flex-col gap-4">
@@ -61,6 +68,19 @@ export default async function AdminFeatureFlagsPage(): Promise<React.ReactNode> 
               <span className="ml-auto text-xs text-muted-foreground">
                 Updated: {formatDate(flag.updated_at)}
               </span>
+
+              <form
+                action={toggleFlag.bind(null, flag.key, flag.enabled)}
+                data-testid={`flag-toggle-form-${flag.key}`}
+              >
+                <button
+                  type="submit"
+                  data-testid={`flag-toggle-${flag.key}`}
+                  className="rounded-md border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-accent"
+                >
+                  {flag.enabled ? "Disable" : "Enable"}
+                </button>
+              </form>
             </div>
           ))}
         </div>
