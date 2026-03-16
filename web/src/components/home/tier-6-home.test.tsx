@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Tier6HomeScreen } from "./tier6-home-screen";
+import { Tier6HomeScreen } from "./tier-6-home";
 import { getDefaultLayout } from "@/lib/default-layouts";
 
 // Mock all widget components.
