@@ -28,6 +28,20 @@ vi.mock("./tier-2-home", () => ({
   ),
 }));
 
+vi.mock("./tier-3-home", () => ({
+  Tier3Home: ({ layout, subType }: { layout: unknown[]; subType: string | null }) => (
+    <div data-testid="mock-tier-3-home">
+      Tier 3 ({layout.length} widgets, sub: {subType ?? "member"})
+    </div>
+  ),
+}));
+
+vi.mock("./tier-5-home", () => ({
+  Tier5Home: ({ layout }: { layout: unknown[] }) => (
+    <div data-testid="mock-tier-5-home">Tier 5 ({layout.length} widgets)</div>
+  ),
+}));
+
 describe("TierHomeScreen", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -107,11 +121,80 @@ describe("TierHomeScreen", () => {
     expect(screen.getByTestId("mock-tier-2-home")).toHaveTextContent("4 widgets");
   });
 
-  it("renders placeholder for tier 3+", () => {
+  it("renders Tier 3 home for paying customers", () => {
     mockUseTier.mockReturnValue({
       tier: 3,
+      subType: null,
+      orgId: "org-1",
       isLoading: false,
       deftDepartment: null,
+    });
+    mockUseHomeLayout.mockReturnValue({
+      layout: [
+        { widget_id: WIDGET_IDS.ORG_OVERVIEW, visible: true },
+        { widget_id: WIDGET_IDS.ORG_SUPPORT_TICKETS, visible: true },
+      ],
+      isLoading: false,
+    });
+
+    render(<TierHomeScreen token="token" />);
+    expect(screen.getByTestId("tier-home-screen")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-tier-3-home")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-tier-3-home")).toHaveTextContent("2 widgets");
+    expect(screen.getByTestId("mock-tier-3-home")).toHaveTextContent("sub: member");
+  });
+
+  it("renders Tier 3 owner variant", () => {
+    mockUseTier.mockReturnValue({
+      tier: 3,
+      subType: "owner",
+      orgId: "org-1",
+      isLoading: false,
+      deftDepartment: null,
+    });
+    mockUseHomeLayout.mockReturnValue({
+      layout: [
+        { widget_id: WIDGET_IDS.ORG_SUPPORT_DASHBOARD, visible: true },
+        { widget_id: WIDGET_IDS.BILLING_STATUS, visible: true },
+      ],
+      isLoading: false,
+    });
+
+    render(<TierHomeScreen token="token" />);
+    expect(screen.getByTestId("mock-tier-3-home")).toHaveTextContent("sub: owner");
+  });
+
+  it("renders Tier 5 home for org admins", () => {
+    mockUseTier.mockReturnValue({
+      tier: 5,
+      subType: null,
+      orgId: "org-1",
+      isLoading: false,
+      deftDepartment: null,
+    });
+    mockUseHomeLayout.mockReturnValue({
+      layout: [
+        { widget_id: WIDGET_IDS.ORG_ACCESS_CONTROL, visible: true },
+        { widget_id: WIDGET_IDS.ORG_RBAC_EDITOR, visible: true },
+        { widget_id: WIDGET_IDS.ORG_SUPPORT_DASHBOARD, visible: true },
+        { widget_id: WIDGET_IDS.BILLING_STATUS, visible: true },
+      ],
+      isLoading: false,
+    });
+
+    render(<TierHomeScreen token="token" />);
+    expect(screen.getByTestId("tier-home-screen")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-tier-5-home")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-tier-5-home")).toHaveTextContent("4 widgets");
+  });
+
+  it("renders placeholder for tier 4", () => {
+    mockUseTier.mockReturnValue({
+      tier: 4,
+      subType: null,
+      orgId: null,
+      isLoading: false,
+      deftDepartment: "sales",
     });
     mockUseHomeLayout.mockReturnValue({
       layout: [],
@@ -120,12 +203,14 @@ describe("TierHomeScreen", () => {
 
     render(<TierHomeScreen token="token" />);
     expect(screen.getByTestId("tier-home-placeholder")).toBeInTheDocument();
-    expect(screen.getByText(/Tier 3 home screen/)).toBeInTheDocument();
+    expect(screen.getByText(/Tier 4 home screen/)).toBeInTheDocument();
   });
 
   it("renders placeholder for tier 6", () => {
     mockUseTier.mockReturnValue({
       tier: 6,
+      subType: null,
+      orgId: null,
       isLoading: false,
       deftDepartment: null,
     });

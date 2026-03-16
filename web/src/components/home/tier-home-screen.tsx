@@ -6,6 +6,8 @@ import { useHomeLayout } from "@/hooks/use-home-layout";
 import type { ProfileData } from "./widgets/my-profile-widget";
 import { Tier1Home } from "./tier-1-home";
 import { Tier2Home } from "./tier-2-home";
+import { Tier3Home } from "./tier-3-home";
+import { Tier5Home } from "./tier-5-home";
 
 interface TierHomeScreenProps {
   /** Clerk auth token (null for anonymous users). */
@@ -19,10 +21,10 @@ interface TierHomeScreenProps {
 /**
  * Top-level home screen component that renders the appropriate
  * tier-specific home screen based on the user's resolved tier.
- * Tiers 3-6 render a placeholder pending future phases.
+ * Tiers 4 and 6 render a placeholder pending future phases.
  */
 export function TierHomeScreen({ token, profile, profileLoading }: TierHomeScreenProps): ReactNode {
-  const { tier, isLoading: tierLoading, deftDepartment } = useTier();
+  const { tier, subType, orgId, isLoading: tierLoading, deftDepartment } = useTier();
   const { layout, isLoading: layoutLoading } = useHomeLayout(tier, token, deftDepartment);
 
   if (tierLoading || layoutLoading) {
@@ -53,7 +55,13 @@ export function TierHomeScreen({ token, profile, profileLoading }: TierHomeScree
         />
       )}
 
-      {tier >= 3 && (
+      {tier === 3 && (
+        <Tier3Home layout={layout} token={token ?? ""} orgId={orgId ?? ""} subType={subType} />
+      )}
+
+      {tier === 5 && <Tier5Home layout={layout} token={token ?? ""} orgId={orgId ?? ""} />}
+
+      {(tier === 4 || tier === 6) && (
         <div data-testid="tier-home-placeholder" className="py-8 text-center">
           <p className="text-muted-foreground">
             Tier {tier} home screen — coming in a future phase.
