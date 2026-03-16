@@ -38,6 +38,8 @@ export default defineConfig({
         "src/components/entities/entity-settings-view.tsx",
         "src/lib/api-types.ts",
         "src/lib/reporting-types.ts",
+        "src/lib/tier-types.ts",
+        "src/app/(public)/**",
         "e2e/**",
       ],
       thresholds: {
