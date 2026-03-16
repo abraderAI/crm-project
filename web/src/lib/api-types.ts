@@ -425,6 +425,29 @@ export interface LlmUsageResponse {
   message: string;
 }
 
+/** Export type options for admin data exports. */
+export type AdminExportType = "users" | "orgs" | "audit";
+
+/** Export format options. */
+export type AdminExportFormat = "csv" | "json";
+
+/** Export status values. */
+export type AdminExportStatus = "pending" | "processing" | "completed" | "failed";
+
+/** Admin data export record matching Go AdminExport model. */
+export interface AdminExport {
+  id: string;
+  type: AdminExportType;
+  filters: string;
+  format: AdminExportFormat;
+  status: AdminExportStatus;
+  file_path?: string;
+  requested_by: string;
+  error_msg?: string;
+  created_at: string;
+  completed_at?: string | null;
+}
+
 // --- IO Channel types (matching Go backend models/channel-config.go) ---
 
 // --- RBAC Policy types (matching Go backend admin/rbac-override.go) ---
