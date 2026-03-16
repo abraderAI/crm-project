@@ -8,7 +8,7 @@ import {
 } from "./reporting-api";
 
 describe("reporting-api export URL builders", () => {
-  describe("getSupportExportUrl",
+  describe("getSupportExportUrl", () => {
     it("builds export URL with all params", () => {
       const url = getSupportExportUrl("org1", {
         from: "2026-01-01",
