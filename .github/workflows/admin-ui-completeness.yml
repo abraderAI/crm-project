@@ -1,0 +1,131 @@
+name: Admin UI Completeness Implementation
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task to implement (1-13, or "all" for all tasks in parallel)'
+        required: true
+        type: string
+        default: 'all'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ── Resolve task list from input ─────────────────────────────────────────────
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      tasks: ${{ steps.set-tasks.outputs.tasks }}
+    steps:
+      - id: set-tasks
+        run: |
+          if [ "${{ inputs.task }}" = "all" ]; then
+            echo 'tasks=[1,2,3,4,5,6,7,8,9,10,11,12,13]' >> $GITHUB_OUTPUT
+          else
+            echo "tasks=[${{ inputs.task }}]" >> $GITHUB_OUTPUT
+          fi
+
+  # ── Run one Oz agent per task (up to 13 in parallel) ─────────────────────────
+  implement:
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        task: ${{ fromJSON(needs.setup.outputs.tasks) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Init deft submodule (with fallback to latest)
+        run: |
+          git submodule update --init --depth=1 deft 2>/dev/null || \
+          (rm -rf deft && git clone --depth=1 https://github.com/visionik/deft deft)
+
+      - name: Install task CLI
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+      - name: Ensure admin-ui-task labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in $(seq 1 13); do
+            gh label create "admin-ui-task:$i" \
+              --color "0ea5e9" \
+              --description "Admin UI Completeness Task $i" 2>/dev/null || true
+          done
+
+      - name: Run Oz agent for task ${{ matrix.task }}
+        id: oz_agent
+        uses: warpdotdev/oz-agent-action@main
+        with:
+          prompt: |
+            Implement Task ${{ matrix.task }} of the Admin UI Completeness spec for the DEFT Evolution CRM project (abraderAI/crm-project).
+
+            START BY reading AGENTS.md — it contains all required framework reading and coding standards.
+            Then read SPECIFICATION-admin-ui-completeness.md and implement ONLY the tasks listed under "Task ${{ matrix.task }}" heading.
+
+            SPECIFICATION SUMMARY — all tasks are fully independent (no dependencies between tasks):
+              Task 1:  Admin User Detail Page — /admin/users/[user_id] with ban/unban, GDPR purge, impersonation
+              Task 2:  Admin System Settings Page — /admin/settings with key-value config editor
+              Task 3:  Admin Security Monitoring Page — /admin/security with recent logins & failed auths
+              Task 4:  Self-Service Upgrade / Conversion Page — /upgrade calls POST /v1/me/upgrade
+              Task 5:  User Profile / Account Settings Page — /settings with Clerk profile + API key management
+              Task 6:  Admin RBAC Policy Management UI — /admin/rbac-policy with dry-run preview
+              Task 7:  Admin API Usage & LLM Usage Stats Pages — /admin/api-usage and /admin/llm-usage
+              Task 8:  Admin Async Data Exports UI — /admin/exports with trigger, poll, download
+              Task 9:  Admin Platform Stats Enhancement — enhance existing /admin page with live KPIs
+              Task 10: Chat Widget Preview & Embed Code Copy — enhance /admin/channels/chat
+              Task 11: Phone Number Management UI — /admin/channels/voice/numbers with purchase confirmation
+              Task 12: In-App Chatbot Widget Verification & Fix — verify/fix ChatbotWidget on all pages
+              Task 13: Minor Fixes — naming convention (hyphens) + /reports redirect
+
+            CRITICAL REQUIREMENTS:
+            - Follow every rule in AGENTS.md and the deft files it references
+            - Implement ALL subtasks under Task ${{ matrix.task }} in SPECIFICATION-admin-ui-completeness.md
+            - Impersonation token MUST be stored in sessionStorage ONLY — NEVER localStorage
+            - Phone number purchase MUST require a confirmation modal (billable action warning)
+            - All new /admin/* pages MUST enforce platform_admin check via existing middleware
+            - TDD: write tests first, watch fail, implement, refactor
+            - ≥85% test coverage (lines, functions, branches, statements) on all new TypeScript
+            - Run `task check` — it MUST fully pass before creating the PR
+            - Push your work to branch: admin-ui/task-${{ matrix.task }}
+            - Open a PR to main if you are able to, but do not worry if you cannot
+          warp_api_key: ${{ secrets.WARP_API_KEY }}
+
+      - name: Open PR if agent did not; ensure admin-ui-task label exists
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="admin-ui/task-${{ matrix.task }}"
+          LABEL="admin-ui-task:${{ matrix.task }}"
+          # Check if branch exists remotely
+          if ! git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
+            echo "Branch $BRANCH not found — agent may not have pushed. Skipping."
+            exit 0
+          fi
+          # Check if a PR already exists for this branch
+          PR_NUMBER=$(gh pr list --repo abraderAI/crm-project \
+            --head "$BRANCH" --state open --json number \
+            --jq '.[0] | .number // empty')
+          if [ -n "$PR_NUMBER" ]; then
+            echo "PR #$PR_NUMBER already exists for $BRANCH — ensuring label is set."
+            gh pr edit "$PR_NUMBER" --repo abraderAI/crm-project --add-label "$LABEL" 2>/dev/null || true
+            exit 0
+          fi
+          echo "Creating PR for $BRANCH"
+          gh pr create \
+            --repo abraderAI/crm-project \
+            --head "$BRANCH" \
+            --base main \
+            --title "feat(admin-ui): task ${{ matrix.task }} implementation" \
+            --label "$LABEL" \
+            --body "Automated PR for Admin UI Completeness Task ${{ matrix.task }}. See SPECIFICATION-admin-ui-completeness.md for details."

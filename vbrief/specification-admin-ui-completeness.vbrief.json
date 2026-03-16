@@ -1,0 +1,239 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.5",
+    "created": "2026-03-16T07:56:00Z",
+    "updated": "2026-03-16T07:56:00Z",
+    "metadata": {
+      "type": "specification",
+      "project": "deft-evolution-admin-ui-completeness",
+      "specOutput": "SPECIFICATION-admin-ui-completeness.md",
+      "parentSpec": "vbrief/specification.vbrief.json",
+      "analysis": "UI gap analysis performed 2026-03-16 against all spec modules"
+    }
+  },
+  "plan": {
+    "id": "admin-ui-completeness",
+    "title": "DEFT Evolution — Admin UI Completeness & User-Facing Gaps",
+    "status": "approved",
+    "author": "gap-analysis-agent",
+    "narratives": {
+      "Overview": "Fills 15 UI gaps identified by cross-referencing all four spec modules (SPECIFICATION.md, SPECIFICATION-io-channels.md, SPECIFICATION-reporting.md, SPECIFICATION-rbac-user-tiers.md) against the current Next.js frontend. All backend endpoints already exist — this module adds only frontend pages and components to complete the specified surface area.",
+      "Background": "All backend phases have been fully implemented. However, several admin and user-facing pages specified in the original SPECIFICATION.md and io-channels spec were never built on the frontend. The gap analysis identified 5 high-severity missing pages (admin user detail, admin settings, admin security, upgrade flow, user profile), 5 medium gaps (RBAC policy UI, API/LLM usage stats, exports UI, widget preview, phone number management), and 5 minor issues (platform stats, per-org branding, chatbot widget verification, naming inconsistency, /reports redirect).",
+      "Constraint": "All backend endpoints already exist — no new Go code required unless a bug is found. The /upgrade page must use the existing POST /v1/me/upgrade endpoint. Admin pages must enforce platform_admin check via existing middleware. ≥85% test coverage on all new TypeScript code.",
+      "Risk": "User impersonation UI touches auth flow — ensure impersonation token is handled securely (no localStorage). Admin security pages display PII (IPs, login events) — RBAC check must be confirmed before render. Phone number purchase flow involves real billing — must be clearly labeled and confirmation-gated.",
+      "Alternative": "Considered splitting into separate frontend-only phases per domain (admin, user, channels). Rejected: all gaps are relatively small, single-phase keeps implementation simple and allows one agent to own the full surface area."
+    },
+    "metadata": {
+      "decisions": {
+        "scope": "frontend-only — all backend endpoints exist",
+        "test_strategy": "Vitest component tests + Playwright E2E for critical flows",
+        "coverage_gate": "≥85% on all new TypeScript code",
+        "admin_pages": "all under /admin/* with platform_admin enforcement via existing middleware",
+        "upgrade_page": "self-service stub calling POST /v1/me/upgrade — billing UI deferred",
+        "impersonation": "token stored only in memory / session, never localStorage",
+        "phone_numbers": "confirmation modal before purchase; clearly labeled as billable action",
+        "naming_fix": "rename tier4-home-screen.tsx and tier6-home-screen.tsx to tier-4-home.tsx and tier-6-home.tsx to match project hyphen convention"
+      }
+    },
+    "tags": ["frontend", "admin", "ui-gaps", "completeness"],
+    "items": [
+      {
+        "id": "gap-task-1",
+        "title": "Task 1: Admin User Detail Page",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Route /admin/users/[user_id] with full user detail: cross-org memberships table, ban/unban toggle, GDPR purge with confirmation dialog, and time-limited impersonation token button. Uses GET /v1/admin/users/{user_id}, POST /v1/admin/users/{user_id}/ban|unban|purge|impersonate."
+        },
+        "subItems": [
+          {"id": "gap-1.route", "title": "Create app/admin/users/[user_id]/page.tsx Server Component fetching user detail from GET /v1/admin/users/{user_id}", "status": "pending", "priority": "high"},
+          {"id": "gap-1.component", "title": "Create components/admin/user-detail.tsx: profile card, cross-org memberships table, ban status badge", "status": "pending", "priority": "high"},
+          {"id": "gap-1.actions", "title": "Ban/unban toggle button with reason input. GDPR purge button with confirmation dialog (type org name). Both audit-logged.", "status": "pending", "priority": "high"},
+          {"id": "gap-1.impersonation", "title": "Impersonate button: calls POST /v1/admin/users/{user_id}/impersonate, stores token in sessionStorage only, shows countdown timer (max 2h), clear button", "status": "pending", "priority": "high"},
+          {"id": "gap-1.link", "title": "Link from /admin/users list rows to /admin/users/[user_id]", "status": "pending", "priority": "high"},
+          {"id": "gap-1.tests", "title": "Vitest: user-detail renders membership table, ban button toggles state. E2E: navigate from user list to detail, ban user, confirm 403 on API call. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "gap-task-2",
+        "title": "Task 2: Admin System Settings Page",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Route /admin/settings with a JSON deep-merge editor for platform-wide settings. Uses GET/PATCH /v1/admin/settings. Displays current settings as a structured form (or editable JSON with validation). Add nav link in admin sidebar."
+        },
+        "subItems": [
+          {"id": "gap-2.route", "title": "Create app/admin/settings/page.tsx fetching current settings from GET /v1/admin/settings", "status": "pending", "priority": "high"},
+          {"id": "gap-2.component", "title": "Create components/admin/system-settings.tsx: key-value form with type inference (string/number/bool/JSON). Save calls PATCH /v1/admin/settings with deep-merge semantics.", "status": "pending", "priority": "high"},
+          {"id": "gap-2.nav", "title": "Add Settings link to admin sidebar nav section", "status": "pending", "priority": "medium"},
+          {"id": "gap-2.tests", "title": "Vitest: system-settings form renders and submits. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "gap-task-3",
+        "title": "Task 3: Admin Security Monitoring Page",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Route /admin/security with two tabs: Recent Logins (GET /v1/admin/security/recent-logins) and Failed Auths (GET /v1/admin/security/failed-auths). Both are paginated tables showing user ID, IP, user agent, timestamp. Add nav link in admin sidebar."
+        },
+        "subItems": [
+          {"id": "gap-3.route", "title": "Create app/admin/security/page.tsx with Tabs: Recent Logins | Failed Auths", "status": "pending", "priority": "high"},
+          {"id": "gap-3.component", "title": "Create components/admin/security-log.tsx: paginated table with user ID (links to user detail), IP, user agent, timestamp. Shared by both tabs.", "status": "pending", "priority": "high"},
+          {"id": "gap-3.nav", "title": "Add Security link to admin sidebar nav section", "status": "pending", "priority": "medium"},
+          {"id": "gap-3.tests", "title": "Vitest: security-log table renders rows correctly. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "gap-task-4",
+        "title": "Task 4: Self-Service Upgrade / Conversion Page",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Route /upgrade for the Tier 2 upgrade CTA destination. Displays plan comparison (Tier 2 vs Tier 3), calls POST /v1/me/upgrade on confirm. Billing is a stub (no real payment form yet — shows 'contact sales' or a trial activation). On success, invalidates tier cache and redirects to home. UpgradeCTAWidget should link here."
+        },
+        "subItems": [
+          {"id": "gap-4.route", "title": "Create app/upgrade/page.tsx: plan comparison layout, upgrade benefits list, CTA button", "status": "pending", "priority": "high"},
+          {"id": "gap-4.component", "title": "Create components/home/upgrade-page.tsx: plan comparison cards, feature checklist, UpgradeButton (calls POST /v1/me/upgrade, invalidates useTier cache, redirects)", "status": "pending", "priority": "high"},
+          {"id": "gap-4.cta-link", "title": "Update UpgradeCTAWidget href to point to /upgrade", "status": "pending", "priority": "high"},
+          {"id": "gap-4.tests", "title": "Vitest: upgrade-page renders plan cards, button calls upgrade endpoint. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "gap-task-5",
+        "title": "Task 5: User Profile / Account Settings Page",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Route /settings for the authenticated user. Sections: Profile (Clerk UserProfile component), Notification preferences (links to /notifications/preferences), API Keys (list/create/revoke personal API keys via existing /v1/auth/api-keys endpoints), current tier display. Accessible from topbar user menu."
+        },
+        "subItems": [
+          {"id": "gap-5.route", "title": "Create app/settings/page.tsx with sections: Profile, Notifications, API Keys, Current Tier", "status": "pending", "priority": "high"},
+          {"id": "gap-5.profile", "title": "Embed Clerk <UserProfile> component for name/email/password management", "status": "pending", "priority": "high"},
+          {"id": "gap-5.api-keys", "title": "Create components/settings/api-keys.tsx: list keys (masked), create new key (show once modal), revoke with confirmation", "status": "pending", "priority": "high"},
+          {"id": "gap-5.tier-display", "title": "Show current tier badge with label and description using useTier()", "status": "pending", "priority": "medium"},
+          {"id": "gap-5.topbar-link", "title": "Add Settings link to topbar user menu (Clerk UserButton afterSignOutUrl or custom menu item)", "status": "pending", "priority": "high"},
+          {"id": "gap-5.tests", "title": "Vitest: api-keys list renders, create modal shows key once, revoke removes row. Coverage ≥85%.", "status": "pending", "priority": "high"}
+        ]
+      },
+      {
+        "id": "gap-task-6",
+        "title": "Task 6: Admin RBAC Policy Management UI",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Route /admin/rbac-policy. Displays current RBAC policy (GET /v1/admin/rbac-policy) as an editable YAML/JSON form. PATCH saves updates. Dry-run preview: POST /v1/admin/rbac-policy/preview — allows input of (user_id, entity_id, entity_type) and shows resolved role without saving."
+        },
+        "subItems": [
+          {"id": "gap-6.route", "title": "Create app/admin/rbac-policy/page.tsx with policy editor and dry-run section", "status": "pending", "priority": "medium"},
+          {"id": "gap-6.component", "title": "Create components/admin/rbac-policy-editor.tsx: displays policy as structured form. Save calls PATCH.", "status": "pending", "priority": "medium"},
+          {"id": "gap-6.preview", "title": "Create components/admin/rbac-policy-preview.tsx: form inputs for user_id/entity/type, shows resolved role on submit via POST /v1/admin/rbac-policy/preview", "status": "pending", "priority": "medium"},
+          {"id": "gap-6.nav", "title": "Add RBAC Policy link to admin sidebar", "status": "pending", "priority": "low"},
+          {"id": "gap-6.tests", "title": "Vitest: editor renders policy, preview form submits and displays result. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "gap-task-7",
+        "title": "Task 7: Admin API Usage & LLM Usage Stats Pages",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Two new admin pages: /admin/api-usage (per-endpoint request counts for 24h/7d/30d from GET /v1/admin/api-usage) and /admin/llm-usage (LLM enrichment call log from GET /v1/admin/llm-usage). Both are read-only data tables with time-window selector."
+        },
+        "subItems": [
+          {"id": "gap-7.api-usage-route", "title": "Create app/admin/api-usage/page.tsx: table of endpoint × count with 24h/7d/30d toggle", "status": "pending", "priority": "medium"},
+          {"id": "gap-7.llm-usage-route", "title": "Create app/admin/llm-usage/page.tsx: table of LLM calls (model, tokens, latency, thread_id, timestamp)", "status": "pending", "priority": "medium"},
+          {"id": "gap-7.nav", "title": "Add API Usage and LLM Usage links to admin sidebar under a Monitoring section", "status": "pending", "priority": "low"},
+          {"id": "gap-7.tests", "title": "Vitest: both tables render with fixture data. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "gap-task-8",
+        "title": "Task 8: Admin Async Data Exports UI",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Route /admin/exports. POST /v1/admin/exports to trigger an async export (type: users|orgs|audit, format: csv|json). Polls GET /v1/admin/exports/{id} for status. Shows download link when complete. Lists recent exports."
+        },
+        "subItems": [
+          {"id": "gap-8.route", "title": "Create app/admin/exports/page.tsx: trigger form + export history table", "status": "pending", "priority": "medium"},
+          {"id": "gap-8.component", "title": "Create components/admin/export-manager.tsx: type/format selectors, Create Export button, status polling (every 3s while pending), download button when ready", "status": "pending", "priority": "medium"},
+          {"id": "gap-8.nav", "title": "Add Exports link to admin sidebar", "status": "pending", "priority": "low"},
+          {"id": "gap-8.tests", "title": "Vitest: export-manager renders form, polling updates status. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "gap-task-9",
+        "title": "Task 9: Admin Platform Stats Enhancement",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Enhance the existing /admin page (admin dashboard overview) to surface live platform stats from GET /v1/admin/stats: org count, user count, thread count, DB size, uptime. Display as MetricCard-style KPI row at the top of the admin dashboard."
+        },
+        "subItems": [
+          {"id": "gap-9.component", "title": "Create components/admin/platform-stats.tsx: KPI row of 5 metric cards (orgs, users, threads, db_size, uptime) from GET /v1/admin/stats", "status": "pending", "priority": "medium"},
+          {"id": "gap-9.integrate", "title": "Add PlatformStats component to top of app/admin/page.tsx above existing nav cards", "status": "pending", "priority": "medium"},
+          {"id": "gap-9.tests", "title": "Vitest: platform-stats renders all 5 metrics. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "gap-task-10",
+        "title": "Task 10: Chat Widget Preview & Embed Code Copy",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Enhance the existing channel config form for the chat channel (/admin/channels/chat) to add: (1) live widget preview panel showing the floating chat button + open panel with configured theme/greeting, (2) embed code snippet with copy-to-clipboard button, (3) test chat in preview mode (sends to a test thread, not production leads)."
+        },
+        "subItems": [
+          {"id": "gap-10.preview", "title": "Create components/admin/chat-widget-preview.tsx: renders an iframe or shadow-DOM simulation of the widget with live theme/greeting from form state", "status": "pending", "priority": "medium"},
+          {"id": "gap-10.embed-code", "title": "Add embed code snippet section to channel-config-form.tsx for chat type: generated from org embed key, copy button via navigator.clipboard", "status": "pending", "priority": "medium"},
+          {"id": "gap-10.integrate", "title": "Add preview + embed code panels to /admin/channels/chat config page layout", "status": "pending", "priority": "medium"},
+          {"id": "gap-10.tests", "title": "Vitest: preview renders with theme props, copy button calls clipboard API. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "gap-task-11",
+        "title": "Task 11: Phone Number Management UI",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Route /admin/channels/voice/numbers. Lists org's provisioned LiveKit phone numbers (GET /v1/orgs/{org}/channels/voice/numbers). Search available numbers by area code (POST .../numbers/search). Purchase flow with confirmation modal (POST .../numbers/purchase). Shows dispatch rule assignment status."
+        },
+        "subItems": [
+          {"id": "gap-11.route", "title": "Create app/admin/channels/voice/numbers/page.tsx", "status": "pending", "priority": "medium"},
+          {"id": "gap-11.component", "title": "Create components/admin/phone-number-manager.tsx: owned numbers list, search form (area code input), search results table, Purchase button with confirmation modal (clearly labeled as billable)", "status": "pending", "priority": "medium"},
+          {"id": "gap-11.link", "title": "Add link to phone numbers from /admin/channels/voice config page", "status": "pending", "priority": "low"},
+          {"id": "gap-11.tests", "title": "Vitest: phone-number-manager renders numbers list, search triggers API call, confirmation modal appears before purchase. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "gap-task-12",
+        "title": "Task 12: In-App Chatbot Widget Verification & Fix",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "The RBAC tiers spec requires a ChatbotWidget (async dynamic import, floating bubble → panel, visible on all pages). Phase 6 merged 'Tasks 6.3-6.6' suggesting 6.1 (ChatbotWidget component) and 6.2 (chat endpoint) may be incomplete. Verify presence, implement missing parts, ensure widget appears in app shell for all tiers."
+        },
+        "subItems": [
+          {"id": "gap-12.audit", "title": "Audit components/ for chatbot-widget.tsx. If missing, implement ChatbotWidget: dynamic import, Clerk anon token, floating bubble → expandable panel, POST /v1/chat/message", "status": "pending", "priority": "medium"},
+          {"id": "gap-12.shell", "title": "Add ChatbotWidget (dynamic import, no SSR) to AppLayoutWrapper so it appears on all authenticated and public pages", "status": "pending", "priority": "medium"},
+          {"id": "gap-12.tests", "title": "Vitest: ChatbotWidget renders bubble, opens panel on click, sends message. Coverage ≥85%.", "status": "pending", "priority": "medium"}
+        ]
+      },
+      {
+        "id": "gap-task-13",
+        "title": "Task 13: Minor Fixes — Naming & Redirect",
+        "status": "pending",
+        "priority": "low",
+        "narrative": {
+          "Overview": "Two small correctness fixes: (1) rename tier home screen files to match project hyphen convention; (2) verify /reports/page.tsx actually redirects to /reports/support."
+        },
+        "subItems": [
+          {"id": "gap-13.naming", "title": "Rename tier4-home-screen.tsx → tier-4-home.tsx and tier6-home-screen.tsx → tier-6-home.tsx (and test files). Update all imports.", "status": "pending", "priority": "low"},
+          {"id": "gap-13.redirect", "title": "Verify app/reports/page.tsx uses redirect('/reports/support'). If not, add it.", "status": "pending", "priority": "low"},
+          {"id": "gap-13.tests", "title": "Confirm all existing tests still pass after rename. Coverage ≥85%.", "status": "pending", "priority": "low"}
+        ]
+      }
+    ]
+  }
+}
