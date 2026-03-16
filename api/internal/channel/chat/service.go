@@ -267,9 +267,13 @@ func (s *Service) createChatThread(ctx context.Context, session *ChatSession) (*
 }
 
 // generateAIResponse uses the LLM provider to generate a response based on
-// conversation history and the org's system prompt.
+// conversation history, RAG context from global-docs, and the org's system prompt.
 func (s *Service) generateAIResponse(ctx context.Context, session *ChatSession, latestMessage string) (string, error) {
 	if s.llmProvider == nil {
+		// Stub mode: check global-docs for relevant content.
+		if ragContext := s.buildRAGContext(ctx, latestMessage); ragContext != "" {
+			return fmt.Sprintf("Based on our documentation: %s", ragContext), nil
+		}
 		return "Thank you for your message. How can I help you today?", nil
 	}
 
@@ -284,6 +288,9 @@ func (s *Service) generateAIResponse(ctx context.Context, session *ChatSession, 
 		fmt.Fprintf(&history, "%s: %s\n", role, msg.Body)
 	}
 
+	// Retrieve RAG context from global-docs.
+	ragSection := s.buildRAGContext(ctx, latestMessage)
+
 	// Get system prompt from channel config.
 	systemPrompt := "You are a helpful customer support assistant."
 	cfg, err := s.repo.FindChannelConfigByEmbedKey(ctx, session.EmbedKey)
@@ -294,17 +301,78 @@ func (s *Service) generateAIResponse(ctx context.Context, session *ChatSession, 
 		}
 	}
 
+	// Build the full prompt with RAG context.
+	var body strings.Builder
+	if ragSection != "" {
+		fmt.Fprintf(&body, "Relevant documentation:\n%s\n\n", ragSection)
+	}
+	fmt.Fprintf(&body, "Conversation history:\n%s\nLatest message: %s\n\nRespond helpfully to the visitor.", history.String(), latestMessage)
+
 	// Use Summarize as a general-purpose LLM call.
 	result, err := s.llmProvider.Summarize(ctx, llm.SummarizeInput{
 		ThreadID: session.ThreadID,
 		Title:    systemPrompt,
-		Body:     fmt.Sprintf("Conversation history:\n%s\nLatest message: %s\n\nRespond helpfully to the visitor.", history.String(), latestMessage),
+		Body:     body.String(),
 		Metadata: fmt.Sprintf(`{"session_id":%q}`, session.ID),
 	})
 	if err != nil {
 		return "", fmt.Errorf("LLM call failed: %w", err)
 	}
 	return result.Text, nil
+}
+
+// buildRAGContext retrieves relevant documentation from global-docs for the given query.
+// Returns a formatted string of relevant content, or empty string if no matches.
+func (s *Service) buildRAGContext(ctx context.Context, query string) string {
+	// Extract keywords from the query (use first few significant words).
+	words := strings.Fields(query)
+	if len(words) == 0 {
+		return ""
+	}
+
+	// Search for each significant word (skip very short words).
+	seen := make(map[string]bool)
+	var results []models.Thread
+	for _, word := range words {
+		if len(word) < 3 {
+			continue
+		}
+		matches, err := s.repo.SearchGlobalDocs(ctx, word, 3)
+		if err != nil || len(matches) == 0 {
+			continue
+		}
+		for _, m := range matches {
+			if !seen[m.ID] {
+				seen[m.ID] = true
+				results = append(results, m)
+			}
+		}
+		if len(results) >= 5 {
+			break
+		}
+	}
+
+	if len(results) == 0 {
+		return ""
+	}
+
+	// Format results as context.
+	var buf strings.Builder
+	for i, thread := range results {
+		if i >= 5 {
+			break
+		}
+		fmt.Fprintf(&buf, "- %s: %s\n", thread.Title, truncate(thread.Body, 200))
+	}
+	return buf.String()
+}
+
+// truncate shortens a string to maxLen characters, adding "..." if truncated.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 // emailRegex matches common email patterns.
@@ -352,6 +420,8 @@ func (s *Service) detectAndCaptureLead(ctx context.Context, session *ChatSession
 				visitor.ContactEmail, visitor.ContactName, visitor.ID)
 			_ = s.repo.UpdateThreadMetadata(ctx, session.ThreadID, meta)
 		}
+		// Create or update a lead record with anon_session_id linked to the visitor.
+		_, _ = s.repo.CreateOrUpdateLead(ctx, visitor.ID, visitor.ContactEmail, visitor.ContactName, "chatbot")
 	}
 }
 
@@ -411,8 +481,8 @@ func (s *Service) detectEscalation(message string) bool {
 	return false
 }
 
-// handleEscalation marks the session as escalated and broadcasts a notification
-// to the CRM agent dashboard via WebSocket.
+// handleEscalation marks the session as escalated, creates a support thread
+// in the global-support space, and broadcasts a notification to DEFT support.
 func (s *Service) handleEscalation(ctx context.Context, session *ChatSession) error {
 	session.Escalated = true
 	if err := s.repo.UpdateSession(ctx, session); err != nil {
@@ -425,6 +495,9 @@ func (s *Service) handleEscalation(ctx context.Context, session *ChatSession) er
 			time.Now().UTC().Format(time.RFC3339), session.VisitorID)
 		_ = s.repo.UpdateThreadMetadata(ctx, session.ThreadID, meta)
 	}
+
+	// Create a support thread in global-support space for DEFT support agents.
+	_ = s.createSupportThread(ctx, session)
 
 	// Broadcast escalation to CRM agents.
 	if s.wsHub != nil {
@@ -440,6 +513,71 @@ func (s *Service) handleEscalation(ctx context.Context, session *ChatSession) er
 		})
 	}
 	return nil
+}
+
+// createSupportThread creates a thread in the global-support space for DEFT agents.
+func (s *Service) createSupportThread(ctx context.Context, session *ChatSession) error {
+	board, err := s.repo.FindGlobalSupportBoard(ctx)
+	if err != nil || board == nil {
+		return fmt.Errorf("no global-support board available")
+	}
+
+	// Collect visitor info for the support thread.
+	visitorName := "Anonymous visitor"
+	visitorEmail := ""
+	visitor, err := s.repo.FindVisitor(ctx, session.VisitorID)
+	if err == nil && visitor != nil {
+		if visitor.ContactName != "" {
+			visitorName = visitor.ContactName
+		}
+		visitorEmail = visitor.ContactEmail
+	}
+
+	slugID, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("generating slug: %w", err)
+	}
+
+	thread := &models.Thread{
+		BoardID:    board.ID,
+		Title:      fmt.Sprintf("Chat escalation — %s", visitorName),
+		Slug:       fmt.Sprintf("escalation-%s", slugID.String()[:8]),
+		AuthorID:   "system",
+		ThreadType: models.ThreadTypeSupport,
+		Visibility: models.ThreadVisibilityDeftOnly,
+		OrgID:      &session.OrgID,
+		Metadata: fmt.Sprintf(
+			`{"source":"chat_escalation","session_id":%q,"visitor_id":%q,"visitor_email":%q,"original_thread_id":%q}`,
+			session.ID, session.VisitorID, visitorEmail, session.ThreadID),
+	}
+	if err := s.repo.CreateThread(ctx, thread); err != nil {
+		return fmt.Errorf("creating support thread: %w", err)
+	}
+
+	// Post the escalation context as first message.
+	body := fmt.Sprintf("Visitor %s has requested to speak with a human agent.", visitorName)
+	if visitorEmail != "" {
+		body += fmt.Sprintf("\nContact email: %s", visitorEmail)
+	}
+	body += fmt.Sprintf("\nOriginal chat session: %s", session.ID)
+
+	msg := &models.Message{
+		ThreadID: thread.ID,
+		Body:     body,
+		AuthorID: "system",
+		Type:     models.MessageTypeSystem,
+		Metadata: fmt.Sprintf(`{"source":"chat_escalation","session_id":%q}`, session.ID),
+	}
+	_ = s.repo.CreateMessage(ctx, msg)
+
+	return nil
+}
+
+// PromoteSession links an anonymous session to a newly registered user.
+// It updates the lead record's user_id and status from anonymous to registered.
+func (s *Service) PromoteSession(anonSessionID, userID string) error {
+	ctx := context.Background()
+	return s.repo.PromoteAnonymousSession(ctx, anonSessionID, userID)
 }
 
 // ResumeAfterEscalationTimeout is called when no human agent answers within

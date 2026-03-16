@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/abraderAI/crm-project/api/internal/auth"
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 	"github.com/abraderAI/crm-project/api/pkg/response"
 )
@@ -79,4 +80,47 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, resp)
+}
+
+// promoteRequest is the expected body for POST /v1/chat/promote.
+type promoteRequest struct {
+	AnonSessionID string `json:"anon_session_id"`
+	UserID        string `json:"user_id"`
+}
+
+// HandleSessionPromotion handles POST /v1/chat/promote.
+// Links an anonymous chatbot session to a newly registered user.
+// Updates the lead record status from anonymous to registered.
+func (h *Handler) HandleSessionPromotion(w http.ResponseWriter, r *http.Request) {
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	var req promoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierrors.BadRequest(w, "invalid request body")
+		return
+	}
+
+	if req.AnonSessionID == "" {
+		apierrors.ValidationError(w, "anon_session_id is required", []apierrors.FieldError{
+			{Field: "anon_session_id", Message: "must not be empty"},
+		})
+		return
+	}
+	if req.UserID == "" {
+		apierrors.ValidationError(w, "user_id is required", []apierrors.FieldError{
+			{Field: "user_id", Message: "must not be empty"},
+		})
+		return
+	}
+
+	if err := h.service.PromoteSession(req.AnonSessionID, req.UserID); err != nil {
+		apierrors.InternalError(w, "failed to promote session")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"status": "promoted"})
 }
