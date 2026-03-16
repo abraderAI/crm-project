@@ -14,6 +14,7 @@ import {
   Shield,
   Headset,
   TrendingUp,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ const ADMIN_TABS = [
   { href: "/admin/moderation", label: "Moderation", icon: Shield, exact: false },
   { href: "/admin/reports/support", label: "Support Reports", icon: Headset, exact: false },
   { href: "/admin/reports/sales", label: "Sales Reports", icon: TrendingUp, exact: false },
+  { href: "/admin/settings", label: "Settings", icon: Settings, exact: false },
 ] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }): React.ReactNode {

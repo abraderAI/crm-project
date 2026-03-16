@@ -16,6 +16,7 @@ vi.mock("./api-client", () => ({
 
 import {
   fetchAdminStats,
+  fetchAdminSettings,
   fetchAdminUsers,
   fetchPlatformAdmins,
   fetchAuditLog,
@@ -48,6 +49,18 @@ describe("admin-api", () => {
       mockGetToken.mockResolvedValue(null);
 
       await expect(fetchAdminStats()).rejects.toThrow("Unauthenticated");
+    });
+  });
+
+  describe("fetchAdminSettings", () => {
+    it("fetches settings with auth token", async () => {
+      const settings = { webhook_retry_policy: { max_attempts: 5 } };
+      mockServerFetch.mockResolvedValue(settings);
+
+      const result = await fetchAdminSettings();
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/settings", { token: "test-token" });
+      expect(result).toEqual(settings);
     });
   });
 

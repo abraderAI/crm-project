@@ -35,6 +35,12 @@ export async function fetchAdminStats(): Promise<PlatformStats> {
   return serverFetch<PlatformStats>("/admin/stats", { token });
 }
 
+/** Fetch all system settings as a key-value map. */
+export async function fetchAdminSettings(): Promise<Record<string, unknown>> {
+  const token = await getToken();
+  return serverFetch<Record<string, unknown>>("/admin/settings", { token });
+}
+
 /** Fetch paginated list of users. */
 export async function fetchAdminUsers(
   params?: Record<string, string>,
