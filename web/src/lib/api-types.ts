@@ -375,6 +375,12 @@ export interface FeatureFlag {
   updated_at: string;
 }
 
+/** Response from POST /v1/admin/users/{user_id}/impersonate. */
+export interface ImpersonationResponse {
+  token: string;
+  expires_at: string;
+}
+
 // --- IO Channel types (matching Go backend models/channel-config.go) ---
 
 /** Channel type enum matching backend channel types. */
