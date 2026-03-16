@@ -33,6 +33,7 @@ export default defineConfig({
         "src/app/reports/**",
         "src/app/upgrade/**",
         "src/app/search/**",
+        "src/app/settings/**",
         "src/components/thread/thread-create-view.tsx",
         "src/components/thread/thread-detail-view.tsx",
         "src/components/entities/entity-create-view.tsx",

@@ -235,6 +235,24 @@ export interface UserVoteStatus {
   voted: boolean;
 }
 
+/** Personal API key. */
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at?: string | null;
+}
+
+/** Response from creating a new API key (includes full key shown once). */
+export interface ApiKeyCreateResponse {
+  id: string;
+  name: string;
+  prefix: string;
+  key: string;
+  created_at: string;
+}
+
 /** Sort option for community thread lists. */
 export type ThreadSortOption = "votes" | "newest" | "oldest";
 
