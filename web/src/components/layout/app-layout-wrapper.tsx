@@ -3,10 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
+import dynamic from "next/dynamic";
 
 import { useNotifications } from "@/hooks/use-notifications";
 import { AppLayout } from "./app-layout";
 import type { NavItem } from "./sidebar";
+
+/** Dynamically load ChatbotWidget without SSR to avoid hydration mismatches. */
+const ChatbotWidget = dynamic(
+  () => import("@/components/chatbot-widget").then((mod) => mod.ChatbotWidget),
+  { ssr: false },
+);
 
 /** Top-level navigation items rendered in the sidebar. */
 const NAV_ITEMS: NavItem[] = [
@@ -60,6 +67,7 @@ export function AppLayoutWrapper({ children }: AppLayoutWrapperProps): React.Rea
       onSearch={handleSearch}
     >
       {children}
+      <ChatbotWidget />
     </AppLayout>
   );
 }

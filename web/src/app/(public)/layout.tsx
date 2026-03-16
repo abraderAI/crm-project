@@ -1,10 +1,17 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+/** Dynamically load ChatbotWidget without SSR to avoid hydration mismatches. */
+const ChatbotWidget = dynamic(
+  () => import("@/components/chatbot-widget").then((mod) => mod.ChatbotWidget),
+  { ssr: false },
+);
 
 /**
  * Public layout for unauthenticated routes (/docs, /forum).
  * No Clerk SignedIn wrapper — accessible to anonymous visitors.
- * Chatbot widget will be rendered here once Phase 6 is implemented.
+ * ChatbotWidget renders on public pages for anonymous support.
  */
 export default function PublicLayout({ children }: { children: ReactNode }): ReactNode {
   return (
@@ -26,7 +33,7 @@ export default function PublicLayout({ children }: { children: ReactNode }): Rea
         </nav>
       </header>
       <main className="mx-auto max-w-5xl p-6">{children}</main>
-      {/* ChatbotWidget will be added in Phase 6 */}
+      <ChatbotWidget />
     </div>
   );
 }
