@@ -212,7 +212,7 @@ describe("HomeLayoutEditor", () => {
     expect(screen.getByTestId("editor-reset")).toBeInTheDocument();
   });
 
-  it("calls onReset on reset click", async () => {
+  it("shows reset confirmation dialog on reset click", async () => {
     const user = userEvent.setup();
     render(
       <HomeLayoutEditor
@@ -225,10 +225,46 @@ describe("HomeLayoutEditor", () => {
     );
 
     await user.click(screen.getByTestId("editor-reset"));
+    expect(screen.getByTestId("reset-confirm-dialog")).toBeInTheDocument();
+  });
+
+  it("calls onReset after confirming the reset dialog", async () => {
+    const user = userEvent.setup();
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={true}
+      />,
+    );
+
+    await user.click(screen.getByTestId("editor-reset"));
+    await user.click(screen.getByTestId("reset-dialog-confirm"));
 
     await waitFor(() => {
       expect(mockReset).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("does not call onReset when cancel is clicked in dialog", async () => {
+    const user = userEvent.setup();
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={true}
+      />,
+    );
+
+    await user.click(screen.getByTestId("editor-reset"));
+    await user.click(screen.getByTestId("reset-dialog-cancel"));
+
+    expect(mockReset).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("reset-confirm-dialog")).not.toBeInTheDocument();
   });
 
   it("has accessible aria-labels for toggle buttons", () => {
@@ -262,5 +298,155 @@ describe("HomeLayoutEditor", () => {
 
     expect(screen.getByTestId("move-up-b")).toHaveAttribute("aria-label", "Move Widget B up");
     expect(screen.getByTestId("move-down-b")).toHaveAttribute("aria-label", "Move Widget B down");
+  });
+
+  it("renders drag handles for each widget", () => {
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={false}
+      />,
+    );
+
+    expect(screen.getByTestId("drag-handle-a")).toBeInTheDocument();
+    expect(screen.getByTestId("drag-handle-b")).toBeInTheDocument();
+    expect(screen.getByTestId("drag-handle-c")).toBeInTheDocument();
+  });
+
+  it("has listbox role on the widget list", () => {
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={false}
+      />,
+    );
+
+    const list = screen.getByTestId("editor-widget-list");
+    expect(list).toHaveAttribute("role", "listbox");
+    expect(list).toHaveAttribute("aria-label", "Widget order");
+  });
+
+  it("has option role on each widget item", () => {
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={false}
+      />,
+    );
+
+    const items = screen.getByTestId("editor-widget-list").querySelectorAll('[role="option"]');
+    expect(items).toHaveLength(3);
+  });
+
+  it("items are draggable", () => {
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={false}
+      />,
+    );
+
+    const item = screen.getByTestId("editor-item-a");
+    expect(item).toHaveAttribute("draggable", "true");
+  });
+
+  it("navigates focus with ArrowDown key", async () => {
+    const user = userEvent.setup();
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={false}
+      />,
+    );
+
+    // Focus first item.
+    const firstItem = screen.getByTestId("editor-item-a");
+    firstItem.focus();
+    await user.keyboard("{ArrowDown}");
+
+    // Second item should now have aria-selected true.
+    await waitFor(() => {
+      expect(screen.getByTestId("editor-item-b")).toHaveAttribute("aria-selected", "true");
+    });
+  });
+
+  it("navigates focus with ArrowUp key", async () => {
+    const user = userEvent.setup();
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={false}
+      />,
+    );
+
+    // Focus second item.
+    const secondItem = screen.getByTestId("editor-item-b");
+    secondItem.focus();
+    await user.keyboard("{ArrowUp}");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("editor-item-a")).toHaveAttribute("aria-selected", "true");
+    });
+  });
+
+  it("toggles visibility with Space key", async () => {
+    const user = userEvent.setup();
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={false}
+      />,
+    );
+
+    const item = screen.getByTestId("editor-item-a");
+    item.focus();
+    await user.keyboard(" ");
+
+    // After Space, the toggle for a should reflect hidden.
+    await waitFor(() => {
+      expect(screen.getByTestId("toggle-a")).toHaveAttribute("aria-label", "Show Widget A");
+    });
+  });
+
+  it("toggles visibility with Enter key", async () => {
+    const user = userEvent.setup();
+    render(
+      <HomeLayoutEditor
+        layout={makeLayout()}
+        registry={testRegistry}
+        onSave={mockSave}
+        onReset={mockReset}
+        isCustomized={false}
+      />,
+    );
+
+    const item = screen.getByTestId("editor-item-a");
+    item.focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toggle-a")).toHaveAttribute("aria-label", "Show Widget A");
+    });
   });
 });
