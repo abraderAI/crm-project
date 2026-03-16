@@ -390,6 +390,41 @@ export interface SecurityLogEntry {
   timestamp: string;
 }
 
+// --- Admin usage types (matching Go backend admin package) ---
+
+/** Time window for API usage queries. */
+export type ApiUsagePeriod = "24h" | "7d" | "30d";
+
+/** Single endpoint usage entry from GET /v1/admin/api-usage. */
+export interface ApiUsageEntry {
+  endpoint: string;
+  method: string;
+  count: number;
+}
+
+/** API usage response envelope. */
+export interface ApiUsageResponse {
+  period: string;
+  data: ApiUsageEntry[];
+}
+
+/** Single LLM usage log entry from GET /v1/admin/llm-usage. */
+export interface LlmUsageEntry {
+  id: string;
+  endpoint: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  duration_ms: number;
+  created_at: string;
+}
+
+/** LLM usage response envelope. */
+export interface LlmUsageResponse {
+  data: LlmUsageEntry[];
+  message: string;
+}
+
 // --- IO Channel types (matching Go backend models/channel-config.go) ---
 
 // --- RBAC Policy types (matching Go backend admin/rbac-override.go) ---

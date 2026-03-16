@@ -1,6 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 
 import type {
+  ApiUsagePeriod,
+  ApiUsageResponse,
   AuditEntry,
   BillingInfo,
   ChannelConfig,
@@ -10,6 +12,7 @@ import type {
   EffectivePolicy,
   FeatureFlag,
   Flag,
+  LlmUsageResponse,
   OrgMembership,
   PaginatedResponse,
   PlatformAdmin,
@@ -19,7 +22,13 @@ import type {
   WebhookDelivery,
   WebhookSubscription,
 } from "./api-types";
-import { serverFetch, serverFetchPaginated } from "./api-client";
+import {
+  buildHeaders,
+  buildUrl,
+  parseResponse,
+  serverFetch,
+  serverFetchPaginated,
+} from "./api-client";
 
 /** Get a Clerk JWT token for server-side requests. Throws if unauthenticated. */
 async function getToken(): Promise<string> {
@@ -141,6 +150,26 @@ export async function fetchFailedAuths(
 export async function fetchRBACPolicy(): Promise<EffectivePolicy> {
   const token = await getToken();
   return serverFetch<EffectivePolicy>("/admin/rbac-policy", { token });
+}
+
+// --- Admin usage API functions ---
+
+/** Fetch API usage stats for the given time period (server-side). */
+export async function fetchApiUsage(period: ApiUsagePeriod = "24h"): Promise<ApiUsageResponse> {
+  const token = await getToken();
+  const url = buildUrl("/admin/api-usage", { period });
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<ApiUsageResponse>(response);
+}
+
+/** Fetch LLM usage log entries (server-side). */
+export async function fetchLlmUsage(): Promise<LlmUsageResponse> {
+  const token = await getToken();
+  return serverFetch<LlmUsageResponse>("/admin/llm-usage", { token });
 }
 
 // --- IO Channel API functions ---

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   BarChart3,
+  BrainCircuit,
   Users,
   ScrollText,
   ToggleRight,
@@ -34,6 +36,8 @@ const ADMIN_TABS = [
   { href: "/admin/rbac-policy", label: "RBAC Policy", icon: ShieldCheck, exact: false },
   { href: "/admin/reports/support", label: "Support Reports", icon: Headset, exact: false },
   { href: "/admin/reports/sales", label: "Sales Reports", icon: TrendingUp, exact: false },
+  { href: "/admin/api-usage", label: "API Usage", icon: Activity, exact: false },
+  { href: "/admin/llm-usage", label: "LLM Usage", icon: BrainCircuit, exact: false },
   { href: "/admin/settings", label: "Settings", icon: Settings, exact: false },
 ] as const;
 
