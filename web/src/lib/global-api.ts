@@ -1,0 +1,124 @@
+import type { PaginatedResponse, Thread } from "./api-types";
+import { buildHeaders, buildUrl, parseResponse, clientMutate } from "./api-client";
+
+/** Global space slugs. */
+export const GLOBAL_SPACES = {
+  DOCS: "global-docs",
+  FORUM: "global-forum",
+  SUPPORT: "global-support",
+  LEADS: "global-leads",
+} as const;
+
+/** Parameters for listing global space threads. */
+export interface GlobalThreadParams {
+  limit?: number;
+  cursor?: string;
+  thread_type?: string;
+}
+
+/**
+ * Fetch recent public threads from a global space.
+ * No auth required for public spaces (global-docs, global-forum).
+ */
+export async function fetchGlobalThreads(
+  spaceSlug: string,
+  params?: GlobalThreadParams,
+  token?: string | null,
+): Promise<PaginatedResponse<Thread>> {
+  const queryParams: Record<string, string> = {};
+  if (params?.limit) queryParams["limit"] = String(params.limit);
+  if (params?.cursor) queryParams["cursor"] = params.cursor;
+  if (params?.thread_type) queryParams["thread_type"] = params.thread_type;
+
+  const url = buildUrl(`/global-spaces/${spaceSlug}/threads`, queryParams);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<PaginatedResponse<Thread>>(response);
+}
+
+/**
+ * Fetch threads authored or commented on by the current user in global-forum.
+ * Requires authentication.
+ */
+export async function fetchUserForumActivity(
+  token: string,
+  params?: GlobalThreadParams,
+): Promise<PaginatedResponse<Thread>> {
+  const queryParams: Record<string, string> = { mine: "true" };
+  if (params?.limit) queryParams["limit"] = String(params.limit);
+  if (params?.cursor) queryParams["cursor"] = params.cursor;
+
+  const url = buildUrl(`/global-spaces/${GLOBAL_SPACES.FORUM}/threads`, queryParams);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<PaginatedResponse<Thread>>(response);
+}
+
+/**
+ * Fetch the current user's support tickets from global-support.
+ * Requires authentication. Returns tickets filtered to current user.
+ */
+export async function fetchUserSupportTickets(
+  token: string,
+  params?: GlobalThreadParams,
+): Promise<PaginatedResponse<Thread>> {
+  const queryParams: Record<string, string> = { mine: "true" };
+  if (params?.limit) queryParams["limit"] = String(params.limit);
+  if (params?.cursor) queryParams["cursor"] = params.cursor;
+
+  const url = buildUrl(`/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads`, queryParams);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<PaginatedResponse<Thread>>(response);
+}
+
+/** Values for creating a forum post. */
+export interface CreateForumPostValues {
+  title: string;
+  body?: string;
+}
+
+/**
+ * Create a new forum thread in global-forum. Tier 2+ only.
+ * Backend enforces tier restriction.
+ */
+export async function createForumThread(
+  token: string,
+  values: CreateForumPostValues,
+): Promise<Thread> {
+  return clientMutate<Thread>("POST", `/global-spaces/${GLOBAL_SPACES.FORUM}/threads`, {
+    token,
+    body: values,
+  });
+}
+
+/** Values for creating a support ticket. */
+export interface CreateSupportTicketValues {
+  title: string;
+  body?: string;
+  org_id?: string | null;
+}
+
+/**
+ * Create a new support ticket in global-support. Tier 2+ only.
+ * If user belongs to an org, org_id is set for scoping.
+ * Backend enforces tier restriction.
+ */
+export async function createSupportTicket(
+  token: string,
+  values: CreateSupportTicketValues,
+): Promise<Thread> {
+  return clientMutate<Thread>("POST", `/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads`, {
+    token,
+    body: values,
+  });
+}
