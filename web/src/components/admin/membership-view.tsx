@@ -36,20 +36,26 @@ export function MembershipView({ initialMembers }: MembershipViewProps): React.R
     async (membershipId: string, newRole: Role) => {
       const token = await getToken();
       if (!token) return;
-      const updated = await changeMembershipRole(token, membershipId, newRole);
+      // Backend uses the member's user_id as path param, not the membership UUID.
+      const member = members.find((m) => m.id === membershipId);
+      if (!member) return;
+      const updated = await changeMembershipRole(token, member.user_id, newRole);
       setMembers((prev) => prev.map((m) => (m.id === membershipId ? toItem(updated) : m)));
     },
-    [getToken],
+    [getToken, members],
   );
 
   const handleRemove = useCallback(
     async (membershipId: string) => {
       const token = await getToken();
       if (!token) return;
-      await removeMembership(token, membershipId);
+      // Backend uses the member's user_id as path param, not the membership UUID.
+      const member = members.find((m) => m.id === membershipId);
+      if (!member) return;
+      await removeMembership(token, member.user_id);
       setMembers((prev) => prev.filter((m) => m.id !== membershipId));
     },
-    [getToken],
+    [getToken, members],
   );
 
   return (

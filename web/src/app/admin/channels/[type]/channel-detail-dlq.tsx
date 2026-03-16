@@ -18,7 +18,8 @@ export function ChannelDetailDLQ({ org, channelType }: ChannelDetailDLQProps): R
   const fetchEvents = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
-      const url = buildUrl(`/orgs/${org}/channels/${channelType}/dlq`);
+      // channel_type is passed as a query param; no per-type path segment in backend.
+      const url = buildUrl(`/orgs/${org}/channels/dlq`, { channel_type: channelType });
       const response = await fetch(url, {
         method: "GET",
         headers: buildHeaders(),
@@ -39,27 +40,27 @@ export function ChannelDetailDLQ({ org, channelType }: ChannelDetailDLQProps): R
   const handleRetry = useCallback(
     async (eventId: string): Promise<void> => {
       try {
-        const url = buildUrl(`/orgs/${org}/channels/${channelType}/dlq/${eventId}/retry`);
+        const url = buildUrl(`/orgs/${org}/channels/dlq/${eventId}/retry`);
         await fetch(url, { method: "POST", headers: buildHeaders() });
         await fetchEvents();
       } catch {
         // Silently handle retry errors.
       }
     },
-    [org, channelType, fetchEvents],
+    [org, fetchEvents],
   );
 
   const handleDismiss = useCallback(
     async (eventId: string): Promise<void> => {
       try {
-        const url = buildUrl(`/orgs/${org}/channels/${channelType}/dlq/${eventId}/dismiss`);
+        const url = buildUrl(`/orgs/${org}/channels/dlq/${eventId}/dismiss`);
         await fetch(url, { method: "POST", headers: buildHeaders() });
         await fetchEvents();
       } catch {
         // Silently handle dismiss errors.
       }
     },
-    [org, channelType, fetchEvents],
+    [org, fetchEvents],
   );
 
   return (

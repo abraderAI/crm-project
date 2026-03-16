@@ -134,7 +134,7 @@ describe("admin-api", () => {
   });
 
   describe("fetchBillingInfo", () => {
-    it("fetches billing info with auth token", async () => {
+    it("fetches billing info from org-scoped endpoint", async () => {
       const billing = {
         org_id: "org1",
         tier: "pro",
@@ -145,13 +145,15 @@ describe("admin-api", () => {
 
       const result = await fetchBillingInfo();
 
-      expect(mockServerFetch).toHaveBeenCalledWith("/admin/billing", { token: "test-token" });
+      expect(mockServerFetch).toHaveBeenCalledWith("/orgs/default/billing", {
+        token: "test-token",
+      });
       expect(result).toEqual(billing);
     });
   });
 
   describe("fetchWebhookSubscriptions", () => {
-    it("fetches paginated webhook subscriptions", async () => {
+    it("fetches paginated webhook subscriptions from org-scoped endpoint", async () => {
       const response = {
         data: [{ id: "ws1", url: "https://example.com/hook" }],
         page_info: { has_more: false },
@@ -160,7 +162,7 @@ describe("admin-api", () => {
 
       const result = await fetchWebhookSubscriptions();
 
-      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/admin/webhooks", undefined, {
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/orgs/default/webhooks", undefined, {
         token: "test-token",
       });
       expect(result).toEqual(response);
@@ -168,7 +170,7 @@ describe("admin-api", () => {
   });
 
   describe("fetchWebhookDeliveries", () => {
-    it("fetches paginated webhook deliveries", async () => {
+    it("fetches paginated webhook deliveries from platform-wide admin endpoint", async () => {
       const response = {
         data: [{ id: "d1", event_type: "message.created" }],
         page_info: { has_more: true },
@@ -178,7 +180,7 @@ describe("admin-api", () => {
       const result = await fetchWebhookDeliveries({ cursor: "abc" });
 
       expect(mockServerFetchPaginated).toHaveBeenCalledWith(
-        "/admin/webhook-deliveries",
+        "/admin/webhooks/deliveries",
         { cursor: "abc" },
         { token: "test-token" },
       );
@@ -187,7 +189,7 @@ describe("admin-api", () => {
   });
 
   describe("fetchMemberships", () => {
-    it("fetches paginated memberships", async () => {
+    it("fetches paginated memberships from org-scoped endpoint", async () => {
       const response = {
         data: [{ id: "m1", user_id: "u1", role: "admin", org_id: "org1" }],
         page_info: { has_more: false },
@@ -196,7 +198,7 @@ describe("admin-api", () => {
 
       const result = await fetchMemberships();
 
-      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/admin/memberships", undefined, {
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/orgs/default/members", undefined, {
         token: "test-token",
       });
       expect(result).toEqual(response);
@@ -204,7 +206,7 @@ describe("admin-api", () => {
   });
 
   describe("fetchFlags", () => {
-    it("fetches paginated flags", async () => {
+    it("fetches paginated flags from org-scoped endpoint", async () => {
       const response = {
         data: [{ id: "f1", thread_id: "t1", reason: "Spam", status: "pending" }],
         page_info: { has_more: false },
@@ -213,20 +215,20 @@ describe("admin-api", () => {
 
       const result = await fetchFlags();
 
-      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/admin/flags", undefined, {
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/orgs/default/flags", undefined, {
         token: "test-token",
       });
       expect(result).toEqual(response);
     });
 
-    it("passes params through", async () => {
+    it("passes params through with explicit org", async () => {
       const response = { data: [], page_info: { has_more: false } };
       mockServerFetchPaginated.mockResolvedValue(response);
 
-      await fetchFlags({ status: "pending" });
+      await fetchFlags("default", { status: "pending" });
 
       expect(mockServerFetchPaginated).toHaveBeenCalledWith(
-        "/admin/flags",
+        "/orgs/default/flags",
         { status: "pending" },
         { token: "test-token" },
       );

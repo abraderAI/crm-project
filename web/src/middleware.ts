@@ -17,8 +17,7 @@ const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 /** API routes restricted to DEFT org members. */
 const isGlobalLeadsRoute = createRouteMatcher(["/api/v1/global-leads(.*)"]);
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 /**
  * Resolves the current user's tier by calling the backend tier endpoint.
@@ -61,17 +60,13 @@ export default clerkMiddleware(async (auth, request) => {
 
     // Admin routes: redirect non-platform-admins to home.
     if (isAdminRoute(request) && tier !== 6) {
-      console.warn(
-        `[middleware] Non-admin access attempt to ${pathname} (tier=${tier})`,
-      );
+      console.warn(`[middleware] Non-admin access attempt to ${pathname} (tier=${tier})`);
       return NextResponse.redirect(new URL("/", request.url));
     }
 
     // Global leads API: reject non-DEFT org users with 403.
     if (isGlobalLeadsRoute(request) && tier !== 4 && tier !== 6) {
-      console.warn(
-        `[middleware] Non-DEFT access attempt to ${pathname} (tier=${tier})`,
-      );
+      console.warn(`[middleware] Non-DEFT access attempt to ${pathname} (tier=${tier})`);
       return NextResponse.json(
         {
           type: "about:blank",

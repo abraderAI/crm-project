@@ -150,10 +150,10 @@ export function ThreadDetailView({
     if (revisionsLoaded) return;
     const token = await getToken();
     if (!token) return;
-    const { data } = await fetchThreadRevisions(token, orgSlug, spaceSlug, boardSlug, threadSlug);
+    const { data } = await fetchThreadRevisions(token, "thread", thread.id);
     setRevisions(data.map(toRevision));
     setRevisionsLoaded(true);
-  }, [getToken, orgSlug, spaceSlug, boardSlug, threadSlug, revisionsLoaded]);
+  }, [getToken, thread.id, revisionsLoaded]);
 
   const loadFiles = useCallback(async (): Promise<void> => {
     if (filesLoaded) return;

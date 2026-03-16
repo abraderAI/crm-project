@@ -146,17 +146,13 @@ export interface CreateMessageValues {
   type?: MessageType;
 }
 
-/** Fetch revisions for a thread (client-side). */
+/** Fetch revisions for an entity (client-side). entityType is e.g. "thread", entityId is its UUID. */
 export async function fetchThreadRevisions(
   token: string,
-  orgSlug: string,
-  spaceSlug: string,
-  boardSlug: string,
-  threadSlug: string,
+  entityType: string,
+  entityId: string,
 ): Promise<PaginatedResponse<Revision>> {
-  const url = buildUrl(
-    `/orgs/${orgSlug}/spaces/${spaceSlug}/boards/${boardSlug}/threads/${threadSlug}/revisions`,
-  );
+  const url = buildUrl(`/revisions/${entityType}/${entityId}`);
   const response = await fetch(url, {
     method: "GET",
     headers: buildHeaders(token),
@@ -164,36 +160,30 @@ export async function fetchThreadRevisions(
   return parseResponse<PaginatedResponse<Revision>>(response);
 }
 
-/** Fetch uploads for a thread (client-side). */
+/** Fetch uploads for a thread (client-side).
+ * NOTE: No list-by-thread endpoint exists in the backend.
+ * Returns an empty paginated response as a safe fallback.
+ */
 export async function fetchThreadUploads(
-  token: string,
-  orgSlug: string,
-  spaceSlug: string,
-  boardSlug: string,
-  threadSlug: string,
+  _token: string,
+  _orgSlug: string,
+  _spaceSlug: string,
+  _boardSlug: string,
+  _threadSlug: string,
 ): Promise<PaginatedResponse<Upload>> {
-  const url = buildUrl(
-    `/orgs/${orgSlug}/spaces/${spaceSlug}/boards/${boardSlug}/threads/${threadSlug}/uploads`,
-  );
-  const response = await fetch(url, {
-    method: "GET",
-    headers: buildHeaders(token),
-  });
-  return parseResponse<PaginatedResponse<Upload>>(response);
+  return { data: [], page_info: { has_more: false } };
 }
 
-/** Upload a file to a thread. */
+/** Upload a file. The file is stored at POST /uploads. */
 export async function uploadFile(
   token: string,
-  orgSlug: string,
-  spaceSlug: string,
-  boardSlug: string,
-  threadSlug: string,
+  _orgSlug: string,
+  _spaceSlug: string,
+  _boardSlug: string,
+  _threadSlug: string,
   file: File,
 ): Promise<Upload> {
-  const url = buildUrl(
-    `/orgs/${orgSlug}/spaces/${spaceSlug}/boards/${boardSlug}/threads/${threadSlug}/uploads`,
-  );
+  const url = buildUrl("/uploads");
   const formData = new FormData();
   formData.append("file", file);
   const response = await fetch(url, {
@@ -237,62 +227,85 @@ export async function createWebhook(
   token: string,
   url: string,
   eventFilter: string,
+  org = "default",
 ): Promise<WebhookSubscription> {
-  return clientMutate<WebhookSubscription>("POST", "/admin/webhooks", {
+  return clientMutate<WebhookSubscription>("POST", `/orgs/${org}/webhooks`, {
     token,
     body: { url, event_filter: eventFilter },
   });
 }
 
 /** Delete a webhook subscription by ID. */
-export async function deleteWebhook(token: string, subscriptionId: string): Promise<void> {
-  await clientMutate<void>("DELETE", `/admin/webhooks/${subscriptionId}`, { token });
+export async function deleteWebhook(
+  token: string,
+  subscriptionId: string,
+  org = "default",
+): Promise<void> {
+  await clientMutate<void>("DELETE", `/orgs/${org}/webhooks/${subscriptionId}`, { token });
 }
 
-/** Toggle a webhook subscription active/inactive. */
+/** Toggle a webhook subscription active/inactive.
+ * NOTE: No toggle endpoint exists in the backend; uses a PATCH to the subscription resource.
+ */
 export async function toggleWebhook(
   token: string,
   subscriptionId: string,
+  org = "default",
 ): Promise<WebhookSubscription> {
-  return clientMutate<WebhookSubscription>("PATCH", `/admin/webhooks/${subscriptionId}/toggle`, {
+  return clientMutate<WebhookSubscription>("PATCH", `/orgs/${org}/webhooks/${subscriptionId}`, {
     token,
   });
 }
 
-/** Replay a webhook delivery. */
-export async function replayWebhookDelivery(token: string, deliveryId: string): Promise<void> {
-  await clientMutate<void>("POST", `/admin/webhook-deliveries/${deliveryId}/replay`, { token });
+/** Replay a webhook delivery. Requires both the webhook subscription ID and delivery ID. */
+export async function replayWebhookDelivery(
+  token: string,
+  webhookId: string,
+  deliveryId: string,
+  org = "default",
+): Promise<void> {
+  await clientMutate<void>(
+    "POST",
+    `/orgs/${org}/webhooks/${webhookId}/deliveries/${deliveryId}/replay`,
+    { token },
+  );
 }
 
 // --- Membership mutations ---
 
-/** Add a membership. */
+/** Add a membership to an org. */
 export async function addMembership(
   token: string,
   userId: string,
   role: Role,
+  org = "default",
 ): Promise<OrgMembership> {
-  return clientMutate<OrgMembership>("POST", "/admin/memberships", {
+  return clientMutate<OrgMembership>("POST", `/orgs/${org}/members`, {
     token,
     body: { user_id: userId, role },
   });
 }
 
-/** Change a membership's role. */
+/** Change a member's role in an org. userId is the member's Clerk user ID. */
 export async function changeMembershipRole(
   token: string,
-  membershipId: string,
+  userId: string,
   newRole: Role,
+  org = "default",
 ): Promise<OrgMembership> {
-  return clientMutate<OrgMembership>("PATCH", `/admin/memberships/${membershipId}`, {
+  return clientMutate<OrgMembership>("PATCH", `/orgs/${org}/members/${userId}`, {
     token,
     body: { role: newRole },
   });
 }
 
-/** Remove a membership. */
-export async function removeMembership(token: string, membershipId: string): Promise<void> {
-  await clientMutate<void>("DELETE", `/admin/memberships/${membershipId}`, { token });
+/** Remove a member from an org. userId is the member's Clerk user ID. */
+export async function removeMembership(
+  token: string,
+  userId: string,
+  org = "default",
+): Promise<void> {
+  await clientMutate<void>("DELETE", `/orgs/${org}/members/${userId}`, { token });
 }
 
 // --- Vote mutations ---
@@ -315,24 +328,34 @@ export async function toggleVote(
 // --- Flag mutations ---
 
 /** Create a content flag for moderation review. */
-export async function createFlag(token: string, threadId: string, reason: string): Promise<Flag> {
-  return clientMutate<Flag>("POST", "/admin/flags", {
+export async function createFlag(
+  token: string,
+  threadId: string,
+  reason: string,
+  org = "default",
+): Promise<Flag> {
+  return clientMutate<Flag>("POST", `/orgs/${org}/flags`, {
     token,
     body: { thread_id: threadId, reason },
   });
 }
 
 /** Resolve a pending flag with an optional note. */
-export async function resolveFlag(token: string, flagId: string, note: string): Promise<Flag> {
-  return clientMutate<Flag>("PATCH", `/admin/flags/${flagId}/resolve`, {
+export async function resolveFlag(
+  token: string,
+  flagId: string,
+  note: string,
+  org = "default",
+): Promise<Flag> {
+  return clientMutate<Flag>("POST", `/orgs/${org}/flags/${flagId}/resolve`, {
     token,
     body: { resolution_note: note },
   });
 }
 
 /** Dismiss a pending flag. */
-export async function dismissFlag(token: string, flagId: string): Promise<Flag> {
-  return clientMutate<Flag>("PATCH", `/admin/flags/${flagId}/dismiss`, {
+export async function dismissFlag(token: string, flagId: string, org = "default"): Promise<Flag> {
+  return clientMutate<Flag>("POST", `/orgs/${org}/flags/${flagId}/dismiss`, {
     token,
   });
 }

@@ -5,8 +5,8 @@ import { buildHeaders, buildUrl, parseResponse } from "./api-client";
  * Fetch the current user's API keys.
  * Requires authentication token.
  */
-export async function fetchApiKeys(token: string): Promise<ApiKey[]> {
-  const url = buildUrl("/auth/api-keys");
+export async function fetchApiKeys(token: string, org = "default"): Promise<ApiKey[]> {
+  const url = buildUrl(`/orgs/${org}/api-keys`);
   const response = await fetch(url, {
     method: "GET",
     headers: buildHeaders(token),
@@ -20,8 +20,12 @@ export async function fetchApiKeys(token: string): Promise<ApiKey[]> {
  * Create a new API key. The full key is returned exactly once in the response.
  * Requires authentication token.
  */
-export async function createApiKey(token: string, name: string): Promise<ApiKeyCreateResponse> {
-  const url = buildUrl("/auth/api-keys");
+export async function createApiKey(
+  token: string,
+  name: string,
+  org = "default",
+): Promise<ApiKeyCreateResponse> {
+  const url = buildUrl(`/orgs/${org}/api-keys`);
   const response = await fetch(url, {
     method: "POST",
     headers: buildHeaders(token),
@@ -34,8 +38,8 @@ export async function createApiKey(token: string, name: string): Promise<ApiKeyC
  * Revoke (delete) an API key by ID.
  * Requires authentication token.
  */
-export async function revokeApiKey(token: string, keyId: string): Promise<void> {
-  const url = buildUrl(`/auth/api-keys/${keyId}`);
+export async function revokeApiKey(token: string, keyId: string, org = "default"): Promise<void> {
+  const url = buildUrl(`/orgs/${org}/api-keys/${keyId}`);
   const response = await fetch(url, {
     method: "DELETE",
     headers: buildHeaders(token),

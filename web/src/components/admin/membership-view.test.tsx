@@ -77,21 +77,27 @@ describe("MembershipView", () => {
     expect(mockAddMembership).toHaveBeenCalledWith("test-token", "user-dave", "moderator");
   });
 
-  it("calls changeMembershipRole via entity-api on role change", async () => {
+  it("calls changeMembershipRole via entity-api on role change using user_id", async () => {
     const user = userEvent.setup();
     render(<MembershipView initialMembers={[member1]} />);
 
     await user.selectOptions(screen.getByTestId("member-role-m1"), "contributor");
 
-    expect(mockChangeMembershipRole).toHaveBeenCalledWith("test-token", "m1", "contributor");
+    // member1.user_id = "user-alice" (backend uses user_id, not membership id)
+    expect(mockChangeMembershipRole).toHaveBeenCalledWith(
+      "test-token",
+      "user-alice",
+      "contributor",
+    );
   });
 
-  it("calls removeMembership via entity-api on remove", async () => {
+  it("calls removeMembership via entity-api on remove using user_id", async () => {
     const user = userEvent.setup();
     render(<MembershipView initialMembers={[member1]} />);
 
     await user.click(screen.getByTestId("member-remove-m1"));
 
-    expect(mockRemoveMembership).toHaveBeenCalledWith("test-token", "m1");
+    // member1.user_id = "user-alice" (backend uses user_id, not membership id)
+    expect(mockRemoveMembership).toHaveBeenCalledWith("test-token", "user-alice");
   });
 });

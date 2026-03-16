@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { Phone } from "lucide-react";
-import { fetchChannelConfig, fetchChannelHealth } from "@/lib/admin-api";
+import { fetchChannelConfig, fetchChannelHealth, putChannelConfig } from "@/lib/admin-api";
 import { ChannelConfigForm } from "@/components/admin/channel-config-form";
 import { ChannelHealthBadge } from "@/components/admin/channel-health-badge";
 import { ChatChannelPanel } from "@/components/admin/chat-channel-panel";
@@ -81,8 +82,13 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
             <ChannelConfigForm
               channelType={channelType}
               initialConfig={configData}
-              onSave={async () => {
+              onSave={async (settings: Record<string, string>, enabled: boolean) => {
                 "use server";
+                await putChannelConfig(DEFAULT_ORG, channelType, {
+                  settings: JSON.stringify(settings),
+                  enabled,
+                });
+                revalidatePath(`/admin/channels/${channelType}`);
               }}
             />
           </div>
@@ -94,8 +100,13 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
         <ChannelConfigForm
           channelType={channelType}
           initialConfig={configData}
-          onSave={async () => {
+          onSave={async (settings: Record<string, string>, enabled: boolean) => {
             "use server";
+            await putChannelConfig(DEFAULT_ORG, channelType, {
+              settings: JSON.stringify(settings),
+              enabled,
+            });
+            revalidatePath(`/admin/channels/${channelType}`);
           }}
         />
       )}

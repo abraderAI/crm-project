@@ -11,7 +11,7 @@ export default async function AdminUserDetailPage({
   const { user_id } = await params;
   const [user, membershipsRes] = await Promise.all([
     fetchAdminUser(user_id),
-    fetchMemberships({ user_id }),
+    fetchMemberships("default", { user_id }),
   ]);
 
   return (

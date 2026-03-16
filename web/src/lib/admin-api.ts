@@ -90,41 +90,44 @@ export async function fetchFeatureFlags(): Promise<FeatureFlag[]> {
 }
 
 /** Fetch billing information for the current org. */
-export async function fetchBillingInfo(): Promise<BillingInfo> {
+export async function fetchBillingInfo(org = "default"): Promise<BillingInfo> {
   const token = await getToken();
-  return serverFetch<BillingInfo>("/admin/billing", { token });
+  return serverFetch<BillingInfo>(`/orgs/${org}/billing`, { token });
 }
 
 /** Fetch paginated webhook subscriptions. */
 export async function fetchWebhookSubscriptions(
+  org = "default",
   params?: Record<string, string>,
 ): Promise<PaginatedResponse<WebhookSubscription>> {
   const token = await getToken();
-  return serverFetchPaginated<WebhookSubscription>("/admin/webhooks", params, { token });
+  return serverFetchPaginated<WebhookSubscription>(`/orgs/${org}/webhooks`, params, { token });
 }
 
-/** Fetch paginated webhook delivery log. */
+/** Fetch paginated webhook delivery log (platform-wide admin view). */
 export async function fetchWebhookDeliveries(
   params?: Record<string, string>,
 ): Promise<PaginatedResponse<WebhookDelivery>> {
   const token = await getToken();
-  return serverFetchPaginated<WebhookDelivery>("/admin/webhook-deliveries", params, { token });
+  return serverFetchPaginated<WebhookDelivery>("/admin/webhooks/deliveries", params, { token });
 }
 
 /** Fetch paginated moderation flags. */
 export async function fetchFlags(
+  org = "default",
   params?: Record<string, string>,
 ): Promise<PaginatedResponse<Flag>> {
   const token = await getToken();
-  return serverFetchPaginated<Flag>("/admin/flags", params, { token });
+  return serverFetchPaginated<Flag>(`/orgs/${org}/flags`, params, { token });
 }
 
 /** Fetch paginated org memberships. */
 export async function fetchMemberships(
+  org = "default",
   params?: Record<string, string>,
 ): Promise<PaginatedResponse<OrgMembership>> {
   const token = await getToken();
-  return serverFetchPaginated<OrgMembership>("/admin/memberships", params, { token });
+  return serverFetchPaginated<OrgMembership>(`/orgs/${org}/members`, params, { token });
 }
 
 /** Fetch paginated recent login events. */
@@ -219,25 +222,35 @@ export async function putChannelConfig(
   return (await response.json()) as ChannelConfig;
 }
 
-/** Fetch channel health status. */
+/** Fetch channel health status for a specific channel type.
+ * The backend returns aggregate health for all channels; we find and return the matching type.
+ */
 export async function fetchChannelHealth(
   org: string,
   channelType: ChannelType,
-): Promise<ChannelHealth> {
+): Promise<ChannelHealth | null> {
   const token = await getToken();
-  return serverFetch<ChannelHealth>(`/orgs/${org}/channels/${channelType}/health`, { token });
+  const res = await serverFetch<{ channels: ChannelHealth[] }>(`/orgs/${org}/channels/health`, {
+    token,
+  });
+  return res.channels.find((c) => c.channel_type === channelType) ?? null;
 }
 
-/** Fetch dead-letter queue events for a channel. */
+/** Fetch dead-letter queue events for a channel. channelType is passed as a query param. */
 export async function fetchDLQEvents(
   org: string,
   channelType: ChannelType,
   params?: Record<string, string>,
 ): Promise<PaginatedResponse<DeadLetterEvent>> {
   const token = await getToken();
-  return serverFetchPaginated<DeadLetterEvent>(`/orgs/${org}/channels/${channelType}/dlq`, params, {
-    token,
-  });
+  return serverFetchPaginated<DeadLetterEvent>(
+    `/orgs/${org}/channels/dlq`,
+    {
+      channel_type: channelType,
+      ...params,
+    },
+    { token },
+  );
 }
 
 /** Retry a dead-letter queue event. */
@@ -247,7 +260,7 @@ export async function retryDLQEvent(
   eventId: string,
 ): Promise<void> {
   const token = await getToken();
-  const url = `/orgs/${org}/channels/${channelType}/dlq/${eventId}/retry`;
+  const url = `/orgs/${org}/channels/dlq/${eventId}/retry`;
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1${url}`,
     {
@@ -265,6 +278,26 @@ export async function retryDLQEvent(
   }
 }
 
+/** Patch (toggle) a feature flag's enabled state. */
+export async function patchFeatureFlag(key: string, enabled: boolean): Promise<FeatureFlag> {
+  const token = await getToken();
+  const url = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1/admin/feature-flags/${key}`;
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ enabled }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update feature flag: ${response.status}`);
+  }
+  return (await response.json()) as FeatureFlag;
+}
+
 /** Dismiss a dead-letter queue event. */
 export async function dismissDLQEvent(
   org: string,
@@ -272,7 +305,7 @@ export async function dismissDLQEvent(
   eventId: string,
 ): Promise<void> {
   const token = await getToken();
-  const url = `/orgs/${org}/channels/${channelType}/dlq/${eventId}/dismiss`;
+  const url = `/orgs/${org}/channels/dlq/${eventId}/dismiss`;
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1${url}`,
     {

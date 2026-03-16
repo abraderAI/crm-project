@@ -240,7 +240,7 @@ describe("entity-api", () => {
   // --- Revisions ---
 
   describe("fetchThreadRevisions", () => {
-    it("fetches revisions via GET with auth header", async () => {
+    it("fetches revisions via GET /revisions/{entityType}/{entityId}", async () => {
       const response = {
         data: [{ id: "r1", version: 1 }],
         page_info: { has_more: false },
@@ -250,10 +250,10 @@ describe("entity-api", () => {
         json: () => Promise.resolve(response),
       });
 
-      const result = await fetchThreadRevisions(token, "acme", "sales", "pipeline", "lead-a");
+      const result = await fetchThreadRevisions(token, "thread", "t1-uuid");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/threads/lead-a/revisions"),
+        expect.stringContaining("/revisions/thread/t1-uuid"),
         expect.objectContaining({ method: "GET" }),
       );
       expect(result).toEqual(response);
@@ -263,28 +263,16 @@ describe("entity-api", () => {
   // --- Uploads ---
 
   describe("fetchThreadUploads", () => {
-    it("fetches uploads via GET with auth header", async () => {
-      const response = {
-        data: [{ id: "u1", filename: "doc.pdf" }],
-        page_info: { has_more: false },
-      };
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(response),
-      });
-
+    it("returns empty list without making a fetch call (no list endpoint in backend)", async () => {
       const result = await fetchThreadUploads(token, "acme", "sales", "pipeline", "lead-a");
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/threads/lead-a/uploads"),
-        expect.objectContaining({ method: "GET" }),
-      );
-      expect(result).toEqual(response);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(result).toEqual({ data: [], page_info: { has_more: false } });
     });
   });
 
   describe("uploadFile", () => {
-    it("posts multipart form data with file", async () => {
+    it("posts multipart form data to POST /uploads", async () => {
       const upload = { id: "u1", filename: "test.png" };
       mockFetch.mockResolvedValue({
         ok: true,
@@ -295,7 +283,7 @@ describe("entity-api", () => {
       const result = await uploadFile(token, "acme", "sales", "pipeline", "lead-a", file);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/threads/lead-a/uploads"),
+        expect.stringContaining("/uploads"),
         expect.objectContaining({
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -394,13 +382,13 @@ describe("entity-api", () => {
   // --- Webhook mutations ---
 
   describe("createWebhook", () => {
-    it("posts to /admin/webhooks with url and event_filter", async () => {
+    it("posts to /orgs/default/webhooks with url and event_filter", async () => {
       const webhook = { id: "ws1", url: "https://example.com/hook" };
       mockClientMutate.mockResolvedValue(webhook);
 
       const result = await createWebhook(token, "https://example.com/hook", "message.created");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/webhooks", {
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/orgs/default/webhooks", {
         token,
         body: { url: "https://example.com/hook", event_filter: "message.created" },
       });
@@ -409,25 +397,25 @@ describe("entity-api", () => {
   });
 
   describe("deleteWebhook", () => {
-    it("deletes /admin/webhooks/:id with token", async () => {
+    it("deletes /orgs/default/webhooks/:id with token", async () => {
       mockClientMutate.mockResolvedValue(undefined);
 
       await deleteWebhook(token, "ws1");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("DELETE", "/admin/webhooks/ws1", {
+      expect(mockClientMutate).toHaveBeenCalledWith("DELETE", "/orgs/default/webhooks/ws1", {
         token,
       });
     });
   });
 
   describe("toggleWebhook", () => {
-    it("patches /admin/webhooks/:id/toggle with token", async () => {
+    it("patches /orgs/default/webhooks/:id with token (no toggle endpoint in backend)", async () => {
       const updated = { id: "ws1", is_active: false };
       mockClientMutate.mockResolvedValue(updated);
 
       const result = await toggleWebhook(token, "ws1");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/admin/webhooks/ws1/toggle", {
+      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/orgs/default/webhooks/ws1", {
         token,
       });
       expect(result).toEqual(updated);
@@ -435,27 +423,29 @@ describe("entity-api", () => {
   });
 
   describe("replayWebhookDelivery", () => {
-    it("posts to /admin/webhook-deliveries/:id/replay with token", async () => {
+    it("posts to /orgs/default/webhooks/:webhookId/deliveries/:deliveryId/replay", async () => {
       mockClientMutate.mockResolvedValue(undefined);
 
-      await replayWebhookDelivery(token, "d1");
+      await replayWebhookDelivery(token, "ws1", "d1");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/webhook-deliveries/d1/replay", {
-        token,
-      });
+      expect(mockClientMutate).toHaveBeenCalledWith(
+        "POST",
+        "/orgs/default/webhooks/ws1/deliveries/d1/replay",
+        { token },
+      );
     });
   });
 
   // --- Membership mutations ---
 
   describe("addMembership", () => {
-    it("posts to /admin/memberships with user_id and role", async () => {
+    it("posts to /orgs/default/members with user_id and role", async () => {
       const membership = { id: "m1", user_id: "u1", role: "admin" };
       mockClientMutate.mockResolvedValue(membership);
 
       const result = await addMembership(token, "u1", "admin");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/memberships", {
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/orgs/default/members", {
         token,
         body: { user_id: "u1", role: "admin" },
       });
@@ -464,13 +454,13 @@ describe("entity-api", () => {
   });
 
   describe("changeMembershipRole", () => {
-    it("patches /admin/memberships/:id with new role", async () => {
+    it("patches /orgs/default/members/:userId with new role", async () => {
       const updated = { id: "m1", user_id: "u1", role: "moderator" };
       mockClientMutate.mockResolvedValue(updated);
 
-      const result = await changeMembershipRole(token, "m1", "moderator");
+      const result = await changeMembershipRole(token, "u1", "moderator");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/admin/memberships/m1", {
+      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/orgs/default/members/u1", {
         token,
         body: { role: "moderator" },
       });
@@ -479,12 +469,12 @@ describe("entity-api", () => {
   });
 
   describe("removeMembership", () => {
-    it("deletes /admin/memberships/:id with token", async () => {
+    it("deletes /orgs/default/members/:userId with token", async () => {
       mockClientMutate.mockResolvedValue(undefined);
 
-      await removeMembership(token, "m1");
+      await removeMembership(token, "u1");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("DELETE", "/admin/memberships/m1", {
+      expect(mockClientMutate).toHaveBeenCalledWith("DELETE", "/orgs/default/members/u1", {
         token,
       });
     });
@@ -511,13 +501,13 @@ describe("entity-api", () => {
   // --- Flag mutations ---
 
   describe("createFlag", () => {
-    it("posts to /admin/flags with thread_id and reason", async () => {
+    it("posts to /orgs/default/flags with thread_id and reason", async () => {
       const flag = { id: "f1", thread_id: "t1", reason: "Spam" };
       mockClientMutate.mockResolvedValue(flag);
 
       const result = await createFlag(token, "t1", "Spam");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/admin/flags", {
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/orgs/default/flags", {
         token,
         body: { thread_id: "t1", reason: "Spam" },
       });
@@ -526,13 +516,13 @@ describe("entity-api", () => {
   });
 
   describe("resolveFlag", () => {
-    it("patches /admin/flags/:id/resolve with note", async () => {
+    it("posts to /orgs/default/flags/:id/resolve with note", async () => {
       const flag = { id: "f1", status: "resolved" };
       mockClientMutate.mockResolvedValue(flag);
 
       const result = await resolveFlag(token, "f1", "Addressed by moderator");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/admin/flags/f1/resolve", {
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/orgs/default/flags/f1/resolve", {
         token,
         body: { resolution_note: "Addressed by moderator" },
       });
@@ -541,13 +531,13 @@ describe("entity-api", () => {
   });
 
   describe("dismissFlag", () => {
-    it("patches /admin/flags/:id/dismiss with token", async () => {
+    it("posts to /orgs/default/flags/:id/dismiss with token", async () => {
       const flag = { id: "f1", status: "dismissed" };
       mockClientMutate.mockResolvedValue(flag);
 
       const result = await dismissFlag(token, "f1");
 
-      expect(mockClientMutate).toHaveBeenCalledWith("PATCH", "/admin/flags/f1/dismiss", {
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/orgs/default/flags/f1/dismiss", {
         token,
       });
       expect(result).toEqual(flag);
