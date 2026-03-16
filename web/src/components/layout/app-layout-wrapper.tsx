@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
+import { Settings } from "lucide-react";
 
 import { useNotifications } from "@/hooks/use-notifications";
 import { AppLayout } from "./app-layout";
@@ -14,6 +15,11 @@ const ChatbotWidget = dynamic(
   () => import("@/components/chatbot-widget").then((mod) => mod.ChatbotWidget),
   { ssr: false },
 );
+
+/** Small settings icon for the UserButton menu. */
+function SettingsIcon(): React.ReactNode {
+  return <Settings className="h-4 w-4" />;
+}
 
 /** Top-level navigation items rendered in the sidebar. */
 const NAV_ITEMS: NavItem[] = [
@@ -63,7 +69,13 @@ export function AppLayoutWrapper({ children }: AppLayoutWrapperProps): React.Rea
       navItems={NAV_ITEMS}
       currentPath={pathname}
       unreadCount={unreadCount}
-      userMenu={<UserButton />}
+      userMenu={
+        <UserButton>
+          <UserButton.MenuItems>
+            <UserButton.Link label="Settings" labelIcon={<SettingsIcon />} href="/settings" />
+          </UserButton.MenuItems>
+        </UserButton>
+      }
       onSearch={handleSearch}
     >
       {children}
