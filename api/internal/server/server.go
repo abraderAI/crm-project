@@ -37,6 +37,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/space"
 	"github.com/abraderAI/crm-project/api/internal/telemetry"
 	"github.com/abraderAI/crm-project/api/internal/thread"
+	"github.com/abraderAI/crm-project/api/internal/tier"
 	"github.com/abraderAI/crm-project/api/internal/upload"
 	"github.com/abraderAI/crm-project/api/internal/voice"
 	"github.com/abraderAI/crm-project/api/internal/vote"
@@ -208,6 +209,11 @@ func NewRouter(cfg Config) http.Handler {
 	reportService := reporting.NewService(reportRepo)
 	reportHandler := reporting.NewHandler(reportService, cfg.DB)
 
+	// Tier resolution service.
+	tierRepo := tier.NewRepository(cfg.DB)
+	tierService := tier.NewService(tierRepo)
+	tierHandler := tier.NewHandler(tierService)
+
 	// IO Phase 4: AI Web Chat Widget.
 	chatJWTSecret := cfg.ChatJWTSecret
 	if chatJWTSecret == "" {
@@ -252,6 +258,11 @@ func NewRouter(cfg Config) http.Handler {
 			authed.Use(admin.UserShadowSync(adminService))
 			authed.Use(admin.APIUsageCounter(cfg.DB))
 			authed.Use(admin.LoginEventRecorder(cfg.DB))
+
+			// User tier and preferences endpoints.
+			authed.Get("/me/tier", tierHandler.GetTier)
+			authed.Get("/me/home-preferences", tierHandler.GetHomePreferences)
+			authed.Put("/me/home-preferences", tierHandler.PutHomePreferences)
 
 			// Search endpoint.
 			authed.Get("/search", searchHandler.Search)
