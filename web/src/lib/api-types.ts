@@ -392,6 +392,51 @@ export interface SecurityLogEntry {
 
 // --- IO Channel types (matching Go backend models/channel-config.go) ---
 
+// --- RBAC Policy types (matching Go backend admin/rbac-override.go) ---
+
+/** Resolution strategy configuration. */
+export interface RBACResolution {
+  strategy: string;
+  order: string[];
+}
+
+/** Role hierarchy and permissions. */
+export interface RBACEffectiveRoles {
+  hierarchy: string[];
+  permissions: Record<string, string[]>;
+}
+
+/** Default role assignments per entity level. */
+export interface RBACDefaults {
+  org_member_role: string;
+  space_member_role: string;
+  board_member_role: string;
+}
+
+/** Effective RBAC policy (base + overrides) from GET /v1/admin/rbac-policy. */
+export interface EffectivePolicy {
+  resolution: RBACResolution;
+  roles: RBACEffectiveRoles;
+  defaults: RBACDefaults;
+  overrides?: Record<string, unknown>;
+}
+
+/** Request body for POST /v1/admin/rbac-policy/preview. */
+export interface RBACPreviewRequest {
+  user_id: string;
+  entity_type: string;
+  entity_id: string;
+}
+
+/** Response from POST /v1/admin/rbac-policy/preview. */
+export interface RBACPreviewResponse {
+  user_id: string;
+  entity_type: string;
+  entity_id: string;
+  role: string;
+  permissions: string[];
+}
+
 /** Channel type enum matching backend channel types. */
 export type ChannelType = "email" | "voice" | "chat";
 
