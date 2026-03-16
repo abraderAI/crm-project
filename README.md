@@ -30,6 +30,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **AI Web Chat Widget** — Embeddable shadow-DOM widget (plain JS/TS, zero deps) with JWT session auth, WebSocket streaming, and LLM-powered responses
 - **Agentic CLI** — `deft` terminal client for natural-language CRM queries via LLM function-calling, interactive REPL, and one-shot mode
 - **Reporting** — Org-scoped support-ticket and sales-pipeline analytics (15 query types): volume-over-time, status/priority breakdowns, assignee distribution, win/loss rates, funnel conversion, deal-value score distribution, avg time-in-stage, and CSV export with date + assignee filtering. Platform admins get cross-org aggregate dashboards with per-org sortable breakdown tables.
+- **RBAC User Tiers** — Six-tier user classification (anonymous → authenticated → customer → customer admin → DEFT internal → platform admin) with tier-specific home screens, customisable widget layouts, global content spaces (docs, forum, support, leads), AI chatbot with live-agent escalation, and automated conversion flows (self-service upgrade, sales-led conversion, admin promotion).
 
 ---
 
@@ -130,7 +131,9 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 
 | Route | Description |
 |---|---|
-| `/` | Home / dashboard |
+| `/` | Home / dashboard — tier-aware: renders the correct home screen for the current user's tier with customisable widget layout |
+| `/docs/[...slug]` | Public documentation (global-docs space) — no auth required |
+| `/forum/[...slug]` | Public community forum (global-forum space) — no auth required |
 | `/sign-in`, `/sign-up` | Clerk authentication |
 | `/orgs/create` | Create organization |
 | `/orgs/[org]` | Org overview |
@@ -284,6 +287,17 @@ task widget:test:coverage # Vitest + enforce ≥85% coverage
 | `*` | `/v1/orgs/{org}/webhooks` | Webhook subscriptions |
 | `GET` | `/v1/orgs/{org}/audit-log` | Audit log |
 | `*` | `/v1/orgs/{org}/billing` | Billing management |
+
+### User Tier & Conversion Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/me/tier` | Resolve current user's tier (1–6) and tier metadata |
+| `GET` | `/v1/me/home-preferences` | Get home screen widget layout preferences |
+| `PUT` | `/v1/me/home-preferences` | Save home screen widget layout preferences |
+| `POST` | `/v1/me/upgrade` | Self-service tier upgrade (e.g. anonymous → registered, or registered → customer trial) |
+| `POST` | `/v1/leads/{lead_id}/convert` | Sales-led conversion — promote a lead to a paying customer org |
+| `POST` | `/v1/admin/users/{user_id}/promote` | Admin-force tier promotion (bypasses normal conversion flow) |
 
 ### Reporting Endpoints
 
@@ -452,6 +466,23 @@ SQLite in WAL mode with FTS5 virtual tables for full-text search, JSON-extracted
 Admin-specific tables: `platform_admins`, `users_shadow`, `system_settings`, `feature_flags`, `admin_exports`, `api_usage_stats`, `login_events`.
 
 IO channel tables: `channel_configs` (per-org, per-type config with masked secrets), `dead_letter_events` (DLQ with status, retry count, next-retry timestamp).
+
+### RBAC User Tiers
+
+Tier resolution runs server-side on every request via `TierResolver`, checking in priority order:
+
+| Tier | Label | Condition |
+|---|---|---|
+| 6 | Platform Admin | `platform_admin` record exists |
+| 5 | Customer Admin | `admin` or `owner` role in any paying customer org |
+| 4 | DEFT Internal | Member of the `deft` org |
+| 3 | Customer | Member of any paying customer org |
+| 2 | Authenticated | Has a Clerk account |
+| 1 | Anonymous | Clerk anonymous token only |
+
+The resolved tier is cached in the session. Each tier gets a distinct home screen (`HomeLayout`) composed of `Widget` components. Authenticated users can toggle visibility and reorder widgets; preferences are persisted via `PUT /v1/me/home-preferences` and loaded at SSR time. Default layouts per tier are defined in a static config.
+
+Four system-seeded **global spaces** exist outside any customer org: `global-docs`, `global-forum`, `global-support`, and `global-leads`. The public docs and forum spaces are accessible without authentication.
 
 ### IO Channel Gateway
 
