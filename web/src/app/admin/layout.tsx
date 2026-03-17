@@ -6,6 +6,7 @@ import {
   Activity,
   BarChart3,
   BrainCircuit,
+  Building2,
   Users,
   ScrollText,
   ToggleRight,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 const ADMIN_TABS = [
   { href: "/admin", label: "Overview", icon: BarChart3, exact: true },
+  { href: "/admin/orgs", label: "Orgs", icon: Building2, exact: false },
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, exact: false },
   { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleRight, exact: false },

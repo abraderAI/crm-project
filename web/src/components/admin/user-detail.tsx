@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { Ban, ShieldCheck, Trash2, UserCog, X, AlertTriangle } from "lucide-react";
+import { Ban, Crown, ShieldCheck, Trash2, UserCog, UserPlus, X, AlertTriangle } from "lucide-react";
 import type { UserShadow, OrgMembership, ImpersonationResponse } from "@/lib/api-types";
 import { clientMutate } from "@/lib/api-client";
 
@@ -63,6 +63,17 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
   const [impersonating, setImpersonating] = useState(false);
   const [impersonationExpiresAt, setImpersonationExpiresAt] = useState<string | null>(null);
   const [countdown, setCountdown] = useState("");
+
+  // --- Add to org state ---
+  const [showAddToOrgForm, setShowAddToOrgForm] = useState(false);
+  const [addToOrgSlug, setAddToOrgSlug] = useState("");
+  const [addToOrgRole, setAddToOrgRole] = useState("member");
+  const [addingToOrg, setAddingToOrg] = useState(false);
+  const [addToOrgSuccess, setAddToOrgSuccess] = useState("");
+
+  // --- Promote to platform admin state ---
+  const [promotingToAdmin, setPromotingToAdmin] = useState(false);
+  const [promoteSuccess, setPromoteSuccess] = useState("");
 
   // Countdown timer for impersonation.
   useEffect(() => {
@@ -155,6 +166,52 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
     setImpersonating(false);
     setImpersonationExpiresAt(null);
   }, []);
+
+  // --- Add to org ---
+  const handleAddToOrg = useCallback(async () => {
+    if (!addToOrgSlug.trim()) return;
+    setError("");
+    setAddToOrgSuccess("");
+    setAddingToOrg(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await clientMutate<void>("POST", `/orgs/${addToOrgSlug.trim()}/members`, {
+        token,
+        body: { user_id: user.clerk_user_id, role: addToOrgRole },
+      });
+      setAddToOrgSlug("");
+      setAddToOrgRole("member");
+      setShowAddToOrgForm(false);
+      setAddToOrgSuccess(`Added to org "${addToOrgSlug.trim()}" as ${addToOrgRole}.`);
+      setTimeout(() => setAddToOrgSuccess(""), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add to org");
+    } finally {
+      setAddingToOrg(false);
+    }
+  }, [getToken, user.clerk_user_id, addToOrgSlug, addToOrgRole]);
+
+  // --- Promote to platform admin ---
+  const handlePromoteToAdmin = useCallback(async () => {
+    setError("");
+    setPromoteSuccess("");
+    setPromotingToAdmin(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await clientMutate<void>("POST", "/admin/platform-admins", {
+        token,
+        body: { user_id: user.clerk_user_id },
+      });
+      setPromoteSuccess(`${user.display_name || user.email} promoted to platform admin.`);
+      setTimeout(() => setPromoteSuccess(""), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to promote user");
+    } finally {
+      setPromotingToAdmin(false);
+    }
+  }, [getToken, user.clerk_user_id, user.display_name, user.email]);
 
   const purgeEmailMatch = purgeEmail === user.email;
 
@@ -277,7 +334,103 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
           <UserCog className="h-4 w-4" />
           Impersonate
         </button>
+
+        <button
+          data-testid="add-to-org-btn"
+          onClick={() => setShowAddToOrgForm((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
+        >
+          <UserPlus className="h-4 w-4" />
+          Add to Org
+        </button>
+
+        <button
+          data-testid="promote-admin-btn"
+          onClick={() => void handlePromoteToAdmin()}
+          disabled={promotingToAdmin}
+          className="inline-flex items-center gap-1.5 rounded-md bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+        >
+          <Crown className="h-4 w-4" />
+          {promotingToAdmin ? "Promoting..." : "Promote to Platform Admin"}
+        </button>
       </div>
+
+      {/* Add-to-org success */}
+      {addToOrgSuccess && (
+        <div
+          data-testid="add-to-org-success"
+          className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700"
+        >
+          {addToOrgSuccess}
+        </div>
+      )}
+
+      {/* Promote-to-admin success */}
+      {promoteSuccess && (
+        <div
+          data-testid="promote-admin-success"
+          className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700"
+        >
+          {promoteSuccess}
+        </div>
+      )}
+
+      {/* Add to org form */}
+      {showAddToOrgForm && (
+        <div
+          data-testid="add-to-org-form"
+          className="rounded-lg border border-border bg-background p-4"
+        >
+          <h3 className="text-sm font-semibold text-foreground">Add to Organization</h3>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div>
+              <label htmlFor="add-to-org-slug" className="text-xs font-medium text-foreground">
+                Org Slug <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="add-to-org-slug"
+                data-testid="add-to-org-slug-input"
+                type="text"
+                value={addToOrgSlug}
+                onChange={(e) => setAddToOrgSlug(e.target.value)}
+                placeholder="my-org-slug"
+                className="mt-1 block w-48 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+            </div>
+            <div>
+              <label htmlFor="add-to-org-role" className="text-xs font-medium text-foreground">
+                Role
+              </label>
+              <select
+                id="add-to-org-role"
+                data-testid="add-to-org-role-select"
+                value={addToOrgRole}
+                onChange={(e) => setAddToOrgRole(e.target.value)}
+                className="mt-1 block rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+                <option value="owner">Owner</option>
+              </select>
+            </div>
+            <button
+              data-testid="add-to-org-submit"
+              onClick={() => void handleAddToOrg()}
+              disabled={addingToOrg || !addToOrgSlug.trim()}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {addingToOrg ? "Adding..." : "Add"}
+            </button>
+            <button
+              data-testid="add-to-org-cancel"
+              onClick={() => { setShowAddToOrgForm(false); setAddToOrgSlug(""); setAddToOrgRole("member"); }}
+              className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Ban confirmation dialog */}
       {showBanDialog && (

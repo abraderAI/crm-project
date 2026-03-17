@@ -495,6 +495,29 @@ export interface RBACPreviewResponse {
   permissions: string[];
 }
 
+/** Admin org detail — org with aggregate counts from GET /v1/admin/orgs/{org}. */
+export interface AdminOrgDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  metadata: string;
+  billing_tier?: string;
+  payment_status?: string;
+  suspended_at?: string | null;
+  suspend_reason?: string;
+  created_at: string;
+  updated_at: string;
+  /** Number of members in this org. */
+  member_count: number;
+  /** Number of spaces in this org. */
+  space_count: number;
+  /** Number of boards across all spaces. */
+  board_count: number;
+  /** Number of threads across all boards. */
+  thread_count: number;
+}
+
 /** Channel type enum matching backend channel types. */
 export type ChannelType = "email" | "voice" | "chat";
 
