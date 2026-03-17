@@ -25,6 +25,10 @@ function SettingsIcon(): React.ReactNode {
 /** Top-level navigation items rendered in the sidebar. */
 const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", href: "/", type: "org" },
+  { id: "forum", label: "Forum", href: "/forum", type: "org" },
+  { id: "docs", label: "Docs", href: "/docs", type: "org" },
+  { id: "support", label: "Support", href: "/support", type: "org" },
+  { id: "notifications", label: "Notifications", href: "/notifications", type: "org" },
   { id: "crm", label: "CRM Pipeline", href: "/crm", type: "org" },
   { id: "reports", label: "Reports", href: "/reports", type: "org" },
   { id: "search", label: "Search", href: "/search", type: "org" },

@@ -184,6 +184,18 @@ export async function fetchUserVote(
   }
 }
 
+/** Fetch paginated support tickets for the current user from global-support. */
+export async function fetchSupportTickets(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<Thread>> {
+  const token = await getToken();
+  return serverFetchPaginated<Thread>(
+    "/global-spaces/global-support/threads",
+    { mine: "true", ...params },
+    { token },
+  );
+}
+
 /** Fetch search results. */
 export async function fetchSearch(
   query: string,

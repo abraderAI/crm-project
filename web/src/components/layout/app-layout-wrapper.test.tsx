@@ -58,6 +58,10 @@ describe("AppLayoutWrapper", () => {
     renderWithTheme(<AppLayoutWrapper>Content</AppLayoutWrapper>);
     expect(screen.getByTestId("sidebar")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-home")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-forum")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-docs")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-support")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-notifications")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-crm")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-search")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-admin")).toBeInTheDocument();
