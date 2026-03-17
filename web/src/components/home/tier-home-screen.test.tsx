@@ -36,9 +36,23 @@ vi.mock("./tier-3-home", () => ({
   ),
 }));
 
+vi.mock("./tier4-home-screen", () => ({
+  Tier4HomeScreen: ({ layout, department }: { layout: unknown[]; department: string }) => (
+    <div data-testid="mock-tier4-home-screen">
+      Tier 4 ({layout.length} widgets, dept: {department})
+    </div>
+  ),
+}));
+
 vi.mock("./tier-5-home", () => ({
   Tier5Home: ({ layout }: { layout: unknown[] }) => (
     <div data-testid="mock-tier-5-home">Tier 5 ({layout.length} widgets)</div>
+  ),
+}));
+
+vi.mock("./tier6-home-screen", () => ({
+  Tier6HomeScreen: ({ layout }: { layout: unknown[] }) => (
+    <div data-testid="mock-tier6-home-screen">Tier 6 ({layout.length} widgets)</div>
   ),
 }));
 
@@ -188,7 +202,7 @@ describe("TierHomeScreen", () => {
     expect(screen.getByTestId("mock-tier-5-home")).toHaveTextContent("4 widgets");
   });
 
-  it("renders placeholder for tier 4", () => {
+  it("renders Tier 4 home for DEFT employees", () => {
     mockUseTier.mockReturnValue({
       tier: 4,
       subType: null,
@@ -197,16 +211,21 @@ describe("TierHomeScreen", () => {
       deftDepartment: "sales",
     });
     mockUseHomeLayout.mockReturnValue({
-      layout: [],
+      layout: [
+        { widget_id: WIDGET_IDS.LEAD_PIPELINE, visible: true },
+        { widget_id: WIDGET_IDS.RECENT_LEADS, visible: true },
+      ],
       isLoading: false,
     });
 
     render(<TierHomeScreen token="token" />);
-    expect(screen.getByTestId("tier-home-placeholder")).toBeInTheDocument();
-    expect(screen.getByText(/Tier 4 home screen/)).toBeInTheDocument();
+    expect(screen.getByTestId("tier-home-screen")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-tier4-home-screen")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-tier4-home-screen")).toHaveTextContent("2 widgets");
+    expect(screen.getByTestId("mock-tier4-home-screen")).toHaveTextContent("dept: sales");
   });
 
-  it("renders placeholder for tier 6", () => {
+  it("renders Tier 6 home for platform admins", () => {
     mockUseTier.mockReturnValue({
       tier: 6,
       subType: null,
@@ -215,13 +234,17 @@ describe("TierHomeScreen", () => {
       deftDepartment: null,
     });
     mockUseHomeLayout.mockReturnValue({
-      layout: [],
+      layout: [
+        { widget_id: WIDGET_IDS.SYSTEM_HEALTH, visible: true },
+        { widget_id: WIDGET_IDS.RECENT_AUDIT_LOG, visible: true },
+      ],
       isLoading: false,
     });
 
     render(<TierHomeScreen token="token" />);
-    expect(screen.getByTestId("tier-home-placeholder")).toBeInTheDocument();
-    expect(screen.getByText(/Tier 6 home screen/)).toBeInTheDocument();
+    expect(screen.getByTestId("tier-home-screen")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-tier6-home-screen")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-tier6-home-screen")).toHaveTextContent("2 widgets");
   });
 
   it("passes tier and department to useHomeLayout", () => {

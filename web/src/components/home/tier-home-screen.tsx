@@ -7,7 +7,9 @@ import type { ProfileData } from "./widgets/my-profile-widget";
 import { Tier1Home } from "./tier-1-home";
 import { Tier2Home } from "./tier-2-home";
 import { Tier3Home } from "./tier-3-home";
+import { Tier4HomeScreen } from "./tier4-home-screen";
 import { Tier5Home } from "./tier-5-home";
+import { Tier6HomeScreen } from "./tier6-home-screen";
 
 interface TierHomeScreenProps {
   /** Clerk auth token (null for anonymous users). */
@@ -59,15 +61,17 @@ export function TierHomeScreen({ token, profile, profileLoading }: TierHomeScree
         <Tier3Home layout={layout} token={token ?? ""} orgId={orgId ?? ""} subType={subType} />
       )}
 
+      {tier === 4 && (
+        <Tier4HomeScreen
+          token={token ?? ""}
+          department={deftDepartment ?? "sales"}
+          layout={layout}
+        />
+      )}
+
       {tier === 5 && <Tier5Home layout={layout} token={token ?? ""} orgId={orgId ?? ""} />}
 
-      {(tier === 4 || tier === 6) && (
-        <div data-testid="tier-home-placeholder" className="py-8 text-center">
-          <p className="text-muted-foreground">
-            Tier {tier} home screen — coming in a future phase.
-          </p>
-        </div>
-      )}
+      {tier === 6 && <Tier6HomeScreen token={token ?? ""} layout={layout} />}
     </div>
   );
 }
