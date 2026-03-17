@@ -15,23 +15,74 @@ vi.mock("./api-client", () => ({
 }));
 
 import {
-  fetchAdminStats,
+  fetchAdminOrg,
+  fetchAdminOrgs,
   fetchAdminSettings,
+  fetchAdminStats,
   fetchAdminUsers,
-  fetchPlatformAdmins,
   fetchAuditLog,
-  fetchFeatureFlags,
   fetchBillingInfo,
-  fetchWebhookSubscriptions,
-  fetchWebhookDeliveries,
-  fetchMemberships,
+  fetchFeatureFlags,
   fetchFlags,
+  fetchMemberships,
+  fetchPlatformAdmins,
+  fetchWebhookDeliveries,
+  fetchWebhookSubscriptions,
 } from "./admin-api";
 
 describe("admin-api", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetToken.mockResolvedValue("test-token");
+  });
+
+  describe("fetchAdminOrgs", () => {
+    it("fetches paginated orgs", async () => {
+      const response = { data: [{ id: "org_1", name: "Acme" }], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchAdminOrgs({ cursor: "abc" });
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/orgs",
+        { cursor: "abc" },
+        { token: "test-token" },
+      );
+      expect(result).toEqual(response);
+    });
+
+    it("works without params", async () => {
+      const response = { data: [], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      await fetchAdminOrgs();
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith("/admin/orgs", undefined, {
+        token: "test-token",
+      });
+    });
+
+    it("throws when unauthenticated", async () => {
+      mockGetToken.mockResolvedValue(null);
+      await expect(fetchAdminOrgs()).rejects.toThrow("Unauthenticated");
+    });
+  });
+
+  describe("fetchAdminOrg", () => {
+    it("fetches a single org by id", async () => {
+      const org = { id: "org_1", name: "Acme", slug: "acme", member_count: 3 };
+      mockServerFetch.mockResolvedValue(org);
+
+      const result = await fetchAdminOrg("org_1");
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/orgs/org_1", { token: "test-token" });
+      expect(result).toEqual(org);
+    });
+
+    it("throws when unauthenticated", async () => {
+      mockGetToken.mockResolvedValue(null);
+      await expect(fetchAdminOrg("org_1")).rejects.toThrow("Unauthenticated");
+    });
   });
 
   describe("fetchAdminStats", () => {

@@ -303,4 +303,47 @@ describe("OrgManager", () => {
       expect(screen.getByTestId("org-manager-error")).toHaveTextContent("Unsuspend failed");
     });
   });
+
+  // --- Branch coverage ---
+
+  it("types in description input when create form is open", async () => {
+    const user = userEvent.setup();
+    render(<OrgManager initialOrgs={[]} />);
+
+    await user.click(screen.getByTestId("create-org-btn"));
+    const desc = screen.getByTestId("create-org-desc-input");
+    await user.type(desc, "Some description");
+    expect(desc).toHaveValue("Some description");
+  });
+
+  it("calls router.push when Details link is clicked", async () => {
+    const user = userEvent.setup();
+    render(<OrgManager initialOrgs={[baseOrg]} />);
+
+    await user.click(screen.getByTestId("org-detail-link-org_1"));
+    expect(mockPush).toHaveBeenCalledWith("/admin/orgs/org_1");
+  });
+
+  it("shows fallback error when suspend throws non-Error", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockRejectedValue("plain string error");
+    render(<OrgManager initialOrgs={[baseOrg]} />);
+
+    await user.click(screen.getByTestId("suspend-btn-org_1"));
+    await user.click(screen.getByTestId("suspend-confirm-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("org-manager-error")).toHaveTextContent("Failed to suspend org");
+    });
+  });
+
+  it("hides create form when Create Org button is toggled off", async () => {
+    const user = userEvent.setup();
+    render(<OrgManager initialOrgs={[]} />);
+
+    await user.click(screen.getByTestId("create-org-btn"));
+    expect(screen.getByTestId("create-org-form")).toBeInTheDocument();
+    await user.click(screen.getByTestId("create-org-btn"));
+    expect(screen.queryByTestId("create-org-form")).not.toBeInTheDocument();
+  });
 });
