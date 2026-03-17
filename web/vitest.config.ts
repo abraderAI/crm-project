@@ -42,6 +42,9 @@ export default defineConfig({
         "src/lib/reporting-types.ts",
         "src/lib/tier-types.ts",
         "src/app/(public)/**",
+        "src/app/forum/**",
+        "src/app/docs/**",
+        "src/app/support/**",
         "e2e/**",
       ],
       thresholds: {
