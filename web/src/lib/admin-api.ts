@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import type {
   AdminExport,
+  AdminOrgDetail,
   ApiUsagePeriod,
   ApiUsageResponse,
   AuditEntry,
@@ -40,6 +41,24 @@ async function getToken(): Promise<string> {
   }
   return token;
 }
+
+// --- Admin Org API functions ---
+
+/** Fetch paginated list of all orgs (admin view). */
+export async function fetchAdminOrgs(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<AdminOrgDetail>> {
+  const token = await getToken();
+  return serverFetchPaginated<AdminOrgDetail>("/admin/orgs", params, { token });
+}
+
+/** Fetch a single org with aggregate counts (admin view). */
+export async function fetchAdminOrg(orgId: string): Promise<AdminOrgDetail> {
+  const token = await getToken();
+  return serverFetch<AdminOrgDetail>(`/admin/orgs/${orgId}`, { token });
+}
+
+// --- Admin Stats ---
 
 /** Fetch platform-wide statistics. */
 export async function fetchAdminStats(): Promise<PlatformStats> {

@@ -426,4 +426,143 @@ describe("UserDetail", () => {
     render(<UserDetail user={baseUser} memberships={memberships} />);
     expect(screen.getByTestId("user-detail")).toBeInTheDocument();
   });
+
+  // --- Add to Org ---
+
+  it("shows add-to-org button", () => {
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+    expect(screen.getByTestId("add-to-org-btn")).toBeInTheDocument();
+  });
+
+  it("shows add-to-org form on button click", async () => {
+    const user = userEvent.setup();
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    expect(screen.queryByTestId("add-to-org-form")).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("add-to-org-btn"));
+    expect(screen.getByTestId("add-to-org-form")).toBeInTheDocument();
+  });
+
+  it("hides add-to-org form when button clicked again", async () => {
+    const user = userEvent.setup();
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("add-to-org-btn"));
+    await user.click(screen.getByTestId("add-to-org-btn"));
+    expect(screen.queryByTestId("add-to-org-form")).not.toBeInTheDocument();
+  });
+
+  it("cancels add-to-org form via cancel button", async () => {
+    const user = userEvent.setup();
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("add-to-org-btn"));
+    await user.click(screen.getByTestId("add-to-org-cancel"));
+    expect(screen.queryByTestId("add-to-org-form")).not.toBeInTheDocument();
+  });
+
+  it("changes role via add-to-org role select", async () => {
+    const user = userEvent.setup();
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("add-to-org-btn"));
+    const select = screen.getByTestId("add-to-org-role-select");
+    await user.selectOptions(select, "admin");
+    expect(select).toHaveValue("admin");
+  });
+
+  it("calls POST /orgs/{slug}/members on add-to-org submit", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockResolvedValue(undefined);
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("add-to-org-btn"));
+    await user.type(screen.getByTestId("add-to-org-slug-input"), "acme-corp");
+    await user.click(screen.getByTestId("add-to-org-submit"));
+
+    expect(mockClientMutate).toHaveBeenCalledWith(
+      "POST",
+      "/orgs/acme-corp/members",
+      expect.objectContaining({
+        token: "test-token",
+        body: { user_id: "user_abc123", role: "member" },
+      }),
+    );
+  });
+
+  it("shows add-to-org success message after submit", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockResolvedValue(undefined);
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("add-to-org-btn"));
+    await user.type(screen.getByTestId("add-to-org-slug-input"), "acme-corp");
+    await user.click(screen.getByTestId("add-to-org-submit"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("add-to-org-success")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error when add-to-org fails", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockRejectedValue(new Error("Org not found"));
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("add-to-org-btn"));
+    await user.type(screen.getByTestId("add-to-org-slug-input"), "bad-org");
+    await user.click(screen.getByTestId("add-to-org-submit"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("action-error")).toHaveTextContent("Org not found");
+    });
+  });
+
+  // --- Promote to Platform Admin ---
+
+  it("shows promote-admin button", () => {
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+    expect(screen.getByTestId("promote-admin-btn")).toBeInTheDocument();
+  });
+
+  it("calls POST /admin/platform-admins on promote click", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockResolvedValue(undefined);
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("promote-admin-btn"));
+
+    expect(mockClientMutate).toHaveBeenCalledWith(
+      "POST",
+      "/admin/platform-admins",
+      expect.objectContaining({
+        token: "test-token",
+        body: { user_id: "user_abc123" },
+      }),
+    );
+  });
+
+  it("shows promote success message after promotion", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockResolvedValue(undefined);
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("promote-admin-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("promote-admin-success")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error when promote to admin fails", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockRejectedValue(new Error("Promote failed"));
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("promote-admin-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("action-error")).toHaveTextContent("Promote failed");
+    });
+  });
 });
