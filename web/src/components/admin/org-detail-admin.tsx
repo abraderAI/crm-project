@@ -242,7 +242,10 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
 
         {/* Inline edit form */}
         {showEdit && (
-          <div data-testid="edit-org-form" className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
+          <div
+            data-testid="edit-org-form"
+            className="mt-4 flex flex-col gap-3 border-t border-border pt-4"
+          >
             <div>
               <label htmlFor="edit-org-name" className="text-xs font-medium text-foreground">
                 Name <span className="text-red-500">*</span>
@@ -380,7 +383,10 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
             <h3 className="text-base font-semibold text-amber-900">Suspend Organization</h3>
             <button
               data-testid="suspend-dialog-close"
-              onClick={() => { setShowSuspendDialog(false); setSuspendReason(""); }}
+              onClick={() => {
+                setShowSuspendDialog(false);
+                setSuspendReason("");
+              }}
               className="text-amber-600 hover:text-amber-800"
             >
               <X className="h-4 w-4" />
@@ -414,7 +420,10 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
             </button>
             <button
               data-testid="suspend-cancel-btn"
-              onClick={() => { setShowSuspendDialog(false); setSuspendReason(""); }}
+              onClick={() => {
+                setShowSuspendDialog(false);
+                setSuspendReason("");
+              }}
               className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
             >
               Cancel
@@ -433,7 +442,10 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
             <h3 className="text-base font-semibold text-foreground">Transfer Ownership</h3>
             <button
               data-testid="transfer-dialog-close"
-              onClick={() => { setShowTransferDialog(false); setNewOwnerUserId(""); }}
+              onClick={() => {
+                setShowTransferDialog(false);
+                setNewOwnerUserId("");
+              }}
               className="text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
@@ -467,7 +479,10 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
             </button>
             <button
               data-testid="transfer-cancel-btn"
-              onClick={() => { setShowTransferDialog(false); setNewOwnerUserId(""); }}
+              onClick={() => {
+                setShowTransferDialog(false);
+                setNewOwnerUserId("");
+              }}
               className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
             >
               Cancel
@@ -486,7 +501,10 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
             <h3 className="text-base font-semibold text-red-900">GDPR Purge — Irreversible</h3>
             <button
               data-testid="purge-dialog-close"
-              onClick={() => { setShowPurgeDialog(false); setPurgeConfirm(""); }}
+              onClick={() => {
+                setShowPurgeDialog(false);
+                setPurgeConfirm("");
+              }}
               className="text-red-600 hover:text-red-800"
             >
               <X className="h-4 w-4" />
@@ -516,7 +534,10 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
             </button>
             <button
               data-testid="purge-cancel-btn"
-              onClick={() => { setShowPurgeDialog(false); setPurgeConfirm(""); }}
+              onClick={() => {
+                setShowPurgeDialog(false);
+                setPurgeConfirm("");
+              }}
               className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
             >
               Cancel

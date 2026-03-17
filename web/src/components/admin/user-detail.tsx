@@ -423,7 +423,11 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
             </button>
             <button
               data-testid="add-to-org-cancel"
-              onClick={() => { setShowAddToOrgForm(false); setAddToOrgSlug(""); setAddToOrgRole("member"); }}
+              onClick={() => {
+                setShowAddToOrgForm(false);
+                setAddToOrgSlug("");
+                setAddToOrgRole("member");
+              }}
               className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
             >
               Cancel

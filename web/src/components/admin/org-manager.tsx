@@ -105,9 +105,7 @@ export function OrgManager({ initialOrgs }: OrgManagerProps): React.ReactNode {
         if (!token) return;
         await clientMutate<void>("POST", `/admin/orgs/${org.id}/unsuspend`, { token });
         setOrgs((prev) =>
-          prev.map((o) =>
-            o.id === org.id ? { ...o, suspended_at: null, suspend_reason: "" } : o,
-          ),
+          prev.map((o) => (o.id === org.id ? { ...o, suspended_at: null, suspend_reason: "" } : o)),
         );
         showSuccess(`Org "${org.name}" unsuspended.`);
       } catch (err) {
@@ -155,9 +153,7 @@ export function OrgManager({ initialOrgs }: OrgManagerProps): React.ReactNode {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground">
-          Organizations ({orgs.length})
-        </h2>
+        <h2 className="text-lg font-semibold text-foreground">Organizations ({orgs.length})</h2>
         <button
           data-testid="create-org-btn"
           onClick={() => setShowCreate((v) => !v)}
@@ -286,7 +282,10 @@ export function OrgManager({ initialOrgs }: OrgManagerProps): React.ReactNode {
                 </span>
 
                 {/* Members */}
-                <span data-testid={`org-member-count-${org.id}`} className="text-sm text-foreground">
+                <span
+                  data-testid={`org-member-count-${org.id}`}
+                  className="text-sm text-foreground"
+                >
                   {org.member_count}
                 </span>
 
