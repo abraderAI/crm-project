@@ -30,6 +30,8 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Agentic CLI** — `deft` terminal client for natural-language CRM queries via LLM function-calling, interactive REPL, and one-shot mode
 - **Reporting** — Org-scoped support-ticket and sales-pipeline analytics (15 query types): volume-over-time, status/priority breakdowns, assignee distribution, win/loss rates, funnel conversion, deal-value score distribution, avg time-in-stage, and CSV export with date + assignee filtering. Platform admins get cross-org aggregate dashboards with per-org sortable breakdown tables.
 - **RBAC User Tiers** — Six-tier user classification (anonymous → authenticated → customer → customer admin → DEFT internal → platform admin) with tier-specific home screens, customisable widget layouts, global content spaces (docs, forum, support, leads), AI chatbot with live-agent escalation, and automated conversion flows (self-service upgrade, sales-led conversion, admin promotion).
+- **Leads Management** — Dedicated `/crm/leads` page for DEFT sales staff: tier 5–6 see all leads with assignee filter; tier 4 sales reps see only their own and assigned leads. Status/search filters, load-more pagination, and detail view per lead.
+- **Support Ticket Management** — Tier-aware `/support` page: tier 1 sees a sign-in prompt; tiers 2–3 see own tickets (org-scoped for org members); tier 4 DEFT staff and tier 5 DEFT support admins see all tickets; tier 5 customer org admins see org-scoped tickets; all elevated views include an open/pending/resolved stats strip. Inline create-ticket form with `org_id` passthrough.
 
 ---
 
@@ -147,7 +149,10 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/orgs/[org]/spaces/[space]/boards/[board]/threads/create` | Create thread |
 | `/orgs/[org]/spaces/[space]/boards/[board]/threads/[thread]` | Thread detail (messages, editor, attachments, voting, flags, revisions) |
 | `/crm` | CRM pipeline — Kanban board with drag-and-drop stage management |
+| `/crm/leads` | Leads management — tier-aware list: tier 5–6 see all leads with assignee filter; tier 4 `deft_sales` reps see own/assigned leads only; status, search, and load-more pagination |
+| `/crm/leads/global/[thread_slug]` | Global lead detail — enrichment data, scoring breakdown, and metadata sidebar for leads in the `global-leads` space |
 | `/crm/leads/[org]/[space]/[board]/[thread]` | Lead detail — enrichment, scoring breakdown, metadata sidebar |
+| `/support` | Support tickets — tier-aware: own tickets (tier 2–3), org-scoped tickets (tier 3 with org, tier 5 owner), all tickets (tier 4+) with open/pending/resolved stats strip; inline create-ticket form |
 | `/search` | Full-text search with filters |
 | `/notifications` | Notification feed |
 | `/notifications/preferences` | Notification channel preferences |
@@ -550,7 +555,7 @@ Config is read from `~/.deft-cli.yaml` with env var overrides (`DEFT_API_URL`, `
 
 ## Quality
 
-- **1,876 frontend tests** across 151 test files (Vitest) — 91% statement, 85% branch coverage
+- **2,013 frontend tests** across 153 test files (Vitest) — 91% statement, 85% branch coverage
 - **1,878 Go tests** across 37 packages with race detector enabled — 86% coverage
 - **15 fuzz functions** across 8 Go packages (`board`, `thread`, `message`, `membership`, `conversion`, `gdpr`, `tier`, `notification`), each with ≥ 40 diverse seeds
 - ≥ 85% test coverage enforced on every PR (statements + branches)
