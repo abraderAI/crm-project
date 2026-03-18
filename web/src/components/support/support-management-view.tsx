@@ -53,7 +53,7 @@ const DEFAULT_FILTERS: TicketFilterValues = {
  * Tier 6 (platform admin): all tickets + stats.
  */
 export function SupportManagementView(): ReactNode {
-  const { tier, subType, deftDepartment, orgId, isLoading: tierLoading } = useTier();
+  const { tier, subType, orgId, isLoading: tierLoading } = useTier();
   const { getToken } = useAuth();
 
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -97,14 +97,8 @@ export function SupportManagementView(): ReactNode {
   /** Show stats strip for org and global views (not for personal-only views). */
   const showStats = scopesAll || scopesOrg;
 
-  // Page heading based on scope.
-  let pageTitle = "My Tickets";
-  if (scopesAll) {
-    const isDeftSupportAdmin = tier === 5 && deftDepartment === "support";
-    pageTitle = isDeftSupportAdmin || tier >= 6 ? "Support Dashboard" : "All Support Tickets";
-  } else if (scopesOrg) {
-    pageTitle = tier === 5 ? "Organization Support" : "Organization Tickets";
-  }
+  // Page heading is always the product name regardless of tier.
+  const pageTitle = "DEFT.support";
 
   // ---------------------------------------------------------------------------
   // Data fetching

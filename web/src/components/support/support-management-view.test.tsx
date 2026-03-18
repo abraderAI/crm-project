@@ -144,11 +144,11 @@ describe("SupportManagementView", () => {
     });
   });
 
-  it("shows 'My Tickets' heading for tier 2", async () => {
+  it("shows 'DEFT.support' heading for tier 2", async () => {
     mockUseTier.mockReturnValue(makeTier({ tier: 2 }));
     render(<SupportManagementView />);
     await waitFor(() => {
-      expect(screen.getByText("My Tickets")).toBeInTheDocument();
+      expect(screen.getByText("DEFT.support")).toBeInTheDocument();
     });
   });
 
@@ -187,11 +187,11 @@ describe("SupportManagementView", () => {
   // Tier 3 — paying customer, no org (own tickets)
   // ---------------------------------------------------------------------------
 
-  it("shows 'My Tickets' heading for tier 3 with no org", async () => {
+  it("shows 'DEFT.support' heading for tier 3 with no org", async () => {
     mockUseTier.mockReturnValue(makeTier({ tier: 3, orgId: null }));
     render(<SupportManagementView />);
     await waitFor(() => {
-      expect(screen.getByText("My Tickets")).toBeInTheDocument();
+      expect(screen.getByText("DEFT.support")).toBeInTheDocument();
     });
   });
 
@@ -219,11 +219,11 @@ describe("SupportManagementView", () => {
   // Tier 3 — paying customer with org (org-scoped tickets)
   // ---------------------------------------------------------------------------
 
-  it("shows 'Organization Tickets' heading for tier 3 with org", async () => {
+  it("shows 'DEFT.support' heading for tier 3 with org", async () => {
     mockUseTier.mockReturnValue(makeTier({ tier: 3, orgId: "org-abc" }));
     render(<SupportManagementView />);
     await waitFor(() => {
-      expect(screen.getByText("Organization Tickets")).toBeInTheDocument();
+      expect(screen.getByText("DEFT.support")).toBeInTheDocument();
     });
   });
 
@@ -262,11 +262,11 @@ describe("SupportManagementView", () => {
   // Tier 4 — DEFT employee (all tickets)
   // ---------------------------------------------------------------------------
 
-  it("shows 'All Support Tickets' heading for tier 4", async () => {
+  it("shows 'DEFT.support' heading for tier 4", async () => {
     mockUseTier.mockReturnValue(makeTier({ tier: 4, deftDepartment: "support" }));
     render(<SupportManagementView />);
     await waitFor(() => {
-      expect(screen.getByText("All Support Tickets")).toBeInTheDocument();
+      expect(screen.getByText("DEFT.support")).toBeInTheDocument();
     });
   });
 
@@ -303,11 +303,11 @@ describe("SupportManagementView", () => {
   // Tier 5 — customer org admin (subType=owner, org-scoped + stats)
   // ---------------------------------------------------------------------------
 
-  it("shows 'Organization Support' heading for tier 5 owner", async () => {
+  it("shows 'DEFT.support' heading for tier 5 owner", async () => {
     mockUseTier.mockReturnValue(makeTier({ tier: 5, subType: "owner", orgId: "org-xyz" }));
     render(<SupportManagementView />);
     await waitFor(() => {
-      expect(screen.getByText("Organization Support")).toBeInTheDocument();
+      expect(screen.getByText("DEFT.support")).toBeInTheDocument();
     });
   });
 
@@ -335,13 +335,13 @@ describe("SupportManagementView", () => {
   // Tier 5 — DEFT support admin (all tickets + dashboard)
   // ---------------------------------------------------------------------------
 
-  it("shows 'Support Dashboard' heading for tier 5 DEFT support admin", async () => {
+  it("shows 'DEFT.support' heading for tier 5 DEFT support admin", async () => {
     mockUseTier.mockReturnValue(
       makeTier({ tier: 5, deftDepartment: "support", subType: "support" }),
     );
     render(<SupportManagementView />);
     await waitFor(() => {
-      expect(screen.getByText("Support Dashboard")).toBeInTheDocument();
+      expect(screen.getByText("DEFT.support")).toBeInTheDocument();
     });
   });
 
@@ -373,11 +373,11 @@ describe("SupportManagementView", () => {
   // Tier 6 — system admin (all tickets + dashboard)
   // ---------------------------------------------------------------------------
 
-  it("shows 'Support Dashboard' heading for tier 6", async () => {
+  it("shows 'DEFT.support' heading for tier 6", async () => {
     mockUseTier.mockReturnValue(makeTier({ tier: 6 }));
     render(<SupportManagementView />);
     await waitFor(() => {
-      expect(screen.getByText("Support Dashboard")).toBeInTheDocument();
+      expect(screen.getByText("DEFT.support")).toBeInTheDocument();
     });
   });
 

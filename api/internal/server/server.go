@@ -347,6 +347,12 @@ func NewRouter(cfg Config) http.Handler {
 			// Pipeline stages route.
 			authed.Get("/orgs/{org}/pipeline/stages", h.pipelineHandler.GetStages)
 
+			// Global space routes — slug-based access to platform-wide spaces.
+			authed.Route("/global-spaces/{space}/threads", func(gs chi.Router) {
+				gs.Get("/", h.globalSpaceHandler.ListThreads)
+				gs.Post("/", h.globalSpaceHandler.CreateThread)
+			})
+
 			// Notification routes.
 			authed.Route("/notifications", func(n chi.Router) {
 				n.Get("/", h.notifHandler.List)

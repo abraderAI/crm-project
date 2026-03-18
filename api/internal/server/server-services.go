@@ -12,6 +12,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/conversion"
 	"github.com/abraderAI/crm-project/api/internal/event"
 	"github.com/abraderAI/crm-project/api/internal/gdpr"
+	"github.com/abraderAI/crm-project/api/internal/globalspace"
 	"github.com/abraderAI/crm-project/api/internal/health"
 	"github.com/abraderAI/crm-project/api/internal/llm"
 	"github.com/abraderAI/crm-project/api/internal/membership"
@@ -38,42 +39,43 @@ import (
 // serverHandlers holds all initialized request handlers and selected services
 // needed by the router's middleware and route closures.
 type serverHandlers struct {
-	jwtValidator      *auth.JWTValidator
-	apiKeyService     *auth.APIKeyService
-	apiKeyHandler     *auth.APIKeyHandler
-	wsHub             *ws.Hub
-	wsHandler         *ws.Handler
-	healthHandler     *health.Handler
-	notifHandler      *notification.Handler
-	orgHandler        *org.Handler
-	spaceHandler      *space.Handler
-	boardHandler      *board.Handler
-	threadHandler     *thread.Handler
-	msgHandler        *message.Handler
-	memberHandler     *membership.Handler
-	billingHandler    *billing.Handler
-	voteHandler       *vote.Handler
-	modHandler        *moderation.Handler
-	voiceHandler      *voice.Handler
-	gdprHandler       *gdpr.Handler
-	searchHandler     *search.Handler
-	uploadHandler     *upload.Handler // may be nil
-	webhookHandler    *webhook.Handler
-	auditHandler      *audit.Handler
-	adminService      *admin.Service
-	adminHandler      *admin.Handler
-	revisionHandler   *revision.Handler
-	pipelineHandler   *pipeline.Handler
-	llmHandler        *llm.Handler
-	provisionHandler  *provision.Handler
-	reportHandler     *reporting.Handler
-	tierHandler       *tier.Handler
-	conversionHandler *conversion.Handler
-	chatHandler       *chat.Handler
-	channelHandler    *channel.Handler
-	voiceLKWebhook    *voicelk.WebhookHandler
-	voiceLKBridge     *voicelk.BridgeHandler
-	voiceLKPhone      *voicelk.PhoneHandler
+	jwtValidator       *auth.JWTValidator
+	apiKeyService      *auth.APIKeyService
+	apiKeyHandler      *auth.APIKeyHandler
+	wsHub              *ws.Hub
+	wsHandler          *ws.Handler
+	healthHandler      *health.Handler
+	notifHandler       *notification.Handler
+	orgHandler         *org.Handler
+	spaceHandler       *space.Handler
+	boardHandler       *board.Handler
+	threadHandler      *thread.Handler
+	msgHandler         *message.Handler
+	memberHandler      *membership.Handler
+	billingHandler     *billing.Handler
+	voteHandler        *vote.Handler
+	modHandler         *moderation.Handler
+	voiceHandler       *voice.Handler
+	gdprHandler        *gdpr.Handler
+	searchHandler      *search.Handler
+	uploadHandler      *upload.Handler // may be nil
+	webhookHandler     *webhook.Handler
+	auditHandler       *audit.Handler
+	adminService       *admin.Service
+	adminHandler       *admin.Handler
+	revisionHandler    *revision.Handler
+	pipelineHandler    *pipeline.Handler
+	llmHandler         *llm.Handler
+	provisionHandler   *provision.Handler
+	reportHandler      *reporting.Handler
+	tierHandler        *tier.Handler
+	conversionHandler  *conversion.Handler
+	chatHandler        *chat.Handler
+	channelHandler     *channel.Handler
+	voiceLKWebhook     *voicelk.WebhookHandler
+	voiceLKBridge      *voicelk.BridgeHandler
+	voiceLKPhone       *voicelk.PhoneHandler
+	globalSpaceHandler *globalspace.Handler
 }
 
 // newHandlers initialises all domain services and HTTP handlers from cfg,
@@ -221,6 +223,11 @@ func newHandlers(cfg Config) serverHandlers {
 	conversionService := conversion.NewService(cfg.DB)
 	conversionHandler := conversion.NewHandler(conversionService, auditService)
 
+	// Global space handler (forum, support, leads — slug-based access).
+	globalSpaceRepo := globalspace.NewRepository(cfg.DB)
+	globalSpaceService := globalspace.NewService(globalSpaceRepo)
+	globalSpaceHandler := globalspace.NewHandler(globalSpaceService)
+
 	// IO Phase 4: AI Web Chat Widget.
 	chatJWTSecret := cfg.ChatJWTSecret
 	if chatJWTSecret == "" {
@@ -231,41 +238,42 @@ func newHandlers(cfg Config) serverHandlers {
 	chatHandler := chat.NewHandler(chatService, chatJWTSecret)
 
 	return serverHandlers{
-		jwtValidator:      jwtValidator,
-		apiKeyService:     apiKeyService,
-		apiKeyHandler:     apiKeyHandler,
-		wsHub:             wsHub,
-		wsHandler:         wsHandler,
-		healthHandler:     healthHandler,
-		notifHandler:      notifHandler,
-		orgHandler:        orgHandler,
-		spaceHandler:      spaceHandler,
-		boardHandler:      boardHandler,
-		threadHandler:     threadHandler,
-		msgHandler:        msgHandler,
-		memberHandler:     memberHandler,
-		billingHandler:    billingHandler,
-		voteHandler:       voteHandler,
-		modHandler:        modHandler,
-		voiceHandler:      voiceHandler,
-		gdprHandler:       gdprHandler,
-		searchHandler:     searchHandler,
-		uploadHandler:     uploadHandler,
-		webhookHandler:    webhookHandler,
-		auditHandler:      auditHandler,
-		adminService:      adminService,
-		adminHandler:      adminHandler,
-		revisionHandler:   revisionHandler,
-		pipelineHandler:   pipelineHandler,
-		llmHandler:        llmHandler,
-		provisionHandler:  provisionHandler,
-		reportHandler:     reportHandler,
-		tierHandler:       tierHandler,
-		conversionHandler: conversionHandler,
-		chatHandler:       chatHandler,
-		channelHandler:    channelHandler,
-		voiceLKWebhook:    voiceLKWebhook,
-		voiceLKBridge:     voiceLKBridge,
-		voiceLKPhone:      voiceLKPhone,
+		jwtValidator:       jwtValidator,
+		apiKeyService:      apiKeyService,
+		apiKeyHandler:      apiKeyHandler,
+		wsHub:              wsHub,
+		wsHandler:          wsHandler,
+		healthHandler:      healthHandler,
+		notifHandler:       notifHandler,
+		orgHandler:         orgHandler,
+		spaceHandler:       spaceHandler,
+		boardHandler:       boardHandler,
+		threadHandler:      threadHandler,
+		msgHandler:         msgHandler,
+		memberHandler:      memberHandler,
+		billingHandler:     billingHandler,
+		voteHandler:        voteHandler,
+		modHandler:         modHandler,
+		voiceHandler:       voiceHandler,
+		gdprHandler:        gdprHandler,
+		searchHandler:      searchHandler,
+		uploadHandler:      uploadHandler,
+		webhookHandler:     webhookHandler,
+		auditHandler:       auditHandler,
+		adminService:       adminService,
+		adminHandler:       adminHandler,
+		revisionHandler:    revisionHandler,
+		pipelineHandler:    pipelineHandler,
+		llmHandler:         llmHandler,
+		provisionHandler:   provisionHandler,
+		reportHandler:      reportHandler,
+		tierHandler:        tierHandler,
+		conversionHandler:  conversionHandler,
+		chatHandler:        chatHandler,
+		channelHandler:     channelHandler,
+		voiceLKWebhook:     voiceLKWebhook,
+		voiceLKBridge:      voiceLKBridge,
+		voiceLKPhone:       voiceLKPhone,
+		globalSpaceHandler: globalSpaceHandler,
 	}
 }
