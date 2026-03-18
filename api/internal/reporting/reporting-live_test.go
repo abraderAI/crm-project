@@ -100,7 +100,7 @@ func createThread(t *testing.T, db *gorm.DB, boardID, title, authorID string, me
 		Metadata: metadata,
 	}
 	require.NoError(t, db.Create(thread).Error)
-	require.NoError(t, db.Exec("UPDATE threads SET created_at = ? WHERE id = ?", createdAt, thread.ID).Error)
+	require.NoError(t, db.Exec("UPDATE threads SET created_at = ? WHERE id = ?", createdAt.Format("2006-01-02 15:04:05.999"), thread.ID).Error)
 	require.NoError(t, db.First(thread, "id = ?", thread.ID).Error)
 	return thread
 }
@@ -114,7 +114,7 @@ func createMessage(t *testing.T, db *gorm.DB, threadID, authorID string, created
 		Metadata: "{}",
 	}
 	require.NoError(t, db.Create(msg).Error)
-	require.NoError(t, db.Exec("UPDATE messages SET created_at = ? WHERE id = ?", createdAt, msg.ID).Error)
+	require.NoError(t, db.Exec("UPDATE messages SET created_at = ? WHERE id = ?", createdAt.Format("2006-01-02 15:04:05.999"), msg.ID).Error)
 }
 
 func createAdminMembership(t *testing.T, db *gorm.DB, orgID, userID string) {
@@ -154,7 +154,7 @@ func seedSupportData(t *testing.T, db *gorm.DB) string {
 	space := createSupportSpace(t, db, org.ID)
 	board := createBoard(t, db, space.ID)
 
-	now := time.Now().UTC()
+	now := time.Now()
 	day1 := now.Add(-60 * time.Hour) // 2.5 days ago — within 72h, not overdue
 	day2 := now.Add(-36 * time.Hour) // 1.5 days ago
 	day3 := now.Add(-12 * time.Hour) // 0.5 days ago

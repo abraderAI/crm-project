@@ -16,7 +16,7 @@ tasks:
       - task --list
     silent: true
 
-  build:
+  go:build:
     desc: Build the API server binary
     dir: '{{.API_DIR}}'
     cmds:
@@ -26,6 +26,11 @@ tasks:
       - '**/*.go'
     generates:
       - '../api/bin/server'
+
+  build:
+    desc: Alias for go:build
+    cmds:
+      - task: go:build
 
   cli:build:
     desc: Build the CLI binary
@@ -38,26 +43,41 @@ tasks:
     generates:
       - '../api/bin/deft'
 
-  fmt:
+  go:fmt:
     desc: Format Go code
     dir: '{{.API_DIR}}'
     cmds:
       - gofmt -w .
 
-  lint:
+  fmt:
+    desc: Alias for go:fmt
+    cmds:
+      - task: go:fmt
+
+  go:lint:
     desc: Lint Go code
     dir: '{{.API_DIR}}'
     cmds:
       - golangci-lint run ./...
 
-  test:
-    desc: Run all tests
+  lint:
+    desc: Alias for go:lint
+    cmds:
+      - task: go:lint
+
+  go:test:
+    desc: Run all Go tests
     dir: '{{.API_DIR}}'
     cmds:
       - go test -race -count=1 ./...
 
-  test:coverage:
-    desc: Run tests with coverage (must be ≥85%)
+  test:
+    desc: Alias for go:test
+    cmds:
+      - task: go:test
+
+  go:test:coverage:
+    desc: Run Go tests with coverage (must be ≥85%)
     dir: '{{.API_DIR}}'
     cmds:
       - go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./internal/... ./pkg/...
@@ -70,6 +90,11 @@ tasks:
           exit 1
         fi
         echo "PASS: Coverage ${TOTAL}% meets {{.COVERAGE_THRESHOLD}}% threshold"
+
+  test:coverage:
+    desc: Alias for go:test:coverage
+    cmds:
+      - task: go:test:coverage
 
   test:fuzz:
     desc: Run fuzz tests (short mode for CI)

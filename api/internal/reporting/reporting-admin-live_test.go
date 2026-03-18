@@ -23,7 +23,7 @@ import (
 func seedAdminReportingData(t *testing.T, env *liveAuthEnv) (org1ID, org2ID, org3ID string) {
 	t.Helper()
 
-	now := time.Now().UTC()
+	now := time.Now()
 
 	// Org 1: 3 support tickets, 2 CRM leads.
 	o1 := createTestOrg(t, env.DB, "admin-rpt-org1")

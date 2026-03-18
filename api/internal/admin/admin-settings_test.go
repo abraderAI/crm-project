@@ -132,14 +132,14 @@ func TestService_UpdateSettings_AllValidKeys(t *testing.T) {
 	svc := NewService(db)
 	ctx := context.Background()
 
-	for key := range KnownSettingKeys {
+	for key := range knownSettingKeys() {
 		patch := map[string]json.RawMessage{key: json.RawMessage(`{"test":true}`)}
 		require.NoError(t, svc.UpdateSettings(ctx, patch, "admin1"), "failed for key: %s", key)
 	}
 
 	settings, err := svc.GetAllSettings(ctx)
 	require.NoError(t, err)
-	assert.Len(t, settings, len(KnownSettingKeys))
+	assert.Len(t, settings, len(knownSettingKeys()))
 }
 
 // --- System Settings Handler Tests ---
