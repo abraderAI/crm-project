@@ -13,6 +13,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/admin"
 	"github.com/abraderAI/crm-project/api/internal/config"
 	"github.com/abraderAI/crm-project/api/internal/database"
+	"github.com/abraderAI/crm-project/api/internal/seed"
 	"github.com/abraderAI/crm-project/api/internal/server"
 )
 
@@ -49,6 +50,12 @@ func main() {
 
 	if err := database.Migrate(db); err != nil {
 		logger.Error("failed to run migrations", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	// Seed system org, global spaces, and their default boards (idempotent).
+	if err := seed.Run(db); err != nil {
+		logger.Error("failed to seed database", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 

@@ -2,6 +2,7 @@
 package seed
 
 import (
+	"errors"
 	"fmt"
 
 	"gorm.io/gorm"
@@ -31,6 +32,9 @@ var globalSpaces = []globalSpaceDef{
 	{Slug: "global-leads", Name: "Leads", Description: "Lead records (DEFT-internal)", Type: models.SpaceTypeCRM},
 }
 
+// defaultBoardSlug is the slug for the single default board in each global space.
+const defaultBoardSlug = "default"
+
 // deftSpaceDef defines a DEFT department space to seed.
 type deftSpaceDef struct {
 	Slug        string
@@ -58,7 +62,8 @@ func Run(db *gorm.DB) error {
 	return nil
 }
 
-// seedSystemOrg creates the system org and its global spaces idempotently.
+// seedSystemOrg creates the system org, its global spaces, and a default
+// board in each space idempotently.
 func seedSystemOrg(db *gorm.DB) error {
 	org, err := findOrCreateOrg(db, SystemOrgSlug, "System", "System-owned organization for global spaces")
 	if err != nil {
@@ -66,8 +71,12 @@ func seedSystemOrg(db *gorm.DB) error {
 	}
 
 	for _, sp := range globalSpaces {
-		if err := findOrCreateSpace(db, org.ID, sp.Slug, sp.Name, sp.Description, sp.Type); err != nil {
+		spaceID, err := findOrCreateSpaceID(db, org.ID, sp.Slug, sp.Name, sp.Description, sp.Type)
+		if err != nil {
 			return fmt.Errorf("seeding space %s: %w", sp.Slug, err)
+		}
+		if err := findOrCreateBoard(db, spaceID, defaultBoardSlug, "Default"); err != nil {
+			return fmt.Errorf("seeding board for %s: %w", sp.Slug, err)
 		}
 	}
 	return nil
@@ -81,7 +90,7 @@ func seedDeftOrg(db *gorm.DB) error {
 	}
 
 	for _, sp := range deftSpaces {
-		if err := findOrCreateSpace(db, org.ID, sp.Slug, sp.Name, sp.Description, sp.Type); err != nil {
+		if _, err := findOrCreateSpaceID(db, org.ID, sp.Slug, sp.Name, sp.Description, sp.Type); err != nil {
 			return fmt.Errorf("seeding space %s: %w", sp.Slug, err)
 		}
 	}
@@ -111,17 +120,19 @@ func findOrCreateOrg(db *gorm.DB, slug, name, description string) (*models.Org, 
 	return &org, nil
 }
 
-// findOrCreateSpace looks up a space by org ID and slug, creating it if missing.
-func findOrCreateSpace(db *gorm.DB, orgID, slug, name, description string, spaceType models.SpaceType) error {
-	var count int64
-	if err := db.Model(&models.Space{}).Where("org_id = ? AND slug = ?", orgID, slug).Count(&count).Error; err != nil {
-		return fmt.Errorf("checking space %s: %w", slug, err)
+// findOrCreateSpaceID looks up a space by org ID and slug (creating it if missing)
+// and returns the space ID.
+func findOrCreateSpaceID(db *gorm.DB, orgID, slug, name, description string, spaceType models.SpaceType) (string, error) {
+	var space models.Space
+	err := db.Where("org_id = ? AND slug = ?", orgID, slug).First(&space).Error
+	if err == nil {
+		return space.ID, nil
 	}
-	if count > 0 {
-		return nil
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", fmt.Errorf("checking space %s: %w", slug, err)
 	}
 
-	space := models.Space{
+	space = models.Space{
 		OrgID:       orgID,
 		Name:        name,
 		Slug:        slug,
@@ -130,7 +141,29 @@ func findOrCreateSpace(db *gorm.DB, orgID, slug, name, description string, space
 		Metadata:    "{}",
 	}
 	if err := db.Create(&space).Error; err != nil {
-		return fmt.Errorf("creating space %s: %w", slug, err)
+		return "", fmt.Errorf("creating space %s: %w", slug, err)
+	}
+	return space.ID, nil
+}
+
+// findOrCreateBoard looks up a board by space ID and slug, creating it if missing.
+func findOrCreateBoard(db *gorm.DB, spaceID, slug, name string) error {
+	var count int64
+	if err := db.Model(&models.Board{}).Where("space_id = ? AND slug = ?", spaceID, slug).Count(&count).Error; err != nil {
+		return fmt.Errorf("checking board %s: %w", slug, err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	board := models.Board{
+		SpaceID:  spaceID,
+		Name:     name,
+		Slug:     slug,
+		Metadata: "{}",
+	}
+	if err := db.Create(&board).Error; err != nil {
+		return fmt.Errorf("creating board %s: %w", slug, err)
 	}
 	return nil
 }
