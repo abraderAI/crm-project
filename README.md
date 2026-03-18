@@ -21,12 +21,11 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Administration console** — Platform-level admin with user/org management, impersonation, system settings, feature flags, security monitoring
 - **GDPR** — Hard-purge admin endpoints; soft delete everywhere else
 - **Observability** — Structured `slog` logging + OpenTelemetry traces and metrics
-- **Voice** — Stubbed `VoiceProvider` interface with thread-based logging and escalation
 - **App shell** — Sidebar navigation, topbar with search + user menu, breadcrumbs, dark/light theme toggle
 - **File preview** — Rich staged file previews (image thumbnails, icons, size) with upload progress indicators
 - **IO Channel Gateway** — Pluggable inbound channel processing with per-channel config, dead-letter queue (DLQ), and exponential-backoff retry engine
 - **Inbound Email** — MIME parsing, thread deduplication by Message-ID / In-Reply-To, lead-thread auto-creation
-- **Voice / LiveKit** — LiveKit room management, webhook ingestion, phone call bridging, transcript storage, and escalation
+- **Voice / LiveKit** — LiveKit AI-first inbound calls: STT→LLM→TTS agent pipeline, human escalation, call recording, transcript stored as thread messages, phone number provisioning; swappable `VoiceProvider` interface (stub available for core CRM)
 - **AI Web Chat Widget** — Embeddable shadow-DOM widget (plain JS/TS, zero deps) with JWT session auth, WebSocket streaming, and LLM-powered responses
 - **Agentic CLI** — `deft` terminal client for natural-language CRM queries via LLM function-calling, interactive REPL, and one-shot mode
 - **Reporting** — Org-scoped support-ticket and sales-pipeline analytics (15 query types): volume-over-time, status/priority breakdowns, assignee distribution, win/loss rates, funnel conversion, deal-value score distribution, avg time-in-stage, and CSV export with date + assignee filtering. Platform admins get cross-org aggregate dashboards with per-org sortable breakdown tables.
@@ -153,7 +152,8 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/notifications` | Notification feed |
 | `/notifications/preferences` | Notification channel preferences |
 | `/admin` | Admin dashboard |
-| `/admin/users` | User management (ban, purge, impersonate) |
+| `/admin/users` | User management list |
+| `/admin/users/[user_id]` | User detail — profile, cross-org memberships, ban/unban, GDPR purge, impersonation |
 | `/admin/billing` | Billing dashboard (FlexPoint) |
 | `/admin/webhooks` | Webhook management + delivery log |
 | `/admin/members` | Organization membership manager |
@@ -162,6 +162,15 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/admin/channels` | IO Channel configuration hub |
 | `/admin/channels/[type]` | Per-channel config, health, and DLQ monitor (`email` \| `voice` \| `chat`) |
 | `/admin/feature-flags` | Feature flag management |
+| `/admin/settings` | System settings — editable key-value platform configuration |
+| `/admin/security` | Security monitoring — recent logins and failed authentication events |
+| `/admin/rbac-policy` | RBAC policy editor — resolution strategy, role hierarchy, and dry-run role preview |
+| `/admin/api-usage` | API usage stats by endpoint (24 h / 7 d / 30 d windows) |
+| `/admin/llm-usage` | LLM enrichment call log (thread, model, tokens, latency) |
+| `/admin/exports` | Async data exports — trigger, poll status, and download (CSV / JSON) |
+| `/admin/channels/voice/numbers` | Phone number provisioning — list owned numbers, search available, purchase |
+| `/upgrade` | Self-service tier upgrade — plan comparison and activation |
+| `/settings` | User profile (Clerk), personal API keys, notification preferences, tier status |
 | `/reports` | Redirects to `/reports/support` |
 | `/reports/support` | Support tickets dashboard — status breakdown, volume over time, assignee + priority charts, CSV export |
 | `/reports/sales` | Sales pipeline dashboard — funnel, lead velocity, assignee, score distribution, conversion rates, time-in-stage, CSV export |
@@ -335,10 +344,13 @@ All accept `?from=YYYY-MM-DD&to=YYYY-MM-DD&assignee=<user_id>`. Org-scoped route
 | `GET` | `/v1/orgs/{org}/channels/{type}/dlq` | List dead-letter queue events |
 | `POST` | `/v1/orgs/{org}/channels/{type}/dlq/{id}/retry` | Retry a DLQ event |
 | `POST` | `/v1/orgs/{org}/channels/{type}/dlq/{id}/dismiss` | Dismiss a DLQ event |
+| `GET` | `/v1/orgs/{org}/channels/voice/numbers` | List owned phone numbers |
+| `POST` | `/v1/orgs/{org}/channels/voice/numbers/search` | Search available numbers by area code / country |
+| `POST` | `/v1/orgs/{org}/channels/voice/numbers/purchase` | Purchase a phone number (confirmation required) |
 | `POST` | `/v1/chat/session` | Create anonymous chat session (JWT issued) |
 | `POST` | `/v1/chat/message` | Send a chat message (WebSocket streaming) |
 | `POST` | `/v1/webhooks/livekit` | LiveKit webhook ingestion (token-verified) |
-| `GET` | `/v1/internal/contacts/lookup` | Internal bridge: contact lookup by phone |
+| `GET` | `/v1/internal/contacts/lookup` | Internal bridge: contact lookup by email / phone |
 | `GET` | `/v1/internal/threads/{id}/summary` | Internal bridge: thread summary for voice |
 
 ### Administration Console (`/v1/admin/*`)
