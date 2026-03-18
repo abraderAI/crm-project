@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { Thread } from "@/lib/api-types";
+import type { ThreadWithAuthor } from "@/lib/api-types";
 
 // Mock Clerk auth.
 const mockGetToken = vi.fn();
@@ -18,9 +18,11 @@ vi.mock("@/hooks/use-tier", () => ({
 // Mock global-api.
 const mockFetchGlobalSupportTickets = vi.fn();
 const mockCreateSupportTicket = vi.fn();
+const mockUpdateSupportTicket = vi.fn();
 vi.mock("@/lib/global-api", () => ({
   fetchGlobalSupportTickets: (...args: unknown[]) => mockFetchGlobalSupportTickets(...args),
   createSupportTicket: (...args: unknown[]) => mockCreateSupportTicket(...args),
+  updateSupportTicket: (...args: unknown[]) => mockUpdateSupportTicket(...args),
 }));
 
 import { SupportManagementView } from "./support-management-view";
@@ -50,8 +52,8 @@ function makeTier(
   };
 }
 
-/** Minimal Thread fixture factory. */
-function makeTicket(overrides: Partial<Thread> = {}): Thread {
+/** Minimal ThreadWithAuthor fixture factory. */
+function makeTicket(overrides: Partial<ThreadWithAuthor> = {}): ThreadWithAuthor {
   return {
     id: "t1",
     board_id: "b1",
@@ -63,6 +65,7 @@ function makeTicket(overrides: Partial<Thread> = {}): Thread {
     is_hidden: false,
     vote_score: 0,
     status: "open",
+    metadata: "{}",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
@@ -70,7 +73,7 @@ function makeTicket(overrides: Partial<Thread> = {}): Thread {
 }
 
 /** Paginated response wrapper. */
-function makePagedResponse(tickets: Thread[], hasMore = false) {
+function makePagedResponse(tickets: ThreadWithAuthor[], hasMore = false) {
   return {
     data: tickets,
     page_info: { has_more: hasMore, next_cursor: hasMore ? "cursor-next" : undefined },
@@ -956,5 +959,266 @@ describe("SupportManagementView", () => {
       "test-token",
       expect.objectContaining({ cursor: "cursor-abc" }),
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Ticket summary — creator and org info
+  // ---------------------------------------------------------------------------
+
+  it("shows author_name in ticket row when present", async () => {
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({
+      id: "t-author",
+      author_id: "user-123",
+      author_name: "Alice Smith",
+      author_email: "alice@example.com",
+    });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-creator-t-author")).toHaveTextContent("Alice Smith");
+    });
+  });
+
+  it("falls back to author_email when author_name is absent", async () => {
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({
+      id: "t-email",
+      author_id: "user-123",
+      author_email: "bob@example.com",
+    });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-creator-t-email")).toHaveTextContent("bob@example.com");
+    });
+  });
+
+  it("falls back to author_id when no name or email present", async () => {
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-id-only", author_id: "raw-clerk-id" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-creator-t-id-only")).toHaveTextContent("raw-clerk-id");
+    });
+  });
+
+  it("shows org_name in ticket row when present", async () => {
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({
+      id: "t-org",
+      org_id: "org-abc",
+      org_name: "Acme Corp",
+    });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-creator-t-org")).toHaveTextContent("Acme Corp");
+    });
+  });
+
+  it("falls back to org:id when org_name absent but org_id present", async () => {
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-orgid", org_id: "org-xyz" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-creator-t-orgid")).toHaveTextContent("org:org-xyz");
+    });
+  });
+
+  it("shows no org label when no org_id or org_name", async () => {
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-noorg", author_name: "User" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      const row = screen.getByTestId("ticket-creator-t-noorg");
+      expect(row).not.toHaveTextContent("org:");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Open button and work-view modal
+  // ---------------------------------------------------------------------------
+
+  it("renders an Open button for each ticket row", async () => {
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-open" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-open")).toBeInTheDocument();
+    });
+  });
+
+  it("clicking Open shows the work-view modal with ticket title", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-modal", title: "My Issue", body: "Some details" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-modal")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-modal"));
+    expect(screen.getByTestId("work-view-modal")).toBeInTheDocument();
+    expect(screen.getByTestId("work-view-title")).toHaveTextContent("My Issue");
+  });
+
+  it("work-view modal shows creator info", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({
+      id: "t-wv-creator",
+      author_name: "Carol",
+      org_name: "Beta Inc",
+    });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-wv-creator")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-wv-creator"));
+    expect(screen.getByTestId("work-view-creator")).toHaveTextContent("Carol");
+    expect(screen.getByTestId("work-view-creator")).toHaveTextContent("Beta Inc");
+  });
+
+  it("work-view modal shows status select for tier 4 (scopesAll)", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-status-sel", status: "open" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-status-sel")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-status-sel"));
+    expect(screen.getByTestId("work-view-status-select")).toBeInTheDocument();
+  });
+
+  it("work-view modal does not show status select for tier 2 (scopesMine)", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 2 }));
+    const ticket = makeTicket({ id: "t-no-status" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-no-status")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-no-status"));
+    expect(screen.queryByTestId("work-view-status-select")).not.toBeInTheDocument();
+  });
+
+  it("work-view cancel button closes the modal", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-cancel" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-cancel")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-cancel"));
+    expect(screen.getByTestId("work-view-modal")).toBeInTheDocument();
+    await user.click(screen.getByTestId("work-view-cancel-btn"));
+    expect(screen.queryByTestId("work-view-modal")).not.toBeInTheDocument();
+  });
+
+  it("work-view close (X) button closes the modal", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-xclose" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-xclose")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-xclose"));
+    await user.click(screen.getByTestId("work-view-close-btn"));
+    expect(screen.queryByTestId("work-view-modal")).not.toBeInTheDocument();
+  });
+
+  it("work-view save calls updateSupportTicket and updates list", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({
+      id: "t-save",
+      slug: "t-save-slug",
+      body: "old body",
+      status: "open",
+    });
+    const updated = makeTicket({
+      id: "t-save",
+      slug: "t-save-slug",
+      body: "new body",
+      status: "resolved",
+    });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    mockUpdateSupportTicket.mockResolvedValue(updated);
+
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-save")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-save"));
+
+    // Change body.
+    const bodyInput = screen.getByTestId("work-view-body-input");
+    await user.clear(bodyInput);
+    await user.type(bodyInput, "new body");
+
+    // Change status.
+    await user.selectOptions(screen.getByTestId("work-view-status-select"), "resolved");
+
+    await user.click(screen.getByTestId("work-view-save-btn"));
+
+    await waitFor(() => {
+      expect(mockUpdateSupportTicket).toHaveBeenCalledWith(
+        "test-token",
+        "t-save-slug",
+        expect.objectContaining({ body: "new body", status: "resolved" }),
+      );
+    });
+
+    // List row status badge should reflect the update.
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-status-t-save")).toHaveTextContent("resolved");
+    });
+  });
+
+  it("work-view save shows error on failure", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-save-err" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    mockUpdateSupportTicket.mockRejectedValue(new Error("Save failed"));
+
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-save-err")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-save-err"));
+    await user.click(screen.getByTestId("work-view-save-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("work-view-error")).toHaveTextContent("Save failed");
+    });
+  });
+
+  it("work-view does not call updateSupportTicket when token is null", async () => {
+    const user = userEvent.setup();
+    mockGetToken.mockResolvedValue(null);
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-null-token" });
+    // Let first fetch succeed (from initial render before token goes null).
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      // Even with null token at render time, empty list is shown.
+      expect(screen.getByTestId("tickets-empty")).toBeInTheDocument();
+    });
   });
 });

@@ -63,6 +63,64 @@ type createThreadRequest struct {
 	OrgID *string `json:"org_id"`
 }
 
+// GetThread handles GET /v1/global-spaces/{space}/threads/{slug}.
+// Returns the enriched thread including author email/name and org name.
+func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
+	spaceSlug := chi.URLParam(r, "space")
+	threadSlug := chi.URLParam(r, "slug")
+
+	t, err := h.service.GetThread(r.Context(), spaceSlug, threadSlug)
+	if err != nil {
+		apierrors.InternalError(w, "failed to get thread")
+		return
+	}
+	if t == nil {
+		apierrors.NotFound(w, "thread not found")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, t)
+}
+
+// updateThreadRequest is the request body for PATCH /v1/global-spaces/{space}/threads/{slug}.
+type updateThreadRequest struct {
+	Body   *string `json:"body"`
+	Status *string `json:"status"`
+}
+
+// UpdateThread handles PATCH /v1/global-spaces/{space}/threads/{slug}.
+// Requires authentication. Allows updating body and/or status.
+func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
+	spaceSlug := chi.URLParam(r, "space")
+	threadSlug := chi.URLParam(r, "slug")
+
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	var req updateThreadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierrors.BadRequest(w, "invalid request body")
+		return
+	}
+
+	input := UpdateInput(req)
+
+	t, err := h.service.UpdateThread(r.Context(), spaceSlug, threadSlug, uc.UserID, input)
+	if err != nil {
+		apierrors.InternalError(w, "failed to update thread")
+		return
+	}
+	if t == nil {
+		apierrors.NotFound(w, "thread not found")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, t)
+}
+
 // CreateThread handles POST /v1/global-spaces/{space}/threads.
 // Requires authentication. Tier enforcement is handled client-side.
 func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {

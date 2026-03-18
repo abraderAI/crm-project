@@ -101,3 +101,73 @@ func (r *Repository) SlugExistsInBoard(ctx context.Context, boardID, threadSlug 
 	}
 	return count > 0, nil
 }
+
+// FindThreadBySlug returns the thread matching slug in boardID, or nil if not found.
+func (r *Repository) FindThreadBySlug(ctx context.Context, boardID, threadSlug string) (*models.Thread, error) {
+	var t models.Thread
+	err := r.db.WithContext(ctx).
+		Where("board_id = ? AND slug = ? AND deleted_at IS NULL", boardID, threadSlug).
+		First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("finding thread by slug: %w", err)
+	}
+	return &t, nil
+}
+
+// UpdateThread persists changes to an existing thread record.
+func (r *Repository) UpdateThread(ctx context.Context, t *models.Thread) error {
+	if err := r.db.WithContext(ctx).Save(t).Error; err != nil {
+		return fmt.Errorf("updating global space thread: %w", err)
+	}
+	return nil
+}
+
+// GetUserShadowsByIDs returns a map of Clerk user ID → UserShadow for the given IDs.
+// Missing entries are silently omitted.
+func (r *Repository) GetUserShadowsByIDs(ctx context.Context, ids []string) (map[string]models.UserShadow, error) {
+	if len(ids) == 0 {
+		return map[string]models.UserShadow{}, nil
+	}
+	var shadows []models.UserShadow
+	if err := r.db.WithContext(ctx).
+		Where("clerk_user_id IN ?", ids).
+		Find(&shadows).Error; err != nil {
+		return nil, fmt.Errorf("fetching user shadows: %w", err)
+	}
+	result := make(map[string]models.UserShadow, len(shadows))
+	for _, s := range shadows {
+		result[s.ClerkUserID] = s
+	}
+	return result, nil
+}
+
+// CreateRevision stores a revision record for audit tracking.
+func (r *Repository) CreateRevision(ctx context.Context, rev *models.Revision) error {
+	if err := r.db.WithContext(ctx).Create(rev).Error; err != nil {
+		return fmt.Errorf("creating revision: %w", err)
+	}
+	return nil
+}
+
+// GetOrgNamesByIDs returns a map of org ID → org name for the given IDs.
+// Missing entries are silently omitted.
+func (r *Repository) GetOrgNamesByIDs(ctx context.Context, ids []string) (map[string]string, error) {
+	if len(ids) == 0 {
+		return map[string]string{}, nil
+	}
+	var orgs []models.Org
+	if err := r.db.WithContext(ctx).
+		Select("id, name").
+		Where("id IN ?", ids).
+		Find(&orgs).Error; err != nil {
+		return nil, fmt.Errorf("fetching org names: %w", err)
+	}
+	result := make(map[string]string, len(orgs))
+	for _, o := range orgs {
+		result[o.ID] = o.Name
+	}
+	return result, nil
+}

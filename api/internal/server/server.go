@@ -351,6 +351,8 @@ func NewRouter(cfg Config) http.Handler {
 			authed.Route("/global-spaces/{space}/threads", func(gs chi.Router) {
 				gs.Get("/", h.globalSpaceHandler.ListThreads)
 				gs.Post("/", h.globalSpaceHandler.CreateThread)
+				gs.Get("/{slug}", h.globalSpaceHandler.GetThread)
+				gs.Patch("/{slug}", h.globalSpaceHandler.UpdateThread)
 			})
 
 			// Notification routes.
