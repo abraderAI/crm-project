@@ -16,16 +16,19 @@ import (
 	"github.com/abraderAI/crm-project/api/pkg/response"
 )
 
-// InitialFeatureFlags are seeded on startup if they don't exist.
-var InitialFeatureFlags = []models.FeatureFlag{
-	{Key: "community_voting", Enabled: true},
-	{Key: "voice_module", Enabled: false},
-	{Key: "maintenance_mode", Enabled: false},
+// initialFeatureFlags returns the feature flags seeded on startup.
+// Returns a fresh slice on each call to prevent external mutation.
+func initialFeatureFlags() []models.FeatureFlag {
+	return []models.FeatureFlag{
+		{Key: "community_voting", Enabled: true},
+		{Key: "voice_module", Enabled: false},
+		{Key: "maintenance_mode", Enabled: false},
+	}
 }
 
 // SeedFeatureFlags creates the initial feature flags if they don't already exist.
 func (s *Service) SeedFeatureFlags(ctx context.Context) error {
-	for _, flag := range InitialFeatureFlags {
+	for _, flag := range initialFeatureFlags() {
 		var existing models.FeatureFlag
 		err := s.db.WithContext(ctx).Where("key = ?", flag.Key).First(&existing).Error
 		if err == gorm.ErrRecordNotFound {

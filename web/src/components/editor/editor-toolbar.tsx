@@ -106,16 +106,30 @@ export function EditorToolbar({
   );
 }
 
+/** Fluent command chain returned by editor.chain(). */
+export interface ChainedCommandLike {
+  focus: () => ChainedCommandLike;
+  toggleBold: () => ChainedCommandLike;
+  toggleItalic: () => ChainedCommandLike;
+  toggleCode: () => ChainedCommandLike;
+  toggleHeading: (attrs: { level: 1 | 2 | 3 | 4 | 5 | 6 }) => ChainedCommandLike;
+  toggleBulletList: () => ChainedCommandLike;
+  toggleOrderedList: () => ChainedCommandLike;
+  toggleCodeBlock: () => ChainedCommandLike;
+  undo: () => ChainedCommandLike;
+  redo: () => ChainedCommandLike;
+  run: () => boolean;
+}
+
 /** Minimal editor interface for building toolbar actions. */
 export interface EditorForToolbar {
   isActive: (name: string) => boolean;
-  chain: () => Record<string, (...args: never[]) => Record<string, (...args: never[]) => unknown>>;
-  can: () => Record<string, (...args: never[]) => Record<string, (...args: never[]) => unknown>>;
+  chain: () => ChainedCommandLike;
+  can: () => { chain: () => ChainedCommandLike };
 }
 
 /** Build default toolbar actions from a Tiptap-like editor API. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildDefaultActions(editor: any): ToolbarAction[] {
+export function buildDefaultActions(editor: EditorForToolbar): ToolbarAction[] {
   return [
     {
       key: "bold",

@@ -13,21 +13,24 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/models"
 )
 
-// AllowedContentTypes defines permitted file MIME types.
-var AllowedContentTypes = map[string]bool{
-	"image/jpeg":               true,
-	"image/png":                true,
-	"image/gif":                true,
-	"image/webp":               true,
-	"image/svg+xml":            true,
-	"application/pdf":          true,
-	"text/plain":               true,
-	"text/csv":                 true,
-	"text/markdown":            true,
-	"application/json":         true,
-	"application/xml":          true,
-	"application/zip":          true,
-	"application/octet-stream": true,
+// allowedContentTypes returns the set of permitted file MIME types.
+// Returns a fresh map on each call to prevent external mutation.
+func allowedContentTypes() map[string]bool {
+	return map[string]bool{
+		"image/jpeg":               true,
+		"image/png":                true,
+		"image/gif":                true,
+		"image/webp":               true,
+		"image/svg+xml":            true,
+		"application/pdf":          true,
+		"text/plain":               true,
+		"text/csv":                 true,
+		"text/markdown":            true,
+		"application/json":         true,
+		"application/xml":          true,
+		"application/zip":          true,
+		"application/octet-stream": true,
+	}
 }
 
 // Service provides business logic for file uploads.
@@ -47,7 +50,7 @@ func ValidateContentType(contentType string) bool {
 	// Normalize: take only the mime type part (before params).
 	ct := strings.Split(contentType, ";")[0]
 	ct = strings.TrimSpace(ct)
-	return AllowedContentTypes[ct]
+	return allowedContentTypes()[ct]
 }
 
 // DetectContentType reads the first 512 bytes to detect the MIME type.

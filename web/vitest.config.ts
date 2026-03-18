@@ -39,6 +39,8 @@ export default defineConfig({
         "src/components/entities/entity-create-view.tsx",
         "src/components/entities/entity-settings-view.tsx",
         "src/lib/api-types.ts",
+        "src/lib/api-types-admin.ts",
+        "src/lib/api-types-channel.ts",
         "src/lib/reporting-types.ts",
         "src/lib/tier-types.ts",
         "src/app/(public)/**",

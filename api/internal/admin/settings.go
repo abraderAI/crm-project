@@ -16,14 +16,17 @@ import (
 	"github.com/abraderAI/crm-project/api/pkg/response"
 )
 
-// KnownSettingKeys lists the valid top-level setting keys with their schema descriptions.
-var KnownSettingKeys = map[string]string{
-	"default_pipeline_stages": "array of stage names for new CRM spaces",
-	"default_templates":       "default Space/Board templates for provisioned customer Orgs",
-	"notification_defaults":   "digest frequency, email from address, etc.",
-	"file_upload_limits":      "max_size (bytes), allowed_types (array of MIME types)",
-	"webhook_retry_policy":    "max_attempts (int), backoff_multiplier (float)",
-	"llm_rate_limits":         "provider rate limits configuration",
+// knownSettingKeys returns the valid top-level setting keys with their schema descriptions.
+// Returns a fresh copy on each call to prevent external mutation.
+func knownSettingKeys() map[string]string {
+	return map[string]string{
+		"default_pipeline_stages": "array of stage names for new CRM spaces",
+		"default_templates":       "default Space/Board templates for provisioned customer Orgs",
+		"notification_defaults":   "digest frequency, email from address, etc.",
+		"file_upload_limits":      "max_size (bytes), allowed_types (array of MIME types)",
+		"webhook_retry_policy":    "max_attempts (int), backoff_multiplier (float)",
+		"llm_rate_limits":         "provider rate limits configuration",
+	}
 }
 
 // GetAllSettings returns all system settings as a single JSON object.
@@ -57,8 +60,9 @@ func (s *Service) GetSetting(ctx context.Context, key string) (*models.SystemSet
 // Only known setting keys are accepted; unknown keys are rejected.
 func (s *Service) UpdateSettings(ctx context.Context, patch map[string]json.RawMessage, updatedBy string) error {
 	// Validate keys.
+	keys := knownSettingKeys()
 	for key := range patch {
-		if _, ok := KnownSettingKeys[key]; !ok {
+		if _, ok := keys[key]; !ok {
 			return fmt.Errorf("unknown setting key: %s", key)
 		}
 	}
