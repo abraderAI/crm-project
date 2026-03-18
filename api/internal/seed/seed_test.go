@@ -122,6 +122,24 @@ func TestRun_SpaceTypes(t *testing.T) {
 	}
 }
 
+func TestRun_CreatesDefaultBoardsForGlobalSpaces(t *testing.T) {
+	db := testDB(t)
+	require.NoError(t, seed.Run(db))
+
+	// Each global space should have exactly one default board.
+	globalSlugs := []string{"global-docs", "global-forum", "global-support", "global-leads"}
+	for _, spaceSlug := range globalSlugs {
+		t.Run(spaceSlug, func(t *testing.T) {
+			var board models.Board
+			err := db.Joins("JOIN spaces ON spaces.id = boards.space_id").
+				Where("spaces.slug = ? AND boards.slug = ?", spaceSlug, "default").
+				First(&board).Error
+			require.NoError(t, err)
+			assert.Equal(t, "Default", board.Name)
+		})
+	}
+}
+
 func TestRun_ThirdRunStillIdempotent(t *testing.T) {
 	db := testDB(t)
 

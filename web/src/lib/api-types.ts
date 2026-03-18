@@ -44,6 +44,20 @@ export interface Board extends BaseEntity {
   threads?: Thread[];
 }
 
+/**
+ * ThreadWithAuthor extends Thread with resolved creator and org display info.
+ * These optional fields are populated by the globalspace endpoints when the
+ * author or org can be resolved from local shadow/org tables.
+ */
+export interface ThreadWithAuthor extends Thread {
+  /** Email address of the thread author, if available. */
+  author_email?: string;
+  /** Display name of the thread author, if available. */
+  author_name?: string;
+  /** Name of the org associated with this thread, if available. */
+  org_name?: string;
+}
+
 /** Thread — discussion thread within a Board. */
 export interface Thread extends BaseEntity {
   board_id: string;

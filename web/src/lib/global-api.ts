@@ -1,4 +1,4 @@
-import type { PaginatedResponse, Thread } from "./api-types";
+import type { PaginatedResponse, Thread, ThreadWithAuthor } from "./api-types";
 import { buildHeaders, buildUrl, parseResponse, clientMutate } from "./api-client";
 
 /** Global space slugs. */
@@ -109,7 +109,7 @@ export async function fetchUserSupportTickets(
 export async function fetchGlobalSupportTickets(
   token: string,
   params?: GlobalSupportParams,
-): Promise<PaginatedResponse<Thread>> {
+): Promise<PaginatedResponse<ThreadWithAuthor>> {
   const queryParams: Record<string, string> = {};
   if (params?.limit) queryParams["limit"] = String(params.limit);
   if (params?.cursor) queryParams["cursor"] = params.cursor;
@@ -184,6 +184,44 @@ export async function createForumThread(
     token,
     body: values,
   });
+}
+
+/**
+ * Fetch a single support ticket from global-support by its slug.
+ * Requires authentication.
+ */
+export async function fetchSupportTicket(token: string, slug: string): Promise<ThreadWithAuthor> {
+  const url = buildUrl(
+    `/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads/${encodeURIComponent(slug)}`,
+  );
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<ThreadWithAuthor>(response);
+}
+
+/** Values for updating a support ticket (body and/or status). */
+export interface UpdateSupportTicketValues {
+  body?: string;
+  status?: string;
+}
+
+/**
+ * Update a support ticket's body and/or status.
+ * Requires authentication.
+ */
+export async function updateSupportTicket(
+  token: string,
+  slug: string,
+  values: UpdateSupportTicketValues,
+): Promise<ThreadWithAuthor> {
+  return clientMutate<ThreadWithAuthor>(
+    "PATCH",
+    `/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads/${encodeURIComponent(slug)}`,
+    { token, body: values },
+  );
 }
 
 /** Values for creating a support ticket. */

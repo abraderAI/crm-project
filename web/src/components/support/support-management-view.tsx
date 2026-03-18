@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { AlertTriangle, LifeBuoy, Plus, X } from "lucide-react";
+import { AlertTriangle, ExternalLink, LifeBuoy, Plus, Save, User, X } from "lucide-react";
 
-import type { Thread } from "@/lib/api-types";
+import type { ThreadWithAuthor } from "@/lib/api-types";
 import {
   fetchGlobalSupportTickets,
   createSupportTicket,
+  updateSupportTicket,
   type GlobalSupportParams,
 } from "@/lib/global-api";
 import { useTier } from "@/hooks/use-tier";
@@ -35,6 +36,14 @@ interface TicketFilterValues {
   search: string;
 }
 
+/** Status transitions available in the work-view. */
+const WORK_STATUS_OPTIONS = [
+  { value: "open", label: "Open" },
+  { value: "pending", label: "Pending" },
+  { value: "resolved", label: "Resolved" },
+  { value: "closed", label: "Closed" },
+];
+
 const DEFAULT_FILTERS: TicketFilterValues = {
   status: "all",
   search: "",
@@ -53,10 +62,10 @@ const DEFAULT_FILTERS: TicketFilterValues = {
  * Tier 6 (platform admin): all tickets + stats.
  */
 export function SupportManagementView(): ReactNode {
-  const { tier, subType, deftDepartment, orgId, isLoading: tierLoading } = useTier();
+  const { tier, subType, orgId, isLoading: tierLoading } = useTier();
   const { getToken } = useAuth();
 
-  const [threads, setThreads] = useState<Thread[]>([]);
+  const [threads, setThreads] = useState<ThreadWithAuthor[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -69,6 +78,13 @@ export function SupportManagementView(): ReactNode {
   const [createBody, setCreateBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
+
+  // Work-view modal state.
+  const [workTicket, setWorkTicket] = useState<ThreadWithAuthor | null>(null);
+  const [workBody, setWorkBody] = useState("");
+  const [workStatus, setWorkStatus] = useState("");
+  const [workSaving, setWorkSaving] = useState(false);
+  const [workError, setWorkError] = useState("");
 
   const mountedRef = useRef(true);
 
@@ -97,14 +113,8 @@ export function SupportManagementView(): ReactNode {
   /** Show stats strip for org and global views (not for personal-only views). */
   const showStats = scopesAll || scopesOrg;
 
-  // Page heading based on scope.
-  let pageTitle = "My Tickets";
-  if (scopesAll) {
-    const isDeftSupportAdmin = tier === 5 && deftDepartment === "support";
-    pageTitle = isDeftSupportAdmin || tier >= 6 ? "Support Dashboard" : "All Support Tickets";
-  } else if (scopesOrg) {
-    pageTitle = tier === 5 ? "Organization Support" : "Organization Tickets";
-  }
+  // Page heading is always the product name regardless of tier.
+  const pageTitle = "DEFT.support";
 
   // ---------------------------------------------------------------------------
   // Data fetching
@@ -186,6 +196,41 @@ export function SupportManagementView(): ReactNode {
   // ---------------------------------------------------------------------------
   // Create ticket handler
   // ---------------------------------------------------------------------------
+
+  // Open a ticket in the work-view modal.
+  const handleOpenTicket = (ticket: ThreadWithAuthor): void => {
+    setWorkTicket(ticket);
+    setWorkBody(ticket.body ?? "");
+    setWorkStatus(ticket.status ?? "open");
+    setWorkError("");
+  };
+
+  // Close the work-view modal without saving.
+  const handleCloseWork = (): void => {
+    setWorkTicket(null);
+    setWorkError("");
+  };
+
+  // Save changes from the work-view modal.
+  const handleSaveWork = async (): Promise<void> => {
+    if (!workTicket) return;
+    setWorkSaving(true);
+    setWorkError("");
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const updated = await updateSupportTicket(token, workTicket.slug, {
+        body: workBody,
+        status: workStatus,
+      });
+      setThreads((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setWorkTicket(updated);
+    } catch (err) {
+      setWorkError(err instanceof Error ? err.message : "Failed to save changes");
+    } finally {
+      setWorkSaving(false);
+    }
+  };
 
   const handleCreate = async (): Promise<void> => {
     if (!createTitle.trim()) return;
@@ -421,25 +466,160 @@ export function SupportManagementView(): ReactNode {
           {filteredThreads.map((ticket) => {
             const status = ticket.status ?? "open";
             const badgeClass = STATUS_STYLES[status] ?? STATUS_STYLES["open"];
+            const creatorLabel = ticket.author_name ?? ticket.author_email ?? ticket.author_id;
+            const orgLabel = ticket.org_name ?? null;
             return (
               <div
                 key={ticket.id}
                 data-testid={`ticket-row-${ticket.id}`}
                 className="flex items-center justify-between px-4 py-3"
               >
-                <div className="flex min-w-0 items-start gap-2">
+                <div className="flex min-w-0 flex-1 items-start gap-2">
                   <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <span className="truncate text-sm text-foreground">{ticket.title}</span>
+                  <div className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {ticket.title}
+                    </span>
+                    <div
+                      data-testid={`ticket-creator-${ticket.id}`}
+                      className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"
+                    >
+                      <User className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{creatorLabel}</span>
+                      {orgLabel && <span className="truncate">&middot; {orgLabel}</span>}
+                    </div>
+                  </div>
                 </div>
-                <span
-                  data-testid={`ticket-status-${ticket.id}`}
-                  className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass}`}
-                >
-                  {status}
-                </span>
+                <div className="ml-3 flex shrink-0 items-center gap-2">
+                  <span
+                    data-testid={`ticket-status-${ticket.id}`}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass}`}
+                  >
+                    {status}
+                  </span>
+                  <button
+                    data-testid={`ticket-open-btn-${ticket.id}`}
+                    onClick={() => handleOpenTicket(ticket)}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open
+                  </button>
+                </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Work-view modal */}
+      {workTicket && (
+        <div
+          data-testid="work-view-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Support ticket work view"
+        >
+          <div className="relative flex w-full max-w-lg flex-col gap-4 rounded-lg border border-border bg-background p-6 shadow-lg">
+            {/* Modal header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3
+                  data-testid="work-view-title"
+                  className="text-base font-semibold text-foreground"
+                >
+                  {workTicket.title}
+                </h3>
+                <div
+                  data-testid="work-view-creator"
+                  className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"
+                >
+                  <User className="h-3 w-3 shrink-0" />
+                  <span>
+                    {workTicket.author_name ?? workTicket.author_email ?? workTicket.author_id}
+                  </span>
+                  {workTicket.org_name && <span>&middot; {workTicket.org_name}</span>}
+                </div>
+              </div>
+              <button
+                data-testid="work-view-close-btn"
+                onClick={handleCloseWork}
+                className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Error banner */}
+            {workError && (
+              <div
+                data-testid="work-view-error"
+                className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {workError}
+              </div>
+            )}
+
+            {/* Status selector — only operators/admins may change status */}
+            {scopesAll && (
+              <div>
+                <label htmlFor="work-view-status" className="text-xs font-medium text-foreground">
+                  Status
+                </label>
+                <select
+                  id="work-view-status"
+                  data-testid="work-view-status-select"
+                  value={workStatus}
+                  onChange={(e) => setWorkStatus(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
+                >
+                  {WORK_STATUS_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Issue body */}
+            <div>
+              <label htmlFor="work-view-body" className="text-xs font-medium text-foreground">
+                Description
+              </label>
+              <textarea
+                id="work-view-body"
+                data-testid="work-view-body-input"
+                value={workBody}
+                onChange={(e) => setWorkBody(e.target.value)}
+                rows={5}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                data-testid="work-view-save-btn"
+                onClick={() => void handleSaveWork()}
+                disabled={workSaving}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {workSaving ? "Saving..." : "Save changes"}
+              </button>
+              <button
+                data-testid="work-view-cancel-btn"
+                onClick={handleCloseWork}
+                className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
