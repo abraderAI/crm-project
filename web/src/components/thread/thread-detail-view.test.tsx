@@ -255,4 +255,124 @@ describe("ThreadDetailView", () => {
     });
     expect(screen.getByTestId("upload-error-bad.txt")).toHaveTextContent("Network error");
   });
+
+  it("does not render editor when thread is locked", () => {
+    render(<ThreadDetailView {...defaultProps} thread={{ ...thread, is_locked: true }} />);
+    expect(screen.queryByTestId("message-editor")).not.toBeInTheDocument();
+  });
+
+  it("shows revision history when revision toggle is clicked", async () => {
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    await user.click(screen.getByTestId("revision-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("no-revisions")).toBeInTheDocument();
+    });
+  });
+
+  it("hides revision history when revision toggle is clicked twice", async () => {
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    await user.click(screen.getByTestId("revision-toggle"));
+    await waitFor(() => {
+      expect(screen.getByTestId("no-revisions")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId("revision-toggle"));
+    expect(screen.queryByTestId("no-revisions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("revision-history")).not.toBeInTheDocument();
+  });
+
+  it("displays file attachments when uploads are present", async () => {
+    const upload = {
+      id: "u1",
+      org_id: "o1",
+      entity_type: "thread",
+      entity_id: "t1",
+      filename: "document.pdf",
+      content_type: "application/pdf",
+      size: 1024,
+      storage_path: "/uploads/document.pdf",
+      uploader_id: "user-1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    mockFetchThreadUploads.mockResolvedValue({ data: [upload], page_info: { has_more: false } });
+
+    render(<ThreadDetailView {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("thread-attachments")).toBeInTheDocument();
+    });
+  });
+
+  it("does not send message when content is empty", async () => {
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    // Switch to markdown mode so submit goes through onSubmit directly.
+    await user.click(screen.getByTestId("toolbar-markdown"));
+    // Clear the textarea in case tiptap populated it with HTML on mode switch.
+    const textarea = screen.getByTestId("markdown-textarea");
+    await user.clear(textarea);
+    await user.click(screen.getByTestId("editor-submit-btn"));
+
+    expect(mockCreateMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends message and refreshes router on success", async () => {
+    mockCreateMessage.mockResolvedValue({});
+
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    await user.click(screen.getByTestId("toolbar-markdown"));
+    const textarea = screen.getByTestId("markdown-textarea");
+    await user.clear(textarea);
+    await user.type(textarea, "Hello world");
+    await user.click(screen.getByTestId("editor-submit-btn"));
+
+    await waitFor(() => {
+      expect(mockCreateMessage).toHaveBeenCalled();
+    });
+    expect(mockRefresh).toHaveBeenCalled();
+  });
+
+  it("does not fetch uploads when token is unavailable", async () => {
+    mockGetToken.mockResolvedValue(null);
+    render(<ThreadDetailView {...defaultProps} />);
+    // Give effects time to run; fetchThreadUploads should not be called
+    // because loadFiles returns early on a null token.
+    await waitFor(() => {
+      expect(mockFetchThreadUploads).not.toHaveBeenCalled();
+    });
+  });
+
+  it("uses cached revisions on subsequent revision toggle", async () => {
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    // Open, close, then open again — second open uses cached revisions.
+    await user.click(screen.getByTestId("revision-toggle"));
+    await waitFor(() => expect(screen.getByTestId("no-revisions")).toBeInTheDocument());
+    await user.click(screen.getByTestId("revision-toggle"));
+    await user.click(screen.getByTestId("revision-toggle"));
+    await waitFor(() => expect(screen.getByTestId("no-revisions")).toBeInTheDocument());
+    // Only one fetch should have been issued (the second open hits the revisionsLoaded guard).
+    expect(mockFetchThreadRevisions).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes flag form when cancel is clicked", async () => {
+    const user = userEvent.setup();
+    render(<ThreadDetailView {...defaultProps} />);
+
+    await user.click(screen.getByTestId("flag-toggle"));
+    expect(screen.getByTestId("flag-form")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("flag-cancel-btn"));
+    expect(screen.queryByTestId("flag-form")).not.toBeInTheDocument();
+  });
 });
