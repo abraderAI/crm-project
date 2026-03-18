@@ -1008,7 +1008,6 @@ describe("SupportManagementView", () => {
     mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
     const ticket = makeTicket({
       id: "t-org",
-      org_id: "org-abc",
       org_name: "Acme Corp",
     });
     mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
@@ -1018,13 +1017,13 @@ describe("SupportManagementView", () => {
     });
   });
 
-  it("falls back to org:id when org_name absent but org_id present", async () => {
+  it("shows no org label when org_name is absent", async () => {
     mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
-    const ticket = makeTicket({ id: "t-orgid", org_id: "org-xyz" });
+    const ticket = makeTicket({ id: "t-orgid", author_name: "User" });
     mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
     render(<SupportManagementView />);
     await waitFor(() => {
-      expect(screen.getByTestId("ticket-creator-t-orgid")).toHaveTextContent("org:org-xyz");
+      expect(screen.getByTestId("ticket-creator-t-orgid")).not.toHaveTextContent("org:");
     });
   });
 
