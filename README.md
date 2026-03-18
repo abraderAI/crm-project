@@ -120,8 +120,9 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   └── src/                    # widget.ts, chat.ts, ui.ts, fingerprint.ts
 ├── agent/                      # TypeScript AI agent (function-calling wrapper)
 ├── docker/                     # Dockerfiles + docker-compose.yml
-├── docs/                       # Environment variables, architecture notes
-├── SPECIFICATION.md            # Full implementation spec
+├── docs/                       # Environment variables, architecture notes, PRDs, specs
+├── secrets/                    # Local secret files (git-ignored); see secrets/README.md
+├── CHANGELOG.md                # Project changelog (Keep a Changelog format)
 └── Taskfile.yml                # All build/test/lint commands
 ```
 
@@ -203,6 +204,8 @@ cp web/.env.example web/.env.local   # fill in NEXT_PUBLIC_* keys
 
 See [`docs/env-vars.md`](docs/env-vars.md) for the full reference.
 
+> **Secrets**: place any local `.env` files you don't want tracked in the `secrets/` directory (git-ignored). See `secrets/README.md`.
+
 **3. Bootstrap a platform admin**
 
 Set the `PLATFORM_ADMIN_USER_ID` environment variable to your Clerk user ID before starting the server. This seeds the first platform admin on startup:
@@ -244,6 +247,14 @@ task test              # Run all Go tests (race detector)
 task test:coverage     # Go tests + enforce ≥85% coverage
 task test:fuzz         # Run fuzz tests (5s each)
 task check             # Full pre-commit suite (fmt + lint + test + coverage + web + widget checks)
+
+# Go-namespaced aliases (equivalent to the above, preferred in CI)
+task go:build
+task go:fmt
+task go:lint
+task go:test
+task go:test:coverage
+task go:test:fuzz
 
 task web:fmt           # Format frontend (Prettier)
 task web:fmt:check     # Check frontend formatting
