@@ -32,7 +32,7 @@ jobs:
       - name: Init deft submodule (with fallback to latest)
         run: |
           git submodule update --init --depth=1 deft 2>/dev/null || \
-          (rm -rf deft && git clone --depth=1 https://github.com/visionik/deft deft)
+          (rm -rf deft && git clone --depth=1 https://github.com/deftai/directive deft)
 
       - uses: actions/setup-go@v6
         with:

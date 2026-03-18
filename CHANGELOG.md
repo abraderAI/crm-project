@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - vBRIEF specification files for all major features
 
 ### Changed
-- Updated deft and vBRIEF submodules to latest upstream (v0.6.0 / master)
+- Updated deft submodule URL to `deftai/directive` (previously `visionik/deft`) and pinned to latest master
+- Updated vBRIEF repo reference to `deftai/vBRIEF` (previously `visionik/vBRIEF`); spec version remains 0.5
 
 [Unreleased]: https://github.com/abraderAI/crm-project/compare/main...HEAD
