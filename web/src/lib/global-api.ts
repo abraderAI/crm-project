@@ -16,6 +16,14 @@ export interface GlobalThreadParams {
   thread_type?: string;
 }
 
+/** Parameters for fetching leads from global-leads space. */
+export interface GlobalLeadsParams {
+  limit?: number;
+  cursor?: string;
+  /** When true, scopes results to threads authored by or assigned to the current user. */
+  mine?: boolean;
+}
+
 /**
  * Fetch recent public threads from a global space.
  * No auth required for public spaces (global-docs, global-forum).
@@ -79,6 +87,47 @@ export async function fetchUserSupportTickets(
     cache: "no-store",
   });
   return parseResponse<PaginatedResponse<Thread>>(response);
+}
+
+/**
+ * Fetch leads from global-leads space.
+ * Pass mine=true to scope results to the current user's own and assigned leads.
+ * Requires authentication.
+ */
+export async function fetchGlobalLeads(
+  token: string,
+  params?: GlobalLeadsParams,
+): Promise<PaginatedResponse<Thread>> {
+  const queryParams: Record<string, string> = {};
+  if (params?.limit) queryParams["limit"] = String(params.limit);
+  if (params?.cursor) queryParams["cursor"] = params.cursor;
+  if (params?.mine) queryParams["mine"] = "true";
+
+  const url = buildUrl(`/global-spaces/${GLOBAL_SPACES.LEADS}/threads`, queryParams);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<PaginatedResponse<Thread>>(response);
+}
+
+/**
+ * Fetch a single thread from a global space by slug.
+ * Used for global lead detail view.
+ */
+export async function fetchGlobalThread(
+  spaceSlug: string,
+  threadSlug: string,
+  token?: string | null,
+): Promise<Thread> {
+  const url = buildUrl(`/global-spaces/${spaceSlug}/threads/${threadSlug}`);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<Thread>(response);
 }
 
 /** Values for creating a forum post. */

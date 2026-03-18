@@ -196,6 +196,24 @@ export async function fetchSupportTickets(
   );
 }
 
+/**
+ * Fetch paginated leads from global-leads space.
+ * Callers pass mine:"true" to scope results to own + assigned leads (tier 4),
+ * or omit it to fetch all leads (tier 5+).
+ */
+export async function fetchLeads(
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<Thread>> {
+  const token = await getToken();
+  return serverFetchPaginated<Thread>("/global-spaces/global-leads/threads", params, { token });
+}
+
+/** Fetch a single lead thread from global-leads space by slug. */
+export async function fetchGlobalLeadThread(threadSlug: string): Promise<Thread> {
+  const token = await getToken();
+  return serverFetch<Thread>(`/global-spaces/global-leads/threads/${threadSlug}`, { token });
+}
+
 /** Fetch search results. */
 export async function fetchSearch(
   query: string,
