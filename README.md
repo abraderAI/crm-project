@@ -50,7 +50,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | Charts | [Recharts](https://recharts.org) (reporting dashboards) |
 | CLI | [Cobra](https://github.com/spf13/cobra), [lipgloss](https://github.com/charmbracelet/lipgloss), tablewriter |
 | Observability | slog + OpenTelemetry |
-| Testing | Go: testify + httptest · Frontend: Vitest + Playwright |
+| Testing | Go: testify + httptest + native fuzz · Frontend: Vitest + Playwright |
 | CI/CD | GitHub Actions |
 | Deployment | Docker Compose (local) · [Fly.io](https://fly.io) (backend) · [Vercel](https://vercel.com) (frontend) |
 
@@ -527,10 +527,10 @@ Config is read from `~/.deft-cli.yaml` with env var overrides (`DEFT_API_URL`, `
 
 ## Quality
 
-- **907 frontend tests** across 62 test files (Vitest) — 94% statement coverage
-- **37 Go test packages** with race detector enabled — 86% coverage
-- ≥ 85% test coverage enforced on every PR
-- ≥ 50 fuzz test cases per input entry point
+- **1,876 frontend tests** across 151 test files (Vitest) — 91% statement, 85% branch coverage
+- **1,878 Go tests** across 37 packages with race detector enabled — 86% coverage
+- **15 fuzz functions** across 8 Go packages (`board`, `thread`, `message`, `membership`, `conversion`, `gdpr`, `tier`, `notification`), each with ≥ 40 diverse seeds
+- ≥ 85% test coverage enforced on every PR (statements + branches)
 - `task check` must pass fully before any merge (fmt + lint + typecheck + tests + coverage)
 - All errors follow RFC 7807 Problem Details
 - All admin destructive actions require confirmation and are audit-logged with reason
