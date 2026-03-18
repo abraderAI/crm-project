@@ -16,6 +16,16 @@ export interface GlobalThreadParams {
   thread_type?: string;
 }
 
+/** Parameters for fetching support tickets from global-support space. */
+export interface GlobalSupportParams {
+  limit?: number;
+  cursor?: string;
+  /** When true, scopes results to threads authored by the current user. */
+  mine?: boolean;
+  /** When set, scopes results to threads belonging to the given org. */
+  org_id?: string;
+}
+
 /** Parameters for fetching leads from global-leads space. */
 export interface GlobalLeadsParams {
   limit?: number;
@@ -79,6 +89,32 @@ export async function fetchUserSupportTickets(
   const queryParams: Record<string, string> = { mine: "true" };
   if (params?.limit) queryParams["limit"] = String(params.limit);
   if (params?.cursor) queryParams["cursor"] = params.cursor;
+
+  const url = buildUrl(`/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads`, queryParams);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<PaginatedResponse<Thread>>(response);
+}
+
+/**
+ * Fetch support tickets from global-support space.
+ * Pass mine=true to scope to the current user's own tickets.
+ * Pass org_id to scope to an org's tickets.
+ * Omit both to fetch all tickets (requires tier 4+ authorization).
+ * Requires authentication.
+ */
+export async function fetchGlobalSupportTickets(
+  token: string,
+  params?: GlobalSupportParams,
+): Promise<PaginatedResponse<Thread>> {
+  const queryParams: Record<string, string> = {};
+  if (params?.limit) queryParams["limit"] = String(params.limit);
+  if (params?.cursor) queryParams["cursor"] = params.cursor;
+  if (params?.mine) queryParams["mine"] = "true";
+  if (params?.org_id) queryParams["org_id"] = params.org_id;
 
   const url = buildUrl(`/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads`, queryParams);
   const response = await fetch(url, {
