@@ -30,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "support", label: "Support", href: "/support", type: "org" },
   { id: "notifications", label: "Notifications", href: "/notifications", type: "org" },
   { id: "crm", label: "CRM Pipeline", href: "/crm", type: "org" },
+  { id: "leads", label: "Leads", href: "/crm/leads", type: "org" },
   { id: "reports", label: "Reports", href: "/reports", type: "org" },
   { id: "search", label: "Search", href: "/search", type: "org" },
   { id: "admin", label: "Admin", href: "/admin", type: "org" },

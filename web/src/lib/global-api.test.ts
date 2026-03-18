@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   GLOBAL_SPACES,
   fetchGlobalThreads,
+  fetchGlobalLeads,
+  fetchGlobalThread,
   fetchUserForumActivity,
   fetchUserSupportTickets,
   createForumThread,
@@ -224,5 +226,129 @@ describe("createSupportTicket", () => {
   it("throws on API error", async () => {
     mockFetch.mockResolvedValue(mockErrorResponse(500));
     await expect(createSupportTicket("token", { title: "x" })).rejects.toThrow();
+  });
+});
+
+describe("fetchGlobalLeads", () => {
+  it("fetches leads from global-leads space", async () => {
+    const body = { data: [THREAD_FIXTURE], page_info: { has_more: false } };
+    mockFetch.mockResolvedValue(mockOkResponse(body));
+
+    const result = await fetchGlobalLeads("token");
+
+    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/global-spaces/global-leads/threads");
+    expect(options.method).toBe("GET");
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]?.id).toBe("t1");
+  });
+
+  it("does not append mine param when mine is false", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalLeads("token", { mine: false });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).not.toContain("mine=");
+  });
+
+  it("appends mine=true when mine is true", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalLeads("token", { mine: true });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("mine=true");
+  });
+
+  it("passes limit and cursor params", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalLeads("token", { limit: 20, cursor: "next-page" });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("limit=20");
+    expect(url).toContain("cursor=next-page");
+  });
+
+  it("includes auth header", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalLeads("lead-token");
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer lead-token");
+  });
+
+  it("throws on API error", async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(403));
+    await expect(fetchGlobalLeads("token")).rejects.toThrow();
+  });
+
+  it("returns has_more and next_cursor from page_info", async () => {
+    const body = {
+      data: [THREAD_FIXTURE],
+      page_info: { has_more: true, next_cursor: "abc123" },
+    };
+    mockFetch.mockResolvedValue(mockOkResponse(body));
+
+    const result = await fetchGlobalLeads("token");
+
+    expect(result.page_info.has_more).toBe(true);
+    expect(result.page_info.next_cursor).toBe("abc123");
+  });
+});
+
+describe("fetchGlobalThread", () => {
+  it("fetches a single thread by slug from a global space", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse(THREAD_FIXTURE));
+
+    const result = await fetchGlobalThread("global-leads", "test-thread");
+
+    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/global-spaces/global-leads/threads/test-thread");
+    expect(options.method).toBe("GET");
+    expect(result.id).toBe("t1");
+    expect(result.title).toBe("Test Thread");
+  });
+
+  it("works for any global space slug", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse(THREAD_FIXTURE));
+
+    await fetchGlobalThread("global-support", "support-slug");
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("/global-spaces/global-support/threads/support-slug");
+  });
+
+  it("passes auth token when provided", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse(THREAD_FIXTURE));
+
+    await fetchGlobalThread("global-leads", "lead-slug", "auth-token");
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer auth-token");
+  });
+
+  it("fetches without auth token when not provided", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse(THREAD_FIXTURE));
+
+    await fetchGlobalThread("global-leads", "lead-slug");
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBeUndefined();
+  });
+
+  it("throws on 404 when thread is not found", async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(404));
+    await expect(fetchGlobalThread("global-leads", "missing")).rejects.toThrow();
+  });
+
+  it("throws on API error", async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(500));
+    await expect(fetchGlobalThread("global-leads", "slug")).rejects.toThrow();
   });
 });
