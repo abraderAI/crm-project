@@ -31,7 +31,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Reporting** — Org-scoped support-ticket and sales-pipeline analytics (15 query types): volume-over-time, status/priority breakdowns, assignee distribution, win/loss rates, funnel conversion, deal-value score distribution, avg time-in-stage, and CSV export with date + assignee filtering. Platform admins get cross-org aggregate dashboards with per-org sortable breakdown tables.
 - **RBAC User Tiers** — Six-tier user classification (anonymous → authenticated → customer → customer admin → DEFT internal → platform admin) with tier-specific home screens, customisable widget layouts, global content spaces (docs, forum, support, leads), AI chatbot with live-agent escalation, and automated conversion flows (self-service upgrade, sales-led conversion, admin promotion).
 - **Leads Management** — Dedicated `/crm/leads` page for DEFT sales staff: tier 5–6 see all leads with assignee filter; tier 4 sales reps see only their own and assigned leads. Status/search filters, load-more pagination, and detail view per lead.
-- **Support Ticket Management** — Tier-aware `/support` page: tier 1 sees a sign-in prompt; tiers 2–3 see own tickets (org-scoped for org members); tier 4 DEFT staff and tier 5 DEFT support admins see all tickets; tier 5 customer org admins see org-scoped tickets; all elevated views include an open/pending/resolved stats strip. Inline create-ticket form with `org_id` passthrough.
+- **Support Ticket Management** — Tier-aware `/support` page: tier 1 sees a sign-in prompt; tiers 2–3 see own tickets (org-scoped for org members); tier 4 DEFT staff and tier 5 DEFT support admins see all tickets; tier 5 customer org admins see org-scoped tickets; all elevated views include an open/pending/resolved stats strip. Inline create-ticket form with `org_id` passthrough. Each ticket row shows the **subject** and **creator** (email + org name). Clicking **Open** launches an inline work-view modal where the ticket body can be edited and DEFT internal/platform-admin users (tiers 5–6) can update the ticket status (`open` → `pending` → `resolved`). Changes are saved via a `PATCH` call and the list refreshes automatically.
 
 ---
 
@@ -152,7 +152,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/crm/leads` | Leads management — tier-aware list: tier 5–6 see all leads with assignee filter; tier 4 `deft_sales` reps see own/assigned leads only; status, search, and load-more pagination |
 | `/crm/leads/global/[thread_slug]` | Global lead detail — enrichment data, scoring breakdown, and metadata sidebar for leads in the `global-leads` space |
 | `/crm/leads/[org]/[space]/[board]/[thread]` | Lead detail — enrichment, scoring breakdown, metadata sidebar |
-| `/support` | Support tickets — tier-aware: own tickets (tier 2–3), org-scoped tickets (tier 3 with org, tier 5 owner), all tickets (tier 4+) with open/pending/resolved stats strip; inline create-ticket form |
+| `/support` | Support tickets — tier-aware: own tickets (tier 2–3), org-scoped tickets (tier 3 with org, tier 5 owner), all tickets (tier 4+) with open/pending/resolved stats strip; inline create-ticket form; ticket rows show subject, creator email, and org; **Open** button opens a work-view modal for body editing and status transitions (tiers 5–6 only) |
 | `/search` | Full-text search with filters |
 | `/notifications` | Notification feed |
 | `/notifications/preferences` | Notification channel preferences |
@@ -338,6 +338,19 @@ All accept `?from=YYYY-MM-DD&to=YYYY-MM-DD&assignee=<user_id>`. Org-scoped route
 | `GET` | `/v1/admin/reports/support/export` | Platform-wide support CSV export |
 | `GET` | `/v1/admin/reports/sales` | Platform-wide sales metrics + per-org breakdown |
 | `GET` | `/v1/admin/reports/sales/export` | Platform-wide sales CSV export |
+
+### Global Space Endpoints
+
+The `global-support` and `global-leads` spaces are served under `/v1/global-spaces/{space}/threads`. These endpoints use the same RBAC tier gating as the frontend.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/global-spaces/{space}/threads` | List threads — enriched with `author_email`, `author_name`, `org_name`; cursor-paginated |
+| `POST` | `/v1/global-spaces/{space}/threads` | Create a thread in a global space |
+| `GET` | `/v1/global-spaces/{space}/threads/{slug}` | Fetch a single thread with author enrichment |
+| `PATCH` | `/v1/global-spaces/{space}/threads/{slug}` | Update thread body and/or status; status change is written as a metadata deep-merge and a revision is recorded |
+
+---
 
 ### IO Channel Endpoints
 
@@ -555,8 +568,8 @@ Config is read from `~/.deft-cli.yaml` with env var overrides (`DEFT_API_URL`, `
 
 ## Quality
 
-- **2,013 frontend tests** across 153 test files (Vitest) — 91% statement, 85% branch coverage
-- **1,878 Go tests** across 37 packages with race detector enabled — 86% coverage
+- **2,029 frontend tests** across 153 test files (Vitest) — 91% statement, 85% branch coverage
+- **1,878 Go tests** across 37 packages with race detector enabled — 85.8% coverage
 - **15 fuzz functions** across 8 Go packages (`board`, `thread`, `message`, `membership`, `conversion`, `gdpr`, `tier`, `notification`), each with ≥ 40 diverse seeds
 - ≥ 85% test coverage enforced on every PR (statements + branches)
 - `task check` must pass fully before any merge (fmt + lint + typecheck + tests + coverage)
