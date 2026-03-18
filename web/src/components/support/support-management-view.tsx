@@ -467,7 +467,7 @@ export function SupportManagementView(): ReactNode {
             const status = ticket.status ?? "open";
             const badgeClass = STATUS_STYLES[status] ?? STATUS_STYLES["open"];
             const creatorLabel = ticket.author_name ?? ticket.author_email ?? ticket.author_id;
-            const orgLabel = ticket.org_name ?? (ticket.org_id ? `org:${ticket.org_id}` : null);
+            const orgLabel = ticket.org_name ?? null;
             return (
               <div
                 key={ticket.id}
@@ -539,8 +539,8 @@ export function SupportManagementView(): ReactNode {
                   <span>
                     {workTicket.author_name ?? workTicket.author_email ?? workTicket.author_id}
                   </span>
-                  {(workTicket.org_name ?? workTicket.org_id) && (
-                    <span>&middot; {workTicket.org_name ?? workTicket.org_id}</span>
+                  {workTicket.org_name && (
+                    <span>&middot; {workTicket.org_name}</span>
                   )}
                 </div>
               </div>

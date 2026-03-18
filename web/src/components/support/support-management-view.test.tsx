@@ -1208,7 +1208,6 @@ describe("SupportManagementView", () => {
   });
 
   it("work-view does not call updateSupportTicket when token is null", async () => {
-    const user = userEvent.setup();
     mockGetToken.mockResolvedValue(null);
     mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
     const ticket = makeTicket({ id: "t-null-token" });
