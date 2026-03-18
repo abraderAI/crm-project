@@ -539,9 +539,7 @@ export function SupportManagementView(): ReactNode {
                   <span>
                     {workTicket.author_name ?? workTicket.author_email ?? workTicket.author_id}
                   </span>
-                  {workTicket.org_name && (
-                    <span>&middot; {workTicket.org_name}</span>
-                  )}
+                  {workTicket.org_name && <span>&middot; {workTicket.org_name}</span>}
                 </div>
               </div>
               <button
