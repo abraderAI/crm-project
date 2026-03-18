@@ -1,20 +1,13 @@
-import type { Thread } from "@/lib/api-types";
-import { fetchSupportTickets } from "@/lib/user-api";
-import { SupportView } from "@/components/support/support-view";
+import { SupportManagementView } from "@/components/support/support-management-view";
 
-/** Support tickets page — shows the current user's tickets with inline create. */
-export default async function SupportPage(): Promise<React.ReactNode> {
-  let tickets: Thread[] = [];
-  try {
-    const result = await fetchSupportTickets();
-    tickets = result.data;
-  } catch {
-    // Render with empty list on error — SupportView handles the empty state.
-  }
-
+/**
+ * Support tickets page — renders the tier-aware SupportManagementView.
+ * RBAC and data fetching are handled client-side in the component.
+ */
+export default function SupportPage(): React.ReactNode {
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <SupportView initialTickets={tickets} />
+      <SupportManagementView />
     </div>
   );
 }

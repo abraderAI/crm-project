@@ -4,6 +4,7 @@ import {
   fetchGlobalThreads,
   fetchGlobalLeads,
   fetchGlobalThread,
+  fetchGlobalSupportTickets,
   fetchUserForumActivity,
   fetchUserSupportTickets,
   createForumThread,
@@ -350,5 +351,99 @@ describe("fetchGlobalThread", () => {
   it("throws on API error", async () => {
     mockFetch.mockResolvedValue(mockErrorResponse(500));
     await expect(fetchGlobalThread("global-leads", "slug")).rejects.toThrow();
+  });
+});
+
+describe("fetchGlobalSupportTickets", () => {
+  it("fetches tickets from global-support space", async () => {
+    const body = { data: [THREAD_FIXTURE], page_info: { has_more: false } };
+    mockFetch.mockResolvedValue(mockOkResponse(body));
+
+    const result = await fetchGlobalSupportTickets("token");
+
+    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/global-spaces/global-support/threads");
+    expect(options.method).toBe("GET");
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]?.id).toBe("t1");
+  });
+
+  it("does not append mine param when mine is not set", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalSupportTickets("token");
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).not.toContain("mine=");
+  });
+
+  it("appends mine=true when mine is true", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalSupportTickets("token", { mine: true });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("mine=true");
+  });
+
+  it("appends org_id param when org_id is provided", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalSupportTickets("token", { org_id: "org-123" });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("org_id=org-123");
+  });
+
+  it("does not append org_id when not provided", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalSupportTickets("token", { mine: true });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).not.toContain("org_id=");
+  });
+
+  it("passes limit and cursor params", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalSupportTickets("token", { limit: 25, cursor: "page2" });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("limit=25");
+    expect(url).toContain("cursor=page2");
+  });
+
+  it("includes auth header", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchGlobalSupportTickets("test-token");
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer test-token");
+  });
+
+  it("returns has_more and next_cursor from page_info", async () => {
+    const body = {
+      data: [THREAD_FIXTURE],
+      page_info: { has_more: true, next_cursor: "cursor-xyz" },
+    };
+    mockFetch.mockResolvedValue(mockOkResponse(body));
+
+    const result = await fetchGlobalSupportTickets("token");
+
+    expect(result.page_info.has_more).toBe(true);
+    expect(result.page_info.next_cursor).toBe("cursor-xyz");
+  });
+
+  it("throws on API error", async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(500));
+    await expect(fetchGlobalSupportTickets("token")).rejects.toThrow();
+  });
+
+  it("throws on 403 (authorization failure)", async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(403));
+    await expect(fetchGlobalSupportTickets("token")).rejects.toThrow();
   });
 });
