@@ -4,9 +4,10 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { ChevronLeft, AlertTriangle, CheckCircle, Pencil, X } from "lucide-react";
+import { ChevronLeft, AlertTriangle, CheckCircle, Pencil } from "lucide-react";
 import type { AdminOrgDetail } from "@/lib/api-types";
 import { clientMutate } from "@/lib/api-client";
+import { OrgSuspendDialog, OrgTransferDialog, OrgPurgeDialog } from "./org-detail-admin-dialogs";
 
 /** Props for OrgDetailAdmin. */
 export interface OrgDetailAdminProps {
@@ -375,175 +376,46 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
 
       {/* Suspend dialog */}
       {showSuspendDialog && (
-        <div
-          data-testid="suspend-dialog"
-          className="rounded-lg border border-amber-200 bg-amber-50 p-6 shadow-lg"
-        >
-          <div className="flex items-start justify-between">
-            <h3 className="text-base font-semibold text-amber-900">Suspend Organization</h3>
-            <button
-              data-testid="suspend-dialog-close"
-              onClick={() => {
-                setShowSuspendDialog(false);
-                setSuspendReason("");
-              }}
-              className="text-amber-600 hover:text-amber-800"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <p className="mt-1 text-sm text-amber-700">
-            Members of &quot;{org.name}&quot; will lose access until unsuspended.
-          </p>
-          <div className="mt-3">
-            <label htmlFor="suspend-reason" className="text-sm font-medium text-amber-900">
-              Reason (optional)
-            </label>
-            <textarea
-              id="suspend-reason"
-              data-testid="suspend-reason-input"
-              value={suspendReason}
-              onChange={(e) => setSuspendReason(e.target.value)}
-              placeholder="Enter reason..."
-              rows={2}
-              className="mt-1 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-foreground"
-            />
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              data-testid="suspend-confirm-btn"
-              onClick={handleSuspend}
-              disabled={suspending}
-              className="rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-            >
-              {suspending ? "Suspending..." : "Confirm Suspend"}
-            </button>
-            <button
-              data-testid="suspend-cancel-btn"
-              onClick={() => {
-                setShowSuspendDialog(false);
-                setSuspendReason("");
-              }}
-              className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <OrgSuspendDialog
+          orgName={org.name}
+          suspendReason={suspendReason}
+          setSuspendReason={setSuspendReason}
+          suspending={suspending}
+          onConfirm={handleSuspend}
+          onCancel={() => {
+            setShowSuspendDialog(false);
+            setSuspendReason("");
+          }}
+        />
       )}
 
       {/* Transfer ownership dialog */}
       {showTransferDialog && (
-        <div
-          data-testid="transfer-dialog"
-          className="rounded-lg border border-border bg-background p-6 shadow-lg"
-        >
-          <div className="flex items-start justify-between">
-            <h3 className="text-base font-semibold text-foreground">Transfer Ownership</h3>
-            <button
-              data-testid="transfer-dialog-close"
-              onClick={() => {
-                setShowTransferDialog(false);
-                setNewOwnerUserId("");
-              }}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            The current owners will be demoted to admin. The new owner will be added as owner.
-          </p>
-          <div className="mt-3">
-            <label htmlFor="new-owner" className="text-sm font-medium text-foreground">
-              New Owner User ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="new-owner"
-              data-testid="new-owner-input"
-              type="text"
-              value={newOwnerUserId}
-              onChange={(e) => setNewOwnerUserId(e.target.value)}
-              placeholder="user_xxxxx (Clerk user ID)"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-            />
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              data-testid="transfer-confirm-btn"
-              onClick={handleTransfer}
-              disabled={transferring || !newOwnerUserId.trim()}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {transferring ? "Transferring..." : "Transfer"}
-            </button>
-            <button
-              data-testid="transfer-cancel-btn"
-              onClick={() => {
-                setShowTransferDialog(false);
-                setNewOwnerUserId("");
-              }}
-              className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <OrgTransferDialog
+          newOwnerUserId={newOwnerUserId}
+          setNewOwnerUserId={setNewOwnerUserId}
+          transferring={transferring}
+          onConfirm={handleTransfer}
+          onCancel={() => {
+            setShowTransferDialog(false);
+            setNewOwnerUserId("");
+          }}
+        />
       )}
 
       {/* Purge dialog */}
       {showPurgeDialog && (
-        <div
-          data-testid="purge-dialog"
-          className="rounded-lg border border-red-200 bg-red-50 p-6 shadow-lg"
-        >
-          <div className="flex items-start justify-between">
-            <h3 className="text-base font-semibold text-red-900">GDPR Purge — Irreversible</h3>
-            <button
-              data-testid="purge-dialog-close"
-              onClick={() => {
-                setShowPurgeDialog(false);
-                setPurgeConfirm("");
-              }}
-              className="text-red-600 hover:text-red-800"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <p className="mt-1 text-sm text-red-700">
-            This will permanently delete this org and all associated data. Type the confirmation
-            phrase to proceed:
-          </p>
-          <p className="mt-1 font-mono text-sm font-medium text-red-800">{purgeToken}</p>
-          <input
-            data-testid="purge-confirm-input"
-            type="text"
-            value={purgeConfirm}
-            onChange={(e) => setPurgeConfirm(e.target.value)}
-            placeholder={`Type "${purgeToken}" to confirm`}
-            className="mt-3 w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm text-foreground"
-          />
-          <div className="mt-4 flex gap-2">
-            <button
-              data-testid="purge-confirm-btn"
-              onClick={handlePurge}
-              disabled={purgeConfirm !== purgeToken || purging}
-              className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {purging ? "Purging..." : "Permanently Delete"}
-            </button>
-            <button
-              data-testid="purge-cancel-btn"
-              onClick={() => {
-                setShowPurgeDialog(false);
-                setPurgeConfirm("");
-              }}
-              className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <OrgPurgeDialog
+          purgeToken={purgeToken}
+          purgeConfirm={purgeConfirm}
+          setPurgeConfirm={setPurgeConfirm}
+          purging={purging}
+          onConfirm={handlePurge}
+          onCancel={() => {
+            setShowPurgeDialog(false);
+            setPurgeConfirm("");
+          }}
+        />
       )}
     </div>
   );

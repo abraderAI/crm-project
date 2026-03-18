@@ -50,7 +50,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | Charts | [Recharts](https://recharts.org) (reporting dashboards) |
 | CLI | [Cobra](https://github.com/spf13/cobra), [lipgloss](https://github.com/charmbracelet/lipgloss), tablewriter |
 | Observability | slog + OpenTelemetry |
-| Testing | Go: testify + httptest · Frontend: Vitest + Playwright |
+| Testing | Go: testify + httptest + native fuzz · Frontend: Vitest + Playwright |
 | CI/CD | GitHub Actions |
 | Deployment | Docker Compose (local) · [Fly.io](https://fly.io) (backend) · [Vercel](https://vercel.com) (frontend) |
 
@@ -120,8 +120,9 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   └── src/                    # widget.ts, chat.ts, ui.ts, fingerprint.ts
 ├── agent/                      # TypeScript AI agent (function-calling wrapper)
 ├── docker/                     # Dockerfiles + docker-compose.yml
-├── docs/                       # Environment variables, architecture notes
-├── SPECIFICATION.md            # Full implementation spec
+├── docs/                       # Environment variables, architecture notes, PRDs, specs
+├── secrets/                    # Local secret files (git-ignored); see secrets/README.md
+├── CHANGELOG.md                # Project changelog (Keep a Changelog format)
 └── Taskfile.yml                # All build/test/lint commands
 ```
 
@@ -203,6 +204,8 @@ cp web/.env.example web/.env.local   # fill in NEXT_PUBLIC_* keys
 
 See [`docs/env-vars.md`](docs/env-vars.md) for the full reference.
 
+> **Secrets**: place any local `.env` files you don't want tracked in the `secrets/` directory (git-ignored). See `secrets/README.md`.
+
 **3. Bootstrap a platform admin**
 
 Set the `PLATFORM_ADMIN_USER_ID` environment variable to your Clerk user ID before starting the server. This seeds the first platform admin on startup:
@@ -244,6 +247,14 @@ task test              # Run all Go tests (race detector)
 task test:coverage     # Go tests + enforce ≥85% coverage
 task test:fuzz         # Run fuzz tests (5s each)
 task check             # Full pre-commit suite (fmt + lint + test + coverage + web + widget checks)
+
+# Go-namespaced aliases (equivalent to the above, preferred in CI)
+task go:build
+task go:fmt
+task go:lint
+task go:test
+task go:test:coverage
+task go:test:fuzz
 
 task web:fmt           # Format frontend (Prettier)
 task web:fmt:check     # Check frontend formatting
@@ -527,10 +538,10 @@ Config is read from `~/.deft-cli.yaml` with env var overrides (`DEFT_API_URL`, `
 
 ## Quality
 
-- **907 frontend tests** across 62 test files (Vitest) — 94% statement coverage
-- **37 Go test packages** with race detector enabled — 86% coverage
-- ≥ 85% test coverage enforced on every PR
-- ≥ 50 fuzz test cases per input entry point
+- **1,876 frontend tests** across 151 test files (Vitest) — 91% statement, 85% branch coverage
+- **1,878 Go tests** across 37 packages with race detector enabled — 86% coverage
+- **15 fuzz functions** across 8 Go packages (`board`, `thread`, `message`, `membership`, `conversion`, `gdpr`, `tier`, `notification`), each with ≥ 40 diverse seeds
+- ≥ 85% test coverage enforced on every PR (statements + branches)
 - `task check` must pass fully before any merge (fmt + lint + typecheck + tests + coverage)
 - All errors follow RFC 7807 Problem Details
 - All admin destructive actions require confirmation and are audit-logged with reason
