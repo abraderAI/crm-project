@@ -82,7 +82,7 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
             <ChannelConfigForm
               channelType={channelType}
               initialConfig={configData}
-              onSave={async (settings: Record<string, string>, enabled: boolean) => {
+              onSave={async (settings, enabled) => {
                 "use server";
                 await putChannelConfig(DEFAULT_ORG, channelType, {
                   settings: JSON.stringify(settings),
@@ -100,7 +100,7 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
         <ChannelConfigForm
           channelType={channelType}
           initialConfig={configData}
-          onSave={async (settings: Record<string, string>, enabled: boolean) => {
+          onSave={async (settings, enabled) => {
             "use server";
             await putChannelConfig(DEFAULT_ORG, channelType, {
               settings: JSON.stringify(settings),

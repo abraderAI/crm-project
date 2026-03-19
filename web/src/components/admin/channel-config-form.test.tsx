@@ -10,9 +10,9 @@ const emailConfig: ChannelConfig = {
   channel_type: "email",
   settings: JSON.stringify({
     imap_host: "mail.example.com",
-    imap_port: "993",
-    imap_user: "user@example.com",
-    imap_password: "secret123",
+    imap_port: 993,
+    username: "user@example.com",
+    password: "secret123",
     mailbox: "INBOX",
   }),
   enabled: true,
@@ -23,10 +23,9 @@ const voiceConfig: ChannelConfig = {
   org_id: "org1",
   channel_type: "voice",
   settings: JSON.stringify({
-    livekit_url: "wss://lk.example.com",
+    livekit_project_url: "wss://lk.example.com",
     livekit_api_key: "key123",
     livekit_api_secret: "secret456",
-    webhook_token: "tok789",
   }),
   enabled: false,
 };
@@ -52,17 +51,16 @@ describe("ChannelConfigForm", () => {
     render(<ChannelConfigForm channelType="email" initialConfig={null} onSave={vi.fn()} />);
     expect(screen.getByTestId("field-input-imap_host")).toBeInTheDocument();
     expect(screen.getByTestId("field-input-imap_port")).toBeInTheDocument();
-    expect(screen.getByTestId("field-input-imap_user")).toBeInTheDocument();
-    expect(screen.getByTestId("field-input-imap_password")).toBeInTheDocument();
+    expect(screen.getByTestId("field-input-username")).toBeInTheDocument();
+    expect(screen.getByTestId("field-input-password")).toBeInTheDocument();
     expect(screen.getByTestId("field-input-mailbox")).toBeInTheDocument();
   });
 
   it("renders voice fields", () => {
     render(<ChannelConfigForm channelType="voice" initialConfig={null} onSave={vi.fn()} />);
-    expect(screen.getByTestId("field-input-livekit_url")).toBeInTheDocument();
+    expect(screen.getByTestId("field-input-livekit_project_url")).toBeInTheDocument();
     expect(screen.getByTestId("field-input-livekit_api_key")).toBeInTheDocument();
     expect(screen.getByTestId("field-input-livekit_api_secret")).toBeInTheDocument();
-    expect(screen.getByTestId("field-input-webhook_token")).toBeInTheDocument();
   });
 
   it("renders chat fields", () => {
@@ -80,17 +78,17 @@ describe("ChannelConfigForm", () => {
 
   it("does not populate masked fields from initial config", () => {
     render(<ChannelConfigForm channelType="email" initialConfig={emailConfig} onSave={vi.fn()} />);
-    expect(screen.getByTestId("field-input-imap_password")).toHaveValue("");
+    expect(screen.getByTestId("field-input-password")).toHaveValue("");
   });
 
   it("shows masked indicator for existing secrets", () => {
     render(<ChannelConfigForm channelType="email" initialConfig={emailConfig} onSave={vi.fn()} />);
-    expect(screen.getByTestId("field-masked-imap_password")).toHaveTextContent("••••••••");
+    expect(screen.getByTestId("field-masked-password")).toHaveTextContent("••••••••");
   });
 
   it("does not show masked indicator when no existing secret", () => {
     render(<ChannelConfigForm channelType="email" initialConfig={null} onSave={vi.fn()} />);
-    expect(screen.queryByTestId("field-masked-imap_password")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("field-masked-password")).not.toBeInTheDocument();
   });
 
   it("renders enabled toggle", () => {
