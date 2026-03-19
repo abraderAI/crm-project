@@ -172,6 +172,19 @@ func (r *Repository) GetLatestEventTime(ctx context.Context, orgID string, chann
 	return &evt.CreatedAt, nil
 }
 
+// IsPlatformAdmin returns true when the given user is an active platform admin.
+func (r *Repository) IsPlatformAdmin(ctx context.Context, userID string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.PlatformAdmin{}).
+		Where("user_id = ? AND is_active = ?", userID, true).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("checking platform admin status: %w", err)
+	}
+	return count > 0, nil
+}
+
 // IsOrgAdmin returns true when the given user has admin or owner role in the org.
 func (r *Repository) IsOrgAdmin(ctx context.Context, orgID, userID string) (bool, error) {
 	var m models.OrgMembership

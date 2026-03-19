@@ -68,6 +68,13 @@ func createAdminMembership(t *testing.T, db *gorm.DB, orgID, userID string) {
 	require.NoError(t, db.Create(m).Error)
 }
 
+// createPlatformAdmin inserts an active platform admin record for userID.
+func createPlatformAdmin(t *testing.T, db *gorm.DB, userID string) {
+	t.Helper()
+	pa := &models.PlatformAdmin{UserID: userID, GrantedBy: "bootstrap", IsActive: true}
+	require.NoError(t, db.Create(pa).Error)
+}
+
 // withAuthCtx injects a UserContext into the request.
 func withAuthCtx(r *http.Request, userID string) *http.Request {
 	ctx := auth.SetUserContext(r.Context(), &auth.UserContext{UserID: userID})
@@ -302,6 +309,33 @@ func TestRepository_IsOrgAdmin(t *testing.T) {
 	isNone, err := repo.IsOrgAdmin(ctx, org.ID, "no-such-user")
 	require.NoError(t, err)
 	assert.False(t, isNone)
+}
+
+func TestRepository_IsPlatformAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	// Non-existent user → false.
+	isAdmin, err := repo.IsPlatformAdmin(ctx, "no-such-user")
+	require.NoError(t, err)
+	assert.False(t, isAdmin)
+
+	// Active platform admin → true.
+	createPlatformAdmin(t, db, "pa-user")
+	isAdmin, err = repo.IsPlatformAdmin(ctx, "pa-user")
+	require.NoError(t, err)
+	assert.True(t, isAdmin)
+
+	// Inactive platform admin → false.
+	// Use create-then-update to avoid GORM skipping the zero-value bool (false) on Create
+	// when the column has gorm:"default:true".
+	inactive := &models.PlatformAdmin{UserID: "inactive-pa", GrantedBy: "bootstrap", IsActive: true}
+	require.NoError(t, db.Create(inactive).Error)
+	require.NoError(t, db.Model(inactive).Update("is_active", false).Error)
+	isAdmin, err = repo.IsPlatformAdmin(ctx, "inactive-pa")
+	require.NoError(t, err)
+	assert.False(t, isAdmin)
 }
 
 // --- Service tests ---
@@ -570,6 +604,22 @@ func TestHandler_PutConfig_AdminSuccess(t *testing.T) {
 	body := `{"settings":"{\"embed_key\":\"abc\"}","enabled":true}`
 	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(body))
 	req = withAuthAndChi(req, "admin-uid", map[string]string{"org": org.ID, "type": "chat"})
+	w := httptest.NewRecorder()
+	h.PutConfig(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandler_PutConfig_PlatformAdminSuccess(t *testing.T) {
+	db := setupTestDB(t)
+	org := createTestOrg(t, db, "hdl-putcfg-pa-org")
+	// Platform admin has no org membership but must still be allowed.
+	createPlatformAdmin(t, db, "platform-admin-uid")
+	h := NewHandler(NewService(NewRepository(db)))
+
+	body := `{"settings":"{}","enabled":true}`
+	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(body))
+	req = withAuthAndChi(req, "platform-admin-uid", map[string]string{"org": org.ID, "type": "email"})
 	w := httptest.NewRecorder()
 	h.PutConfig(w, req)
 

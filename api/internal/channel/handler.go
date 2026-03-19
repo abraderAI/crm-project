@@ -23,14 +23,26 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-// requireOrgAdmin checks that the authenticated user holds admin or owner role in the org.
-// It writes an error response and returns false when the check fails.
+// requireOrgAdmin checks that the authenticated user holds admin or owner role in the org,
+// OR is an active platform admin. It writes an error response and returns false when the
+// check fails.
 func (h *Handler) requireOrgAdmin(w http.ResponseWriter, r *http.Request, orgID string) bool {
 	uc := auth.GetUserContext(r.Context())
 	if uc == nil {
 		apierrors.Unauthorized(w, "authentication required")
 		return false
 	}
+
+	// Platform admins can manage channel config for any org.
+	isPlatformAdmin, err := h.service.IsPlatformAdmin(r.Context(), uc.UserID)
+	if err != nil {
+		apierrors.InternalError(w, "failed to check permissions")
+		return false
+	}
+	if isPlatformAdmin {
+		return true
+	}
+
 	isAdmin, err := h.service.IsOrgAdmin(r.Context(), orgID, uc.UserID)
 	if err != nil {
 		apierrors.InternalError(w, "failed to check permissions")

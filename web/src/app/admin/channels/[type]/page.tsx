@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Phone } from "lucide-react";
-import { fetchChannelConfig, fetchChannelHealth, putChannelConfig } from "@/lib/admin-api";
+import { fetchChannelConfig, fetchChannelHealth, fetchFirstOrgId, putChannelConfig } from "@/lib/admin-api";
 import { ChannelConfigForm } from "@/components/admin/channel-config-form";
 import { ChannelHealthBadge } from "@/components/admin/channel-health-badge";
 import { ChatChannelPanel } from "@/components/admin/chat-channel-panel";
@@ -10,7 +10,6 @@ import { ChannelDetailDLQ } from "./channel-detail-dlq";
 import type { ChannelType } from "@/lib/api-types";
 
 const VALID_TYPES = new Set<string>(["email", "voice", "chat"]);
-const DEFAULT_ORG = "default";
 
 const CHANNEL_LABELS: Record<ChannelType, string> = {
   email: "Email",
@@ -30,10 +29,11 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
   }
 
   const channelType = type as ChannelType;
+  const orgId = await fetchFirstOrgId();
 
   const [config, health] = await Promise.allSettled([
-    fetchChannelConfig(DEFAULT_ORG, channelType),
-    fetchChannelHealth(DEFAULT_ORG, channelType),
+    fetchChannelConfig(orgId, channelType),
+    fetchChannelHealth(orgId, channelType),
   ]);
 
   const configData = config.status === "fulfilled" ? config.value : null;
@@ -84,7 +84,7 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
               initialConfig={configData}
               onSave={async (settings, enabled) => {
                 "use server";
-                await putChannelConfig(DEFAULT_ORG, channelType, {
+                await putChannelConfig(orgId, channelType, {
                   settings: JSON.stringify(settings),
                   enabled,
                 });
@@ -94,7 +94,7 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
           </div>
 
           {/* Right-side preview panel */}
-          <ChatChannelPanel embedKey={configData?.org_id ?? DEFAULT_ORG} />
+          <ChatChannelPanel embedKey={configData?.org_id ?? orgId} />
         </div>
       ) : (
         <ChannelConfigForm
@@ -102,7 +102,7 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
           initialConfig={configData}
           onSave={async (settings, enabled) => {
             "use server";
-            await putChannelConfig(DEFAULT_ORG, channelType, {
+            await putChannelConfig(orgId, channelType, {
               settings: JSON.stringify(settings),
               enabled,
             });
@@ -112,7 +112,7 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
       )}
 
       {/* DLQ monitor (client component) */}
-      <ChannelDetailDLQ org={DEFAULT_ORG} channelType={channelType} />
+      <ChannelDetailDLQ org={orgId} channelType={channelType} />
     </div>
   );
 }
