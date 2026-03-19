@@ -354,6 +354,7 @@ func NewRouter(cfg Config) http.Handler {
 				gs.Get("/{slug}", h.globalSpaceHandler.GetThread)
 				gs.Patch("/{slug}", h.globalSpaceHandler.UpdateThread)
 				gs.Get("/{slug}/attachments", h.globalSpaceHandler.ListAttachments)
+				gs.Post("/{slug}/attachments", h.globalSpaceHandler.UploadAttachment)
 			})
 
 			// Notification routes.

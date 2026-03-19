@@ -163,8 +163,9 @@ func newHandlers(cfg Config) serverHandlers {
 		maxUpload = 104857600 // 100MB default
 	}
 	var uploadHandler *upload.Handler
+	var uploadService *upload.Service
 	if storage, err := upload.NewLocalStorage(uploadDir); err == nil {
-		uploadService := upload.NewService(cfg.DB, storage, maxUpload)
+		uploadService = upload.NewService(cfg.DB, storage, maxUpload)
 		uploadHandler = upload.NewHandler(uploadService, maxUpload)
 	}
 
@@ -225,7 +226,7 @@ func newHandlers(cfg Config) serverHandlers {
 
 	// Global space handler (forum, support, leads — slug-based access).
 	globalSpaceRepo := globalspace.NewRepository(cfg.DB)
-	globalSpaceService := globalspace.NewService(globalSpaceRepo, cfg.EventBus)
+	globalSpaceService := globalspace.NewService(globalSpaceRepo, cfg.EventBus, uploadService)
 	globalSpaceHandler := globalspace.NewHandler(globalSpaceService)
 
 	// IO Phase 4: AI Web Chat Widget.

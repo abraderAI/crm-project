@@ -164,6 +164,16 @@ func (r *Repository) ListUploadsByThread(ctx context.Context, threadID string) (
 	return uploads, nil
 }
 
+// FindSystemOrgID returns the ID of the _system org used for platform-level entity scoping.
+// Returns an error if the org does not exist.
+func (r *Repository) FindSystemOrgID(ctx context.Context) (string, error) {
+	var org models.Org
+	if err := r.db.WithContext(ctx).Select("id").Where("slug = ?", "_system").First(&org).Error; err != nil {
+		return "", fmt.Errorf("finding system org: %w", err)
+	}
+	return org.ID, nil
+}
+
 // GetOrgNamesByIDs returns a map of org ID → org name for the given IDs.
 // Missing entries are silently omitted.
 func (r *Repository) GetOrgNamesByIDs(ctx context.Context, ids []string) (map[string]string, error) {

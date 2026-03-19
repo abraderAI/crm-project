@@ -19,7 +19,7 @@ import {
   createSupportTicket,
   updateSupportTicket,
   fetchThreadAttachments,
-  uploadTicketAttachment,
+  uploadThreadAttachment,
   type GlobalSupportParams,
 } from "@/lib/global-api";
 import { useTier } from "@/hooks/use-tier";
@@ -254,7 +254,7 @@ export function SupportManagementView(): ReactNode {
     try {
       const token = await getToken();
       if (!token) return;
-      const uploaded = await uploadTicketAttachment(token, workTicket.id, orgId, file);
+      const uploaded = await uploadThreadAttachment(token, workTicket.slug, file);
       setAttachments((prev) => [...prev, uploaded]);
     } catch (err) {
       setAttachmentError(err instanceof Error ? err.message : "Failed to upload file");

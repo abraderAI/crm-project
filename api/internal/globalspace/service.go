@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"time"
 
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/models"
+	"github.com/abraderAI/crm-project/api/internal/upload"
 	"github.com/abraderAI/crm-project/api/pkg/metadata"
 	"github.com/abraderAI/crm-project/api/pkg/pagination"
 	"github.com/abraderAI/crm-project/api/pkg/slug"
@@ -15,14 +17,16 @@ import (
 
 // Service provides business logic for global space thread operations.
 type Service struct {
-	repo *Repository
-	bus  *eventbus.Bus
+	repo      *Repository
+	bus       *eventbus.Bus
+	uploadSvc *upload.Service
 }
 
 // NewService creates a new global space Service.
-// bus may be nil; when provided, domain events are published after mutations.
-func NewService(repo *Repository, bus *eventbus.Bus) *Service {
-	return &Service{repo: repo, bus: bus}
+// bus and uploadSvc may be nil; when provided, events are published and file
+// attachments are supported respectively.
+func NewService(repo *Repository, bus *eventbus.Bus, uploadSvc *upload.Service) *Service {
+	return &Service{repo: repo, bus: bus, uploadSvc: uploadSvc}
 }
 
 // ThreadWithAuthor wraps a Thread with resolved author and org display names.
@@ -278,6 +282,45 @@ func (s *Service) ListAttachments(ctx context.Context, spaceSlug, threadSlug str
 		return nil, err
 	}
 	return uploads, nil
+}
+
+// UploadAttachment stores a file and associates it with the given thread.
+// The org_id for the upload is taken from the thread when available, falling
+// back to the _system org so that tickets from users without an org are accepted.
+// Returns nil, nil when the space or thread does not exist.
+func (s *Service) UploadAttachment(ctx context.Context, spaceSlug, threadSlug, uploaderID, filename string, size int64, file multipart.File) (*models.Upload, error) {
+	if s.uploadSvc == nil {
+		return nil, fmt.Errorf("upload service not available")
+	}
+
+	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
+	if err != nil {
+		return nil, fmt.Errorf("uploading attachment: %w", err)
+	}
+	if board == nil {
+		return nil, nil
+	}
+
+	t, err := s.repo.FindThreadBySlug(ctx, board.ID, threadSlug)
+	if err != nil {
+		return nil, fmt.Errorf("uploading attachment: %w", err)
+	}
+	if t == nil {
+		return nil, nil
+	}
+
+	// Resolve org: use the ticket's own org when set, otherwise scope to _system.
+	orgID := ""
+	if t.OrgID != nil && *t.OrgID != "" {
+		orgID = *t.OrgID
+	} else {
+		orgID, err = s.repo.FindSystemOrgID(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("resolving org for upload: %w", err)
+		}
+	}
+
+	return s.uploadSvc.Create(ctx, orgID, "thread", t.ID, uploaderID, filename, size, file)
 }
 
 // CreateThread creates a new thread in the specified global space.
