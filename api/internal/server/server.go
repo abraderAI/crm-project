@@ -26,6 +26,7 @@ type Config struct {
 	CORSOrigins         []string
 	RBACPolicy          *config.RBACPolicy
 	IssuerURL           string // Clerk issuer URL for JWT validation.
+	ClerkSecretKey      string // Clerk secret key for Backend API calls (user profile enrichment).
 	WebhookSecret       string // HMAC secret for billing webhook verification.
 	ChatJWTSecret       string // HMAC secret for chat session JWT signing.
 	EventBus            *eventbus.Bus

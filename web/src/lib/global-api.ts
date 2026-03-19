@@ -270,6 +270,33 @@ export async function uploadThreadAttachment(
   return parseResponse<Upload>(response);
 }
 
+/**
+ * Download an uploaded file attachment by its upload record ID.
+ * Fetches the file from the authenticated download endpoint and triggers a
+ * browser file download. Requires a valid auth token.
+ */
+export async function downloadUpload(
+  token: string,
+  uploadId: string,
+  filename: string,
+): Promise<void> {
+  const url = buildUrl(`/uploads/${encodeURIComponent(uploadId)}/download`);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}`, Accept: "*/*" },
+  });
+  if (!response.ok) {
+    throw new Error(`Download failed: ${response.status}`);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
 /** Values for creating a support ticket. */
 export interface CreateSupportTicketValues {
   title: string;

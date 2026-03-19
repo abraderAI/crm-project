@@ -103,7 +103,26 @@ func (s *Service) BootstrapAdmin(ctx context.Context, userID string) error {
 
 // SyncUserShadow upserts a user shadow record from JWT claims.
 // When email or displayName is empty, the existing DB value is preserved (not overwritten).
+// If both are empty and a Clerk client is configured, it attempts a one-time fetch from
+// the Clerk Backend API so that users are never displayed by their raw Clerk ID.
 func (s *Service) SyncUserShadow(ctx context.Context, userID, email, displayName string) {
+	// If the JWT didn't include identity claims, try the Clerk Backend API once —
+	// but only when the user shadow doesn't already have an email stored.
+	if email == "" && displayName == "" && s.clerkClient != nil {
+		var existing models.UserShadow
+		findErr := s.db.WithContext(ctx).
+			Select("email", "display_name").
+			Where("clerk_user_id = ?", userID).
+			First(&existing).Error
+		// Call Clerk when the record is absent (findErr != nil) or has no email yet.
+		if findErr != nil || existing.Email == "" {
+			if user, fetchErr := s.clerkClient.GetUser(ctx, userID); fetchErr == nil {
+				email = user.Email
+				displayName = user.DisplayName
+			}
+		}
+	}
+
 	now := time.Now()
 	shadow := models.UserShadow{
 		ClerkUserID: userID,

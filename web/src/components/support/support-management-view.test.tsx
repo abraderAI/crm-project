@@ -21,12 +21,14 @@ const mockCreateSupportTicket = vi.fn();
 const mockUpdateSupportTicket = vi.fn();
 const mockFetchThreadAttachments = vi.fn();
 const mockUploadThreadAttachment = vi.fn();
+const mockDownloadUpload = vi.fn();
 vi.mock("@/lib/global-api", () => ({
   fetchGlobalSupportTickets: (...args: unknown[]) => mockFetchGlobalSupportTickets(...args),
   createSupportTicket: (...args: unknown[]) => mockCreateSupportTicket(...args),
   updateSupportTicket: (...args: unknown[]) => mockUpdateSupportTicket(...args),
   fetchThreadAttachments: (...args: unknown[]) => mockFetchThreadAttachments(...args),
   uploadThreadAttachment: (...args: unknown[]) => mockUploadThreadAttachment(...args),
+  downloadUpload: (...args: unknown[]) => mockDownloadUpload(...args),
 }));
 
 import { SupportManagementView } from "./support-management-view";
@@ -90,6 +92,7 @@ describe("SupportManagementView", () => {
     mockGetToken.mockResolvedValue("test-token");
     mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([]));
     mockFetchThreadAttachments.mockResolvedValue([]);
+    mockDownloadUpload.mockResolvedValue(undefined);
   });
 
   // ---------------------------------------------------------------------------
@@ -1304,6 +1307,75 @@ describe("SupportManagementView", () => {
     await user.click(screen.getByTestId("ticket-open-btn-t-fetch-att"));
     await waitFor(() => {
       expect(mockFetchThreadAttachments).toHaveBeenCalledWith("test-token", "my-ticket-slug");
+    });
+  });
+
+  it("attachment download button is rendered and calls downloadUpload on click", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-dl", slug: "t-dl-slug" });
+    const attachment = {
+      id: "upload-dl-1",
+      org_id: "org-1",
+      entity_type: "thread",
+      entity_id: ticket.id,
+      filename: "invoice.pdf",
+      content_type: "application/pdf",
+      size: 1024,
+      storage_path: "/uploads/invoice.pdf",
+      uploader_id: "u1",
+      created_at: "2026-03-01T00:00:00Z",
+      updated_at: "2026-03-01T00:00:00Z",
+    };
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    mockFetchThreadAttachments.mockResolvedValue([attachment]);
+
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-dl")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-dl"));
+    await waitFor(() => {
+      expect(screen.getByTestId("attachment-download-upload-dl-1")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("attachment-download-upload-dl-1"));
+    await waitFor(() => {
+      expect(mockDownloadUpload).toHaveBeenCalledWith("test-token", "upload-dl-1", "invoice.pdf");
+    });
+  });
+
+  it("attachment download button shows error when download fails", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-dl-err", slug: "t-dl-err-slug" });
+    const attachment = {
+      id: "upload-err-1",
+      org_id: "org-1",
+      entity_type: "thread",
+      entity_id: ticket.id,
+      filename: "broken.pdf",
+      content_type: "application/pdf",
+      size: 512,
+      storage_path: "/uploads/broken.pdf",
+      uploader_id: "u1",
+      created_at: "2026-03-01T00:00:00Z",
+      updated_at: "2026-03-01T00:00:00Z",
+    };
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    mockFetchThreadAttachments.mockResolvedValue([attachment]);
+    mockDownloadUpload.mockRejectedValue(new Error("Download failed"));
+
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-dl-err")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-dl-err"));
+    await waitFor(() => {
+      expect(screen.getByTestId("attachment-download-upload-err-1")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("attachment-download-upload-err-1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("work-view-attachment-error")).toHaveTextContent("Download failed");
     });
   });
 

@@ -74,6 +74,7 @@ func main() {
 		Logger:              logger,
 		CORSOrigins:         cfg.CORSOrigins,
 		IssuerURL:           cfg.ClerkIssuerURL,
+		ClerkSecretKey:      cfg.ClerkSecretKey,
 		PlatformAdminUserID: cfg.PlatformAdminUserID,
 	})
 
