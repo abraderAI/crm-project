@@ -82,16 +82,16 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
             <ChannelConfigForm
               channelType={channelType}
               initialConfig={configData}
-          onSave={async (settings, enabled) => {
-            "use server";
-            await putChannelConfig(DEFAULT_ORG, channelType, {
-              settings: JSON.stringify(settings),
-              enabled,
-            });
-            revalidatePath(`/admin/channels/${channelType}`);
-          }}
-        />
-      </div>
+              onSave={async (settings, enabled) => {
+                "use server";
+                await putChannelConfig(DEFAULT_ORG, channelType, {
+                  settings: JSON.stringify(settings),
+                  enabled,
+                });
+                revalidatePath(`/admin/channels/${channelType}`);
+              }}
+            />
+          </div>
 
           {/* Right-side preview panel */}
           <ChatChannelPanel embedKey={configData?.org_id ?? DEFAULT_ORG} />
