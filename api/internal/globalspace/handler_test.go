@@ -1,8 +1,10 @@
 package globalspace
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -21,6 +23,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/database"
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/models"
+	"github.com/abraderAI/crm-project/api/internal/upload"
 	"github.com/abraderAI/crm-project/api/pkg/pagination"
 )
 
@@ -56,9 +59,17 @@ func setupDB(t *testing.T) (*gorm.DB, string) {
 	return db, bd.ID
 }
 
-// newSvc creates a Service with no event bus for tests.
+// newSvc creates a Service with no event bus or upload service for tests.
 func newSvc(db *gorm.DB) *Service {
-	return NewService(NewRepository(db), nil)
+	return NewService(NewRepository(db), nil, nil)
+}
+
+// newUploadSvc creates an upload.Service backed by a temp directory for tests.
+func newUploadSvc(t *testing.T, db *gorm.DB) *upload.Service {
+	t.Helper()
+	storage, err := upload.NewLocalStorage(t.TempDir())
+	require.NoError(t, err)
+	return upload.NewService(db, storage, 10<<20) // 10 MB limit
 }
 
 // globalSpaceRouter wires up a test chi router for the global-spaces endpoints.
@@ -69,6 +80,7 @@ func globalSpaceRouter(h *Handler) *chi.Mux {
 	r.Get("/global-spaces/{space}/threads/{slug}", h.GetThread)
 	r.Patch("/global-spaces/{space}/threads/{slug}", h.UpdateThread)
 	r.Get("/global-spaces/{space}/threads/{slug}/attachments", h.ListAttachments)
+	r.Post("/global-spaces/{space}/threads/{slug}/attachments", h.UploadAttachment)
 	return r
 }
 
@@ -560,6 +572,78 @@ func TestHandler_ListAttachments(t *testing.T) {
 	})
 }
 
+// TestHandler_UploadAttachment covers POST /{slug}/attachments.
+func TestHandler_UploadAttachment(t *testing.T) {
+	db, _ := setupDB(t)
+	upSvc := newUploadSvc(t, db)
+	svc := NewService(NewRepository(db), nil, upSvc)
+	h := NewHandler(svc)
+	r := globalSpaceRouter(h)
+	ctx := context.Background()
+
+	th, err := svc.CreateThread(ctx, "global-support", "user-up", CreateInput{Title: "Upload Ticket"})
+	require.NoError(t, err)
+
+	// buildMultipart creates a multipart/form-data body with a single text file.
+	buildMultipart := func(t *testing.T, filename, content string) (*bytes.Buffer, string) {
+		t.Helper()
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		fw, err := mw.CreateFormFile("file", filename)
+		require.NoError(t, err)
+		_, err = fw.Write([]byte(content))
+		require.NoError(t, err)
+		require.NoError(t, mw.Close())
+		return &buf, mw.FormDataContentType()
+	}
+
+	t.Run("success returns 201 with upload record", func(t *testing.T) {
+		body, ct := buildMultipart(t, "notes.txt", "some content")
+		req := httptest.NewRequest(http.MethodPost, "/global-spaces/global-support/threads/"+th.Slug+"/attachments", body)
+		req.Header.Set("Content-Type", ct)
+		req = withUser(req, "user-up")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "notes.txt", resp["filename"])
+		assert.Equal(t, "thread", resp["entity_type"])
+	})
+
+	t.Run("unknown thread returns 404", func(t *testing.T) {
+		body, ct := buildMultipart(t, "x.txt", "x")
+		req := httptest.NewRequest(http.MethodPost, "/global-spaces/global-support/threads/no-such/attachments", body)
+		req.Header.Set("Content-Type", ct)
+		req = withUser(req, "user-up")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("missing file field returns 400", func(t *testing.T) {
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		require.NoError(t, mw.Close())
+		req := httptest.NewRequest(http.MethodPost, "/global-spaces/global-support/threads/"+th.Slug+"/attachments", &buf)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		req = withUser(req, "user-up")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("unauthenticated returns 401", func(t *testing.T) {
+		body, ct := buildMultipart(t, "y.txt", "y")
+		req := httptest.NewRequest(http.MethodPost, "/global-spaces/global-support/threads/"+th.Slug+"/attachments", body)
+		req.Header.Set("Content-Type", ct)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}
+
 // TestService_UpdateThread_PublishesEvent verifies the event bus integration.
 func TestService_UpdateThread_PublishesEvent(t *testing.T) {
 	db, _ := setupDB(t)
@@ -572,7 +656,7 @@ func TestService_UpdateThread_PublishesEvent(t *testing.T) {
 		}
 	}()
 
-	svc := NewService(NewRepository(db), bus)
+	svc := NewService(NewRepository(db), bus, nil)
 	ctx := context.Background()
 
 	th, err := svc.CreateThread(ctx, "global-support", "opener", CreateInput{Title: "Notify Ticket"})

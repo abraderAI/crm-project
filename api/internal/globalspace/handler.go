@@ -140,6 +140,47 @@ func (h *Handler) ListAttachments(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, uploads)
 }
 
+// maxAttachmentSize is the maximum file size accepted by the attachment upload handler.
+const maxAttachmentSize = 100 << 20 // 100 MB
+
+// UploadAttachment handles POST /v1/global-spaces/{space}/threads/{slug}/attachments.
+// Accepts a multipart/form-data body with a single "file" field.
+// Requires authentication. The org_id is resolved server-side.
+func (h *Handler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
+	spaceSlug := chi.URLParam(r, "space")
+	threadSlug := chi.URLParam(r, "slug")
+
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	if err := r.ParseMultipartForm(maxAttachmentSize); err != nil {
+		apierrors.BadRequest(w, "invalid multipart form")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		apierrors.BadRequest(w, "file field is required")
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	uploaded, err := h.service.UploadAttachment(r.Context(), spaceSlug, threadSlug, uc.UserID, header.Filename, header.Size, file)
+	if err != nil {
+		apierrors.InternalError(w, "failed to upload attachment")
+		return
+	}
+	if uploaded == nil {
+		apierrors.NotFound(w, "thread not found")
+		return
+	}
+
+	response.Created(w, uploaded)
+}
+
 // CreateThread handles POST /v1/global-spaces/{space}/threads.
 // Requires authentication. Tier enforcement is handled client-side.
 func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {

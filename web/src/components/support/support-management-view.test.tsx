@@ -20,13 +20,13 @@ const mockFetchGlobalSupportTickets = vi.fn();
 const mockCreateSupportTicket = vi.fn();
 const mockUpdateSupportTicket = vi.fn();
 const mockFetchThreadAttachments = vi.fn();
-const mockUploadTicketAttachment = vi.fn();
+const mockUploadThreadAttachment = vi.fn();
 vi.mock("@/lib/global-api", () => ({
   fetchGlobalSupportTickets: (...args: unknown[]) => mockFetchGlobalSupportTickets(...args),
   createSupportTicket: (...args: unknown[]) => mockCreateSupportTicket(...args),
   updateSupportTicket: (...args: unknown[]) => mockUpdateSupportTicket(...args),
   fetchThreadAttachments: (...args: unknown[]) => mockFetchThreadAttachments(...args),
-  uploadTicketAttachment: (...args: unknown[]) => mockUploadTicketAttachment(...args),
+  uploadThreadAttachment: (...args: unknown[]) => mockUploadThreadAttachment(...args),
 }));
 
 import { SupportManagementView } from "./support-management-view";

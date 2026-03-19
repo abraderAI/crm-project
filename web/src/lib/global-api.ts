@@ -242,26 +242,26 @@ export async function fetchThreadAttachments(token: string, slug: string): Promi
 }
 
 /**
- * Upload a file attachment and associate it with a support ticket thread.
+ * Upload a file attachment to a support ticket thread via the dedicated
+ * thread-scoped endpoint. The server resolves org_id automatically, so no
+ * org context is required from the caller.
  * Requires authentication. The file is posted as multipart/form-data.
  */
-export async function uploadTicketAttachment(
+export async function uploadThreadAttachment(
   token: string,
-  threadId: string,
-  orgId: string | null | undefined,
+  threadSlug: string,
   file: File,
 ): Promise<Upload> {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("entity_type", "thread");
-  formData.append("entity_id", threadId);
-  if (orgId) formData.append("org_id", orgId);
 
   // Omit Content-Type so the browser sets the multipart/form-data boundary automatically.
   const headers: Record<string, string> = { Accept: "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const url = buildUrl("/uploads");
+  const url = buildUrl(
+    `/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads/${encodeURIComponent(threadSlug)}/attachments`,
+  );
   const response = await fetch(url, {
     method: "POST",
     headers,
