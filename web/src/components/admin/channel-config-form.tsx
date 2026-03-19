@@ -17,15 +17,14 @@ const CHANNEL_FIELDS: Record<ChannelType, FieldDef[]> = {
   email: [
     { key: "imap_host", label: "IMAP Host", masked: false, type: "text" },
     { key: "imap_port", label: "IMAP Port", masked: false, type: "number" },
-    { key: "imap_user", label: "IMAP User", masked: false, type: "text" },
-    { key: "imap_password", label: "IMAP Password", masked: true, type: "text" },
+    { key: "username", label: "IMAP User", masked: false, type: "text" },
+    { key: "password", label: "IMAP Password", masked: true, type: "text" },
     { key: "mailbox", label: "Mailbox", masked: false, type: "text" },
   ],
   voice: [
-    { key: "livekit_url", label: "LiveKit URL", masked: false, type: "text" },
+    { key: "livekit_project_url", label: "LiveKit URL", masked: false, type: "text" },
     { key: "livekit_api_key", label: "LiveKit API Key", masked: false, type: "text" },
     { key: "livekit_api_secret", label: "LiveKit API Secret", masked: true, type: "text" },
-    { key: "webhook_token", label: "Webhook Token", masked: true, type: "text" },
   ],
   chat: [
     { key: "jwt_secret", label: "JWT Secret", masked: true, type: "text" },
@@ -47,7 +46,7 @@ export interface ChannelConfigFormProps {
   /** Initial configuration data. */
   initialConfig: ChannelConfig | null;
   /** Called when the form is saved. */
-  onSave: (settings: Record<string, string>, enabled: boolean) => Promise<void> | void;
+  onSave: (settings: Record<string, unknown>, enabled: boolean) => Promise<void> | void;
 }
 
 /** Parse settings JSON string into a record. */
@@ -107,7 +106,8 @@ export function ChannelConfigForm({
     setSaving(true);
     try {
       // Build settings: include non-masked fields always, masked fields only if non-empty.
-      const settings: Record<string, string> = {};
+      // Number fields are converted to actual numbers so the backend can deserialise them.
+      const settings: Record<string, unknown> = {};
       for (const f of fields) {
         if (f.masked) {
           const val = values[f.key];
@@ -119,7 +119,8 @@ export function ChannelConfigForm({
             settings[f.key] = existing;
           }
         } else {
-          settings[f.key] = values[f.key] ?? "";
+          const raw = values[f.key] ?? "";
+          settings[f.key] = f.type === "number" ? Number(raw) || 0 : raw;
         }
       }
       await onSave(settings, enabled);
