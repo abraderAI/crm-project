@@ -178,7 +178,9 @@ func newHandlers(cfg Config) serverHandlers {
 	auditHandler := audit.NewHandler(auditService)
 
 	// Admin service and handler.
-	adminService := admin.NewService(cfg.DB)
+	// WithClerkKey enables server-side profile enrichment from the Clerk Backend API
+	// when JWT tokens do not include email/name claims.
+	adminService := admin.NewService(cfg.DB).WithClerkKey(cfg.ClerkSecretKey)
 	adminHandler := admin.NewHandler(adminService, auditService, gdprService, cfg.RBACPolicy)
 
 	revisionRepo := revision.NewRepository(cfg.DB)

@@ -20,6 +20,7 @@ import {
   updateSupportTicket,
   fetchThreadAttachments,
   uploadThreadAttachment,
+  downloadUpload,
   type GlobalSupportParams,
 } from "@/lib/global-api";
 import { useTier } from "@/hooks/use-tier";
@@ -262,6 +263,20 @@ export function SupportManagementView(): ReactNode {
       setUploadingFile(false);
     }
   };
+
+  // Trigger a browser download for an attachment.
+  const handleDownloadAttachment = useCallback(
+    async (uploadId: string, filename: string): Promise<void> => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        await downloadUpload(token, uploadId, filename);
+      } catch (err) {
+        setAttachmentError(err instanceof Error ? err.message : "Failed to download file");
+      }
+    },
+    [getToken],
+  );
 
   // Close the work-view modal without saving.
   const handleCloseWork = (): void => {
@@ -706,7 +721,13 @@ export function SupportManagementView(): ReactNode {
                   {attachments.map((a) => (
                     <li key={a.id} className="flex items-center gap-1 text-xs">
                       <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      <span className="truncate text-foreground">{a.filename}</span>
+                      <button
+                        data-testid={`attachment-download-${a.id}`}
+                        onClick={() => void handleDownloadAttachment(a.id, a.filename)}
+                        className="truncate text-foreground underline hover:no-underline"
+                      >
+                        {a.filename}
+                      </button>
                       <span className="shrink-0 text-muted-foreground">
                         ({(a.size / 1024).toFixed(1)} KB)
                       </span>

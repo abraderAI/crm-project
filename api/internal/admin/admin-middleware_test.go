@@ -16,6 +16,20 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/models"
 )
 
+// clerkTestServer creates a httptest.Server that returns the given Clerk user JSON,
+// and a ClerkClient pointing at it.
+func clerkTestServer(t *testing.T, responseBody string, statusCode int) (*httptest.Server, *auth.ClerkClient) {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(statusCode)
+		_, _ = w.Write([]byte(responseBody))
+	}))
+	t.Cleanup(ts.Close)
+	// Build a ClerkClient that targets the test server.
+	client := auth.NewClerkClientForTest("test-secret", ts.URL)
+	return ts, client
+}
+
 // --- Middleware Tests ---
 
 func TestPlatformAdminOnly_NoAuth(t *testing.T) {
@@ -277,4 +291,62 @@ func TestSyncUserShadow_PreservesExistingEmail(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "real@example.com", shadow.Email, "email should be preserved")
 	assert.Equal(t, "Real Name", shadow.DisplayName, "display_name should be preserved")
+}
+
+func TestSyncUserShadow_ClerkFallback_NewUser(t *testing.T) {
+	db := setupTestDB(t)
+	_, clerkClient := clerkTestServer(t, `{
+		"email_addresses": [{"email_address": "jane@example.com"}],
+		"first_name": "Jane",
+		"last_name": "Doe"
+	}`, http.StatusOK)
+
+	svc := NewService(db).withClerkClient(clerkClient)
+	svc.SyncUserShadow(context.Background(), "new_clerk_user", "", "")
+
+	var shadow models.UserShadow
+	err := db.Where("clerk_user_id = ?", "new_clerk_user").First(&shadow).Error
+	require.NoError(t, err)
+	assert.Equal(t, "jane@example.com", shadow.Email, "Clerk API email should be stored")
+	assert.Equal(t, "Jane Doe", shadow.DisplayName, "Clerk API name should be stored")
+}
+
+func TestSyncUserShadow_ClerkFallback_ExistingEmailSkipsClerk(t *testing.T) {
+	db := setupTestDB(t)
+	clerkCallCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		clerkCallCount++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"email_addresses": [{"email_address": "other@example.com"}]}`))
+	}))
+	t.Cleanup(ts.Close)
+	clerkClient := auth.NewClerkClientForTest("key", ts.URL)
+
+	svc := NewService(db).withClerkClient(clerkClient)
+	ctx := context.Background()
+
+	// Pre-seed shadow with an email.
+	svc.SyncUserShadow(ctx, "existing_email_user", "existing@example.com", "Existing User")
+	clerkCallCount = 0 // reset after first sync (which itself won't call Clerk since email is present)
+
+	// Sync with empty JWT claims — should NOT call Clerk because email already stored.
+	svc.SyncUserShadow(ctx, "existing_email_user", "", "")
+
+	assert.Equal(t, 0, clerkCallCount, "Clerk API should not be called when email already in shadow")
+	var shadow models.UserShadow
+	err := db.Where("clerk_user_id = ?", "existing_email_user").First(&shadow).Error
+	require.NoError(t, err)
+	assert.Equal(t, "existing@example.com", shadow.Email, "original email should be preserved")
+}
+
+func TestSyncUserShadow_ClerkFallback_SkippedWhenNoClient(t *testing.T) {
+	db := setupTestDB(t)
+	// No Clerk client configured — should not panic and should still create shadow.
+	svc := NewService(db)
+	svc.SyncUserShadow(context.Background(), "no_clerk_user", "", "")
+
+	var shadow models.UserShadow
+	err := db.Where("clerk_user_id = ?", "no_clerk_user").First(&shadow).Error
+	require.NoError(t, err)
+	assert.Equal(t, "", shadow.Email, "email should remain empty without Clerk client")
 }
