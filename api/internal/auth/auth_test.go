@@ -174,6 +174,121 @@ func TestJWT_NoExpiry(t *testing.T) {
 	assert.Equal(t, "user1", claims.Subject)
 }
 
+// --- JWT Identity Claims Tests ---
+
+func TestJWT_EmailAndNameClaims(t *testing.T) {
+	kp := generateTestKeyPair(t)
+	issuer := "https://clerk.example.com"
+	v := testValidator(t, kp, issuer)
+
+	claims := JWTClaims{
+		Subject:   "user-with-email",
+		Issuer:    issuer,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+		Email:     "alice@example.com",
+		FirstName: "Alice",
+		LastName:  "Smith",
+	}
+	token := signTestJWT(t, kp, claims)
+	got, err := v.Validate(token)
+	require.NoError(t, err)
+	assert.Equal(t, "alice@example.com", got.Email)
+	assert.Equal(t, "Alice", got.FirstName)
+	assert.Equal(t, "Smith", got.LastName)
+}
+
+func TestJWT_EmptyEmailClaims(t *testing.T) {
+	kp := generateTestKeyPair(t)
+	issuer := "https://clerk.example.com"
+	v := testValidator(t, kp, issuer)
+
+	claims := JWTClaims{
+		Subject:   "user-no-email",
+		Issuer:    issuer,
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+	}
+	token := signTestJWT(t, kp, claims)
+	got, err := v.Validate(token)
+	require.NoError(t, err)
+	assert.Empty(t, got.Email)
+	assert.Empty(t, got.FirstName)
+	assert.Empty(t, got.LastName)
+}
+
+// --- buildDisplayName tests ---
+
+func TestBuildDisplayName(t *testing.T) {
+	tests := []struct {
+		name  string
+		first string
+		last  string
+		want  string
+	}{
+		{"both names", "Alice", "Smith", "Alice Smith"},
+		{"first only", "Alice", "", "Alice"},
+		{"last only", "", "Smith", "Smith"},
+		{"both empty", "", "", ""},
+		{"whitespace only", "  ", "  ", ""},
+		{"first with whitespace", "  Alice  ", "", "Alice"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildDisplayName(tt.first, tt.last)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --- UserContext Email/DisplayName tests ---
+
+func TestUserContext_EmailAndDisplayName(t *testing.T) {
+	uc := &UserContext{
+		UserID:      "user-1",
+		AuthMethod:  AuthMethodJWT,
+		Email:       "bob@example.com",
+		DisplayName: "Bob Jones",
+	}
+	ctx := SetUserContext(context.Background(), uc)
+	got := GetUserContext(ctx)
+	require.NotNil(t, got)
+	assert.Equal(t, "bob@example.com", got.Email)
+	assert.Equal(t, "Bob Jones", got.DisplayName)
+}
+
+// --- JWTAuth middleware identity claim propagation ---
+
+func TestJWTAuth_PropagatesEmailAndDisplayName(t *testing.T) {
+	kp := generateTestKeyPair(t)
+	issuer := "https://clerk.example.com"
+	v := testValidator(t, kp, issuer)
+
+	var capturedUC *UserContext
+	handler := JWTAuth(v)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedUC = GetUserContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	claims := JWTClaims{
+		Subject:   "user-jwt-email",
+		Issuer:    issuer,
+		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		Email:     "carol@example.com",
+		FirstName: "Carol",
+		LastName:  "Danvers",
+	}
+	token := signTestJWT(t, kp, claims)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(w, r)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotNil(t, capturedUC)
+	assert.Equal(t, "carol@example.com", capturedUC.Email)
+	assert.Equal(t, "Carol Danvers", capturedUC.DisplayName)
+}
+
 // --- Base64URL Tests ---
 
 func TestBase64URLDecode_Padding(t *testing.T) {

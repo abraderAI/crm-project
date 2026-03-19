@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/models"
 	"github.com/abraderAI/crm-project/api/pkg/metadata"
 	"github.com/abraderAI/crm-project/api/pkg/pagination"
@@ -14,11 +16,13 @@ import (
 // Service provides business logic for global space thread operations.
 type Service struct {
 	repo *Repository
+	bus  *eventbus.Bus
 }
 
 // NewService creates a new global space Service.
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+// bus may be nil; when provided, domain events are published after mutations.
+func NewService(repo *Repository, bus *eventbus.Bus) *Service {
+	return &Service{repo: repo, bus: bus}
 }
 
 // ThreadWithAuthor wraps a Thread with resolved author and org display names.
@@ -227,11 +231,53 @@ func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, edito
 		reloaded = t
 	}
 
+	// Publish thread.updated event for notification routing — best-effort.
+	if s.bus != nil && spaceSlug == "global-support" {
+		s.bus.Publish(eventbus.Event{
+			Type:       "thread.updated",
+			EntityType: "thread",
+			EntityID:   reloaded.ID,
+			UserID:     editorID,
+			Timestamp:  time.Now(),
+			Payload: map[string]any{
+				"title":        reloaded.Title,
+				"source":       "global-support",
+				"participants": []string{reloaded.AuthorID},
+			},
+		})
+	}
+
 	enriched, err := s.enrichThreads(ctx, []models.Thread{*reloaded})
 	if err != nil {
 		return nil, err
 	}
 	return &enriched[0], nil
+}
+
+// ListAttachments returns all uploads attached to the specified thread.
+// Returns nil, nil when the space or thread does not exist.
+func (s *Service) ListAttachments(ctx context.Context, spaceSlug, threadSlug string) ([]models.Upload, error) {
+	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
+	if err != nil {
+		return nil, fmt.Errorf("listing attachments: %w", err)
+	}
+	if board == nil {
+		return nil, nil
+	}
+
+	t, err := s.repo.FindThreadBySlug(ctx, board.ID, threadSlug)
+	if err != nil {
+		return nil, fmt.Errorf("listing attachments: %w", err)
+	}
+	if t == nil {
+		return nil, nil
+	}
+
+	uploads, err := s.repo.ListUploadsByThread(ctx, t.ID)
+	if err != nil {
+		return nil, err
+	}
+	return uploads, nil
 }
 
 // CreateThread creates a new thread in the specified global space.

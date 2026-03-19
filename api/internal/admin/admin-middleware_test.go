@@ -230,3 +230,51 @@ func TestUserShadowSync_APIKey(t *testing.T) {
 	db.Model(&models.UserShadow{}).Where("clerk_user_id = ?", "apikey_user").Count(&count)
 	assert.Equal(t, int64(0), count)
 }
+
+func TestUserShadowSync_PropagatesEmailAndDisplayName(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+
+	handler := UserShadowSync(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx := auth.SetUserContext(r.Context(), &auth.UserContext{
+		UserID:      "email_user",
+		AuthMethod:  auth.AuthMethodJWT,
+		Email:       "user@example.com",
+		DisplayName: "Email User",
+	})
+	handler.ServeHTTP(w, r.WithContext(ctx))
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	time.Sleep(100 * time.Millisecond)
+
+	var shadow models.UserShadow
+	err := db.Where("clerk_user_id = ?", "email_user").First(&shadow).Error
+	require.NoError(t, err)
+	assert.Equal(t, "user@example.com", shadow.Email)
+	assert.Equal(t, "Email User", shadow.DisplayName)
+}
+
+func TestSyncUserShadow_PreservesExistingEmail(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	ctx := context.Background()
+
+	// First sync with real data.
+	svc.SyncUserShadow(ctx, "preserve_user", "real@example.com", "Real Name")
+	time.Sleep(50 * time.Millisecond)
+
+	// Second sync with empty data — should NOT overwrite email or display_name.
+	svc.SyncUserShadow(ctx, "preserve_user", "", "")
+	time.Sleep(50 * time.Millisecond)
+
+	var shadow models.UserShadow
+	err := db.Where("clerk_user_id = ?", "preserve_user").First(&shadow).Error
+	require.NoError(t, err)
+	assert.Equal(t, "real@example.com", shadow.Email, "email should be preserved")
+	assert.Equal(t, "Real Name", shadow.DisplayName, "display_name should be preserved")
+}

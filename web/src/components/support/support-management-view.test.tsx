@@ -19,10 +19,14 @@ vi.mock("@/hooks/use-tier", () => ({
 const mockFetchGlobalSupportTickets = vi.fn();
 const mockCreateSupportTicket = vi.fn();
 const mockUpdateSupportTicket = vi.fn();
+const mockFetchThreadAttachments = vi.fn();
+const mockUploadTicketAttachment = vi.fn();
 vi.mock("@/lib/global-api", () => ({
   fetchGlobalSupportTickets: (...args: unknown[]) => mockFetchGlobalSupportTickets(...args),
   createSupportTicket: (...args: unknown[]) => mockCreateSupportTicket(...args),
   updateSupportTicket: (...args: unknown[]) => mockUpdateSupportTicket(...args),
+  fetchThreadAttachments: (...args: unknown[]) => mockFetchThreadAttachments(...args),
+  uploadTicketAttachment: (...args: unknown[]) => mockUploadTicketAttachment(...args),
 }));
 
 import { SupportManagementView } from "./support-management-view";
@@ -85,6 +89,7 @@ describe("SupportManagementView", () => {
     vi.clearAllMocks();
     mockGetToken.mockResolvedValue("test-token");
     mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([]));
+    mockFetchThreadAttachments.mockResolvedValue([]);
   });
 
   // ---------------------------------------------------------------------------
@@ -1203,6 +1208,102 @@ describe("SupportManagementView", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("work-view-error")).toHaveTextContent("Save failed");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Work-view enhancements — Close label, updated_at, attachments
+  // ---------------------------------------------------------------------------
+
+  it("work-view cancel button label reads 'Close'", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-close-label" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-close-label")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-close-label"));
+    expect(screen.getByTestId("work-view-cancel-btn")).toHaveTextContent("Close");
+  });
+
+  it("work-view shows updated_at timestamp when present", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({
+      id: "t-updated-at",
+      updated_at: "2026-03-01T12:00:00Z",
+    });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-updated-at")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-updated-at"));
+    await waitFor(() => {
+      expect(screen.getByTestId("work-view-updated-at")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("work-view-updated-at")).toHaveTextContent("Last updated:");
+  });
+
+  it("work-view shows attach button", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-attach-btn" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-attach-btn")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-attach-btn"));
+    await waitFor(() => {
+      expect(screen.getByTestId("work-view-attach-btn")).toBeInTheDocument();
+    });
+  });
+
+  it("work-view renders attachments list when attachments are returned", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-attach-list", slug: "t-attach-list-slug" });
+    const attachment = {
+      id: "upload-1",
+      org_id: "org-1",
+      entity_type: "thread",
+      entity_id: ticket.id,
+      filename: "report.pdf",
+      content_type: "application/pdf",
+      size: 2048,
+      storage_path: "/uploads/report.pdf",
+      uploader_id: "u1",
+      created_at: "2026-03-01T00:00:00Z",
+      updated_at: "2026-03-01T00:00:00Z",
+    };
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    mockFetchThreadAttachments.mockResolvedValue([attachment]);
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-attach-list")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-attach-list"));
+    await waitFor(() => {
+      expect(screen.getByTestId("work-view-attachments-list")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("work-view-attachments-list")).toHaveTextContent("report.pdf");
+  });
+
+  it("work-view calls fetchThreadAttachments with correct slug on open", async () => {
+    const user = userEvent.setup();
+    mockUseTier.mockReturnValue(makeTier({ tier: 4 }));
+    const ticket = makeTicket({ id: "t-fetch-att", slug: "my-ticket-slug" });
+    mockFetchGlobalSupportTickets.mockResolvedValue(makePagedResponse([ticket]));
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-open-btn-t-fetch-att")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("ticket-open-btn-t-fetch-att"));
+    await waitFor(() => {
+      expect(mockFetchThreadAttachments).toHaveBeenCalledWith("test-token", "my-ticket-slug");
     });
   });
 

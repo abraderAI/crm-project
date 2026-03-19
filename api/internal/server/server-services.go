@@ -225,7 +225,7 @@ func newHandlers(cfg Config) serverHandlers {
 
 	// Global space handler (forum, support, leads — slug-based access).
 	globalSpaceRepo := globalspace.NewRepository(cfg.DB)
-	globalSpaceService := globalspace.NewService(globalSpaceRepo)
+	globalSpaceService := globalspace.NewService(globalSpaceRepo, cfg.EventBus)
 	globalSpaceHandler := globalspace.NewHandler(globalSpaceService)
 
 	// IO Phase 4: AI Web Chat Widget.

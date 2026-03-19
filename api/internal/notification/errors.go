@@ -12,12 +12,13 @@ var (
 
 // Notification event types.
 const (
-	TypeNewMessage  = "new_message"
-	TypeMention     = "mention"
-	TypeStageChange = "stage_change"
-	TypeAssignment  = "assignment"
-	TypeInvite      = "invite"
-	TypeDigest      = "digest"
+	TypeNewMessage           = "new_message"
+	TypeMention              = "mention"
+	TypeStageChange          = "stage_change"
+	TypeAssignment           = "assignment"
+	TypeInvite               = "invite"
+	TypeDigest               = "digest"
+	TypeSupportTicketUpdated = "support_ticket.updated"
 )
 
 // Notification channels.

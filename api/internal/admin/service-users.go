@@ -102,6 +102,7 @@ func (s *Service) BootstrapAdmin(ctx context.Context, userID string) error {
 // --- User Shadow Management ---
 
 // SyncUserShadow upserts a user shadow record from JWT claims.
+// When email or displayName is empty, the existing DB value is preserved (not overwritten).
 func (s *Service) SyncUserShadow(ctx context.Context, userID, email, displayName string) {
 	now := time.Now()
 	shadow := models.UserShadow{
@@ -111,14 +112,19 @@ func (s *Service) SyncUserShadow(ctx context.Context, userID, email, displayName
 		LastSeenAt:  now,
 		SyncedAt:    now,
 	}
-	// Upsert: create or update last_seen_at and synced_at.
+	// Always update last_seen_at and synced_at; only overwrite identity fields when non-empty.
+	assignFields := map[string]any{
+		"last_seen_at": now,
+		"synced_at":    now,
+	}
+	if email != "" {
+		assignFields["email"] = email
+	}
+	if displayName != "" {
+		assignFields["display_name"] = displayName
+	}
 	s.db.WithContext(ctx).Where("clerk_user_id = ?", userID).
-		Assign(map[string]any{
-			"last_seen_at": now,
-			"synced_at":    now,
-			"email":        email,
-			"display_name": displayName,
-		}).FirstOrCreate(&shadow)
+		Assign(assignFields).FirstOrCreate(&shadow)
 }
 
 // IsUserBanned checks if a user is banned.

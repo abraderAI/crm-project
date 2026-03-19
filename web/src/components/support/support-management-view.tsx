@@ -2,13 +2,24 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { AlertTriangle, ExternalLink, LifeBuoy, Plus, Save, User, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ExternalLink,
+  LifeBuoy,
+  Paperclip,
+  Plus,
+  Save,
+  User,
+  X,
+} from "lucide-react";
 
-import type { ThreadWithAuthor } from "@/lib/api-types";
+import type { ThreadWithAuthor, Upload } from "@/lib/api-types";
 import {
   fetchGlobalSupportTickets,
   createSupportTicket,
   updateSupportTicket,
+  fetchThreadAttachments,
+  uploadTicketAttachment,
   type GlobalSupportParams,
 } from "@/lib/global-api";
 import { useTier } from "@/hooks/use-tier";
@@ -85,6 +96,13 @@ export function SupportManagementView(): ReactNode {
   const [workStatus, setWorkStatus] = useState("");
   const [workSaving, setWorkSaving] = useState(false);
   const [workError, setWorkError] = useState("");
+
+  // Attachments state.
+  const [attachments, setAttachments] = useState<Upload[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [attachmentError, setAttachmentError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const mountedRef = useRef(true);
 
@@ -197,18 +215,60 @@ export function SupportManagementView(): ReactNode {
   // Create ticket handler
   // ---------------------------------------------------------------------------
 
-  // Open a ticket in the work-view modal.
+  // Open a ticket in the work-view modal and load its attachments.
   const handleOpenTicket = (ticket: ThreadWithAuthor): void => {
     setWorkTicket(ticket);
     setWorkBody(ticket.body ?? "");
     setWorkStatus(ticket.status ?? "open");
     setWorkError("");
+    setAttachments([]);
+    setAttachmentError("");
+    // Fetch attachments asynchronously.
+    setAttachmentsLoading(true);
+    void getToken().then((token) => {
+      if (!token) {
+        setAttachmentsLoading(false);
+        return;
+      }
+      return fetchThreadAttachments(token, ticket.slug)
+        .then((uploads) => {
+          setAttachments(uploads);
+        })
+        .catch((err: unknown) => {
+          setAttachmentError(err instanceof Error ? err.message : "Failed to load attachments");
+        })
+        .finally(() => {
+          setAttachmentsLoading(false);
+        });
+    });
+  };
+
+  // Handle file upload in the work-view.
+  const handleAttachFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    if (!file || !workTicket) return;
+    // Reset input so the same file can be re-selected.
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setUploadingFile(true);
+    setAttachmentError("");
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const uploaded = await uploadTicketAttachment(token, workTicket.id, orgId, file);
+      setAttachments((prev) => [...prev, uploaded]);
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : "Failed to upload file");
+    } finally {
+      setUploadingFile(false);
+    }
   };
 
   // Close the work-view modal without saving.
   const handleCloseWork = (): void => {
     setWorkTicket(null);
     setWorkError("");
+    setAttachments([]);
+    setAttachmentError("");
   };
 
   // Save changes from the work-view modal.
@@ -600,6 +660,64 @@ export function SupportManagementView(): ReactNode {
               />
             </div>
 
+            {/* Last updated timestamp */}
+            {workTicket.updated_at && (
+              <p data-testid="work-view-updated-at" className="text-xs text-muted-foreground">
+                Last updated: {new Date(workTicket.updated_at).toLocaleString()}
+              </p>
+            )}
+
+            {/* Attachments section */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-foreground">Attachments</label>
+                <label
+                  htmlFor="work-view-file-input"
+                  data-testid="work-view-attach-btn"
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-accent"
+                >
+                  <Paperclip className="h-3 w-3" />
+                  {uploadingFile ? "Uploading..." : "Attach file"}
+                </label>
+                <input
+                  id="work-view-file-input"
+                  data-testid="work-view-file-input"
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => void handleAttachFile(e)}
+                  disabled={uploadingFile}
+                />
+              </div>
+              {attachmentError && (
+                <p data-testid="work-view-attachment-error" className="mt-1 text-xs text-red-600">
+                  {attachmentError}
+                </p>
+              )}
+              {attachmentsLoading ? (
+                <p
+                  data-testid="work-view-attachments-loading"
+                  className="mt-1 text-xs text-muted-foreground"
+                >
+                  Loading attachments...
+                </p>
+              ) : attachments.length > 0 ? (
+                <ul data-testid="work-view-attachments-list" className="mt-2 space-y-1">
+                  {attachments.map((a) => (
+                    <li key={a.id} className="flex items-center gap-1 text-xs">
+                      <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-foreground">{a.filename}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        ({(a.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">No attachments.</p>
+              )}
+            </div>
+
             {/* Actions */}
             <div className="flex gap-2">
               <button
@@ -616,7 +734,7 @@ export function SupportManagementView(): ReactNode {
                 onClick={handleCloseWork}
                 className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
               >
-                Cancel
+                Close
               </button>
             </div>
           </div>
