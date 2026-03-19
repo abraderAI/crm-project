@@ -34,6 +34,10 @@ type JWTClaims struct {
 	ExpiresAt int64  `json:"exp"`
 	IssuedAt  int64  `json:"iat"`
 	NotBefore int64  `json:"nbf"`
+	// User identity claims populated by Clerk.
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 // jwksKey represents a single key from JWKS response.

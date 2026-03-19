@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/go-chi/chi/v5"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/abraderAI/crm-project/api/internal/auth"
 	"github.com/abraderAI/crm-project/api/internal/database"
+	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/models"
 	"github.com/abraderAI/crm-project/api/pkg/pagination"
 )
@@ -54,6 +56,11 @@ func setupDB(t *testing.T) (*gorm.DB, string) {
 	return db, bd.ID
 }
 
+// newSvc creates a Service with no event bus for tests.
+func newSvc(db *gorm.DB) *Service {
+	return NewService(NewRepository(db), nil)
+}
+
 // globalSpaceRouter wires up a test chi router for the global-spaces endpoints.
 func globalSpaceRouter(h *Handler) *chi.Mux {
 	r := chi.NewRouter()
@@ -61,6 +68,7 @@ func globalSpaceRouter(h *Handler) *chi.Mux {
 	r.Post("/global-spaces/{space}/threads", h.CreateThread)
 	r.Get("/global-spaces/{space}/threads/{slug}", h.GetThread)
 	r.Patch("/global-spaces/{space}/threads/{slug}", h.UpdateThread)
+	r.Get("/global-spaces/{space}/threads/{slug}/attachments", h.ListAttachments)
 	return r
 }
 
@@ -73,10 +81,10 @@ func withUser(r *http.Request, userID string) *http.Request {
 // TestHandler_ListThreads covers the GET endpoint.
 func TestHandler_ListThreads(t *testing.T) {
 	db, _ := setupDB(t)
-	h := NewHandler(NewService(NewRepository(db)))
+	h := NewHandler(newSvc(db))
 	r := globalSpaceRouter(h)
 	ctx := context.Background()
-	svc := NewService(NewRepository(db))
+	svc := newSvc(db)
 
 	// Seed a couple of threads.
 	orgID := "org-abc"
@@ -141,7 +149,7 @@ func TestHandler_ListThreads(t *testing.T) {
 // TestHandler_CreateThread covers the POST endpoint.
 func TestHandler_CreateThread(t *testing.T) {
 	db, _ := setupDB(t)
-	h := NewHandler(NewService(NewRepository(db)))
+	h := NewHandler(newSvc(db))
 	r := globalSpaceRouter(h)
 
 	t.Run("success without org_id", func(t *testing.T) {
@@ -217,7 +225,7 @@ func TestHandler_CreateThread(t *testing.T) {
 // TestService_ListThreads covers service-level filtering.
 func TestService_ListThreads(t *testing.T) {
 	db, _ := setupDB(t)
-	svc := NewService(NewRepository(db))
+	svc := newSvc(db)
 	ctx := context.Background()
 
 	orgA := "org-a"
@@ -270,7 +278,7 @@ func TestService_ListThreads(t *testing.T) {
 // TestService_CreateThread covers service-level creation.
 func TestService_CreateThread(t *testing.T) {
 	db, _ := setupDB(t)
-	svc := NewService(NewRepository(db))
+	svc := newSvc(db)
 	ctx := context.Background()
 
 	t.Run("success sets thread type to support", func(t *testing.T) {
@@ -305,10 +313,10 @@ func TestService_CreateThread(t *testing.T) {
 // TestHandler_GetThread covers the GET /{slug} endpoint.
 func TestHandler_GetThread(t *testing.T) {
 	db, _ := setupDB(t)
-	h := NewHandler(NewService(NewRepository(db)))
+	h := NewHandler(newSvc(db))
 	r := globalSpaceRouter(h)
 	ctx := context.Background()
-	svc := NewService(NewRepository(db))
+	svc := newSvc(db)
 
 	// Seed a user shadow so enrichment populates author fields.
 	require.NoError(t, db.Create(&models.UserShadow{
@@ -355,10 +363,10 @@ func TestHandler_GetThread(t *testing.T) {
 // TestHandler_UpdateThread covers the PATCH /{slug} endpoint.
 func TestHandler_UpdateThread(t *testing.T) {
 	db, _ := setupDB(t)
-	h := NewHandler(NewService(NewRepository(db)))
+	h := NewHandler(newSvc(db))
 	r := globalSpaceRouter(h)
 	ctx := context.Background()
-	svc := NewService(NewRepository(db))
+	svc := newSvc(db)
 
 	th, err := svc.CreateThread(ctx, "global-support", "user-editor", CreateInput{Title: "Editable Ticket", Body: "original body"})
 	require.NoError(t, err)
@@ -423,7 +431,7 @@ func TestHandler_UpdateThread(t *testing.T) {
 // TestService_Enrichment verifies that author_email/author_name/org_name are populated.
 func TestService_Enrichment(t *testing.T) {
 	db, _ := setupDB(t)
-	svc := NewService(NewRepository(db))
+	svc := newSvc(db)
 	ctx := context.Background()
 
 	// Seed a user shadow and a real org.
@@ -475,7 +483,7 @@ func TestService_Enrichment(t *testing.T) {
 // TestService_UpdateThread covers service-level update behavior.
 func TestService_UpdateThread(t *testing.T) {
 	db, _ := setupDB(t)
-	svc := NewService(NewRepository(db))
+	svc := newSvc(db)
 	ctx := context.Background()
 
 	th, err := svc.CreateThread(ctx, "global-support", "user-u", CreateInput{Title: "Update Me", Body: "old"})
@@ -510,6 +518,81 @@ func TestService_UpdateThread(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, rich)
 	})
+}
+
+// TestHandler_ListAttachments covers the GET /{slug}/attachments endpoint.
+func TestHandler_ListAttachments(t *testing.T) {
+	db, _ := setupDB(t)
+	h := NewHandler(newSvc(db))
+	r := globalSpaceRouter(h)
+	ctx := context.Background()
+	svc := newSvc(db)
+
+	th, err := svc.CreateThread(ctx, "global-support", "user-attach", CreateInput{Title: "Attachable Ticket"})
+	require.NoError(t, err)
+
+	t.Run("empty attachments returns 200 with empty array", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/"+th.Slug+"/attachments", nil)
+		req = withUser(req, "any-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp []any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Empty(t, resp)
+	})
+
+	t.Run("not found thread returns 404", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/no-such-slug/attachments", nil)
+		req = withUser(req, "any-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("unknown space returns 404", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/no-such-space/threads/anything/attachments", nil)
+		req = withUser(req, "any-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+// TestService_UpdateThread_PublishesEvent verifies the event bus integration.
+func TestService_UpdateThread_PublishesEvent(t *testing.T) {
+	db, _ := setupDB(t)
+	bus := eventbus.New()
+	done := make(chan eventbus.Event, 1)
+	events, _ := bus.Subscribe("thread.updated", 4)
+	go func() {
+		for e := range events {
+			done <- e
+		}
+	}()
+
+	svc := NewService(NewRepository(db), bus)
+	ctx := context.Background()
+
+	th, err := svc.CreateThread(ctx, "global-support", "opener", CreateInput{Title: "Notify Ticket"})
+	require.NoError(t, err)
+
+	newBody := "updated content"
+	_, err = svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{Body: &newBody})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-done:
+		assert.Equal(t, "thread.updated", evt.Type)
+		assert.Equal(t, "editor", evt.UserID)
+		payload, ok := evt.Payload.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "global-support", payload["source"])
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected event was not published")
+	}
+	bus.Close()
 }
 
 // TestThreadTypeForSpace covers the space-to-thread-type mapping.

@@ -152,6 +152,18 @@ func (r *Repository) CreateRevision(ctx context.Context, rev *models.Revision) e
 	return nil
 }
 
+// ListUploadsByThread returns all non-deleted uploads attached to the given thread ID.
+func (r *Repository) ListUploadsByThread(ctx context.Context, threadID string) ([]models.Upload, error) {
+	var uploads []models.Upload
+	if err := r.db.WithContext(ctx).
+		Where("entity_type = ? AND entity_id = ? AND deleted_at IS NULL", "thread", threadID).
+		Order("created_at ASC").
+		Find(&uploads).Error; err != nil {
+		return nil, fmt.Errorf("listing thread uploads: %w", err)
+	}
+	return uploads, nil
+}
+
 // GetOrgNamesByIDs returns a map of org ID → org name for the given IDs.
 // Missing entries are silently omitted.
 func (r *Repository) GetOrgNamesByIDs(ctx context.Context, ids []string) (map[string]string, error) {

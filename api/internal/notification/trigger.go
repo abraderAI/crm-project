@@ -111,6 +111,10 @@ func mapEventToNotification(event eventbus.Event) (notifType, title, body string
 	case "message.created":
 		return TypeNewMessage, "New message", formatBody(event, "A new message was posted")
 	case "thread.updated":
+		// Route support ticket updates from the global-support space.
+		if source, ok := extractPayloadString(event.Payload, "source"); ok && source == "global-support" {
+			return TypeSupportTicketUpdated, "Support ticket updated", formatBody(event, "A support ticket was updated")
+		}
 		// Check if it's a stage change.
 		if hasPayloadField(event.Payload, "stage") {
 			return TypeStageChange, "Stage changed", formatBody(event, "Thread stage was updated")

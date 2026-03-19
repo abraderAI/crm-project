@@ -152,7 +152,7 @@ func UserShadowSync(svc *Service) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			uc := auth.GetUserContext(r.Context())
 			if uc != nil && uc.AuthMethod == auth.AuthMethodJWT {
-				svc.SyncUserShadow(r.Context(), uc.UserID, "", "")
+				svc.SyncUserShadow(r.Context(), uc.UserID, uc.Email, uc.DisplayName)
 			}
 			next.ServeHTTP(w, r)
 		})

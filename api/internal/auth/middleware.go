@@ -10,6 +10,23 @@ import (
 	apierrors "github.com/abraderAI/crm-project/api/pkg/errors"
 )
 
+// buildDisplayName constructs a display name from first and last name claims.
+// Returns empty string when both parts are empty.
+func buildDisplayName(firstName, lastName string) string {
+	first := strings.TrimSpace(firstName)
+	last := strings.TrimSpace(lastName)
+	switch {
+	case first != "" && last != "":
+		return first + " " + last
+	case first != "":
+		return first
+	case last != "":
+		return last
+	default:
+		return ""
+	}
+}
+
 // JWTAuth middleware validates JWT tokens from the Authorization header.
 func JWTAuth(validator *JWTValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -27,15 +44,17 @@ func JWTAuth(validator *JWTValidator) func(http.Handler) http.Handler {
 			}
 
 			ctx := SetUserContext(r.Context(), &UserContext{
-				UserID:     claims.Subject,
-				AuthMethod: AuthMethodJWT,
+				UserID:      claims.Subject,
+				AuthMethod:  AuthMethodJWT,
+				Email:       strings.TrimSpace(claims.Email),
+				DisplayName: buildDisplayName(claims.FirstName, claims.LastName),
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// APIKeyAuthMiddleware validates API keys from the X-API-Key header.
+// APIKeyAuthMiddleware
 func APIKeyAuthMiddleware(service *APIKeyService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,8 +98,10 @@ func DualAuth(validator *JWTValidator, apiKeyService *APIKeyService) func(http.H
 					return
 				}
 				ctx := SetUserContext(r.Context(), &UserContext{
-					UserID:     claims.Subject,
-					AuthMethod: AuthMethodJWT,
+					UserID:      claims.Subject,
+					AuthMethod:  AuthMethodJWT,
+					Email:       strings.TrimSpace(claims.Email),
+					DisplayName: buildDisplayName(claims.FirstName, claims.LastName),
 				})
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return

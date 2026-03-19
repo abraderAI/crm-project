@@ -700,6 +700,7 @@ func TestMapEventToNotification(t *testing.T) {
 		{"message.created", eventbus.Event{Type: "message.created"}, TypeNewMessage, "New message"},
 		{"stage change", eventbus.Event{Type: "thread.updated", Payload: map[string]any{"stage": "x"}}, TypeStageChange, "Stage changed"},
 		{"assignment", eventbus.Event{Type: "thread.updated", Payload: map[string]any{"assigned_to": "u1"}}, TypeAssignment, "Assigned to you"},
+		{"support ticket updated", eventbus.Event{Type: "thread.updated", Payload: map[string]any{"source": "global-support", "title": "My Ticket"}}, TypeSupportTicketUpdated, "Support ticket updated"},
 		{"mention", eventbus.Event{Type: "mention"}, TypeMention, "You were mentioned"},
 		{"invite", eventbus.Event{Type: "invite"}, TypeInvite, "You're invited"},
 		{"unknown", eventbus.Event{Type: "unknown"}, "", ""},

@@ -113,6 +113,18 @@ func (s *Service) Create(ctx context.Context, orgID, entityType, entityID, uploa
 	return upload, nil
 }
 
+// ListByEntity returns all non-deleted uploads associated with a given entity.
+func (s *Service) ListByEntity(ctx context.Context, entityType, entityID string) ([]models.Upload, error) {
+	var uploads []models.Upload
+	if err := s.db.WithContext(ctx).
+		Where("entity_type = ? AND entity_id = ? AND deleted_at IS NULL", entityType, entityID).
+		Order("created_at ASC").
+		Find(&uploads).Error; err != nil {
+		return nil, fmt.Errorf("listing uploads by entity: %w", err)
+	}
+	return uploads, nil
+}
+
 // Get retrieves an upload record by ID.
 func (s *Service) Get(ctx context.Context, id string) (*models.Upload, error) {
 	var upload models.Upload

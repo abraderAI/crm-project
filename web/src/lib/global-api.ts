@@ -1,4 +1,4 @@
-import type { PaginatedResponse, Thread, ThreadWithAuthor } from "./api-types";
+import type { PaginatedResponse, Thread, ThreadWithAuthor, Upload } from "./api-types";
 import { buildHeaders, buildUrl, parseResponse, clientMutate } from "./api-client";
 
 /** Global space slugs. */
@@ -222,6 +222,52 @@ export async function updateSupportTicket(
     `/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads/${encodeURIComponent(slug)}`,
     { token, body: values },
   );
+}
+
+/**
+ * Fetch attachments for a support ticket thread.
+ * Returns an array of Upload records attached to the thread.
+ * Requires authentication.
+ */
+export async function fetchThreadAttachments(token: string, slug: string): Promise<Upload[]> {
+  const url = buildUrl(
+    `/global-spaces/${GLOBAL_SPACES.SUPPORT}/threads/${encodeURIComponent(slug)}/attachments`,
+  );
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  return parseResponse<Upload[]>(response);
+}
+
+/**
+ * Upload a file attachment and associate it with a support ticket thread.
+ * Requires authentication. The file is posted as multipart/form-data.
+ */
+export async function uploadTicketAttachment(
+  token: string,
+  threadId: string,
+  orgId: string | null | undefined,
+  file: File,
+): Promise<Upload> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("entity_type", "thread");
+  formData.append("entity_id", threadId);
+  if (orgId) formData.append("org_id", orgId);
+
+  // Omit Content-Type so the browser sets the multipart/form-data boundary automatically.
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const url = buildUrl("/uploads");
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  return parseResponse<Upload>(response);
 }
 
 /** Values for creating a support ticket. */

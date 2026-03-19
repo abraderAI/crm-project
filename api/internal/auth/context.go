@@ -25,6 +25,9 @@ type UserContext struct {
 	AuthMethod     AuthMethod `json:"auth_method"`
 	OrgID          string     `json:"org_id,omitempty"`          // Set when authenticated via API key.
 	ImpersonatorID string     `json:"impersonator_id,omitempty"` // Set when impersonating another user.
+	// Email and DisplayName are populated from JWT claims when available.
+	Email       string `json:"email,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
 }
 
 // SetUserContext stores the UserContext in the request context.

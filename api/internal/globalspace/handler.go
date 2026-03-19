@@ -121,6 +121,25 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, t)
 }
 
+// ListAttachments handles GET /v1/global-spaces/{space}/threads/{slug}/attachments.
+// Returns uploads attached to the specified thread.
+func (h *Handler) ListAttachments(w http.ResponseWriter, r *http.Request) {
+	spaceSlug := chi.URLParam(r, "space")
+	threadSlug := chi.URLParam(r, "slug")
+
+	uploads, err := h.service.ListAttachments(r.Context(), spaceSlug, threadSlug)
+	if err != nil {
+		apierrors.InternalError(w, "failed to list attachments")
+		return
+	}
+	if uploads == nil {
+		apierrors.NotFound(w, "thread not found")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, uploads)
+}
+
 // CreateThread handles POST /v1/global-spaces/{space}/threads.
 // Requires authentication. Tier enforcement is handled client-side.
 func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
