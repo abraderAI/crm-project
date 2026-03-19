@@ -662,12 +662,8 @@ export function SupportManagementView(): ReactNode {
 
             {/* Last updated timestamp */}
             {workTicket.updated_at && (
-              <p
-                data-testid="work-view-updated-at"
-                className="text-xs text-muted-foreground"
-              >
-                Last updated:{" "}
-                {new Date(workTicket.updated_at).toLocaleString()}
+              <p data-testid="work-view-updated-at" className="text-xs text-muted-foreground">
+                Last updated: {new Date(workTicket.updated_at).toLocaleString()}
               </p>
             )}
 
@@ -694,10 +690,7 @@ export function SupportManagementView(): ReactNode {
                 />
               </div>
               {attachmentError && (
-                <p
-                  data-testid="work-view-attachment-error"
-                  className="mt-1 text-xs text-red-600"
-                >
+                <p data-testid="work-view-attachment-error" className="mt-1 text-xs text-red-600">
                   {attachmentError}
                 </p>
               )}
@@ -709,10 +702,7 @@ export function SupportManagementView(): ReactNode {
                   Loading attachments...
                 </p>
               ) : attachments.length > 0 ? (
-                <ul
-                  data-testid="work-view-attachments-list"
-                  className="mt-2 space-y-1"
-                >
+                <ul data-testid="work-view-attachments-list" className="mt-2 space-y-1">
                   {attachments.map((a) => (
                     <li key={a.id} className="flex items-center gap-1 text-xs">
                       <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
