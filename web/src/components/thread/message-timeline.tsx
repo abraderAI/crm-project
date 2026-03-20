@@ -1,16 +1,25 @@
 "use client";
 
-import { Mail, MessageSquare, Phone, FileText, Bot } from "lucide-react";
-import type { Message, MessageType } from "@/lib/api-types";
+import { Mail, MessageSquare, Phone, FileText, Bot, User, Send, PenLine, Lock, Zap } from "lucide-react";
+import type { AnyMessageType, Message } from "@/lib/api-types";
 import { formatDate } from "./thread-list";
 
-const TYPE_CONFIG: Record<MessageType, { icon: typeof MessageSquare; label: string }> = {
+const TYPE_CONFIG: Partial<Record<AnyMessageType, { icon: typeof MessageSquare; label: string }>> = {
+  // Generic types
   comment: { icon: MessageSquare, label: "Comment" },
   note: { icon: FileText, label: "Note" },
   email: { icon: Mail, label: "Email" },
   call_log: { icon: Phone, label: "Call" },
   system: { icon: Bot, label: "System" },
+  // Support-specific types
+  customer: { icon: User, label: "Customer" },
+  agent_reply: { icon: Send, label: "Agent Reply" },
+  draft: { icon: PenLine, label: "Draft" },
+  context: { icon: Lock, label: "Internal" },
+  system_event: { icon: Zap, label: "System Event" },
 };
+
+const DEFAULT_CONFIG = { icon: MessageSquare, label: "Message" };
 
 export interface MessageTimelineProps {
   messages: Message[];
@@ -40,7 +49,7 @@ export function MessageTimeline({
   return (
     <div className="space-y-4" data-testid="message-timeline">
       {messages.map((msg) => {
-        const config = TYPE_CONFIG[msg.type] ?? TYPE_CONFIG.comment;
+        const config = TYPE_CONFIG[msg.type] ?? DEFAULT_CONFIG;
         const Icon = config.icon;
         const isOwner = currentUserId === msg.author_id;
 
