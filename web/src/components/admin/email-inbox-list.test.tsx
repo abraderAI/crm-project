@@ -98,7 +98,14 @@ describe("EmailInboxList", () => {
   it("adds inbox to list on successful create", async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn().mockResolvedValue(inbox1);
-    render(<EmailInboxList initialInboxes={[]} onCreate={onCreate} onUpdate={noop.onUpdate} onDelete={noop.onDelete} />);
+    render(
+      <EmailInboxList
+        initialInboxes={[]}
+        onCreate={onCreate}
+        onUpdate={noop.onUpdate}
+        onDelete={noop.onDelete}
+      />,
+    );
 
     await user.click(screen.getByTestId("add-inbox-btn"));
 
@@ -127,7 +134,14 @@ describe("EmailInboxList", () => {
     const user = userEvent.setup();
     const updatedInbox = { ...inbox1, name: "Renamed" };
     const onUpdate = vi.fn().mockResolvedValue(updatedInbox);
-    render(<EmailInboxList initialInboxes={[inbox1]} onCreate={noop.onCreate} onUpdate={onUpdate} onDelete={noop.onDelete} />);
+    render(
+      <EmailInboxList
+        initialInboxes={[inbox1]}
+        onCreate={noop.onCreate}
+        onUpdate={onUpdate}
+        onDelete={noop.onDelete}
+      />,
+    );
 
     await user.click(screen.getByTestId(`edit-inbox-${inbox1.id}`));
     await user.click(screen.getByTestId("inbox-save-btn"));
@@ -141,7 +155,14 @@ describe("EmailInboxList", () => {
     // Mock window.confirm to return true
     vi.stubGlobal("confirm", () => true);
 
-    render(<EmailInboxList initialInboxes={[inbox1, inbox2]} onCreate={noop.onCreate} onUpdate={noop.onUpdate} onDelete={onDelete} />);
+    render(
+      <EmailInboxList
+        initialInboxes={[inbox1, inbox2]}
+        onCreate={noop.onCreate}
+        onUpdate={noop.onUpdate}
+        onDelete={onDelete}
+      />,
+    );
 
     await user.click(screen.getByTestId(`delete-inbox-${inbox1.id}`));
 
@@ -156,7 +177,14 @@ describe("EmailInboxList", () => {
     const onDelete = vi.fn();
     vi.stubGlobal("confirm", () => false);
 
-    render(<EmailInboxList initialInboxes={[inbox1]} onCreate={noop.onCreate} onUpdate={noop.onUpdate} onDelete={onDelete} />);
+    render(
+      <EmailInboxList
+        initialInboxes={[inbox1]}
+        onCreate={noop.onCreate}
+        onUpdate={noop.onUpdate}
+        onDelete={onDelete}
+      />,
+    );
     await user.click(screen.getByTestId(`delete-inbox-${inbox1.id}`));
 
     expect(onDelete).not.toHaveBeenCalled();
@@ -170,7 +198,14 @@ describe("EmailInboxList", () => {
     vi.stubGlobal("confirm", () => true);
     const onDelete = vi.fn().mockRejectedValue(new Error("Delete failed"));
 
-    render(<EmailInboxList initialInboxes={[inbox1]} onCreate={noop.onCreate} onUpdate={noop.onUpdate} onDelete={onDelete} />);
+    render(
+      <EmailInboxList
+        initialInboxes={[inbox1]}
+        onCreate={noop.onCreate}
+        onUpdate={noop.onUpdate}
+        onDelete={onDelete}
+      />,
+    );
     await user.click(screen.getByTestId(`delete-inbox-${inbox1.id}`));
 
     expect(await screen.findByTestId("inbox-list-error")).toHaveTextContent("Delete failed");

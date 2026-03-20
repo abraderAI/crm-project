@@ -452,9 +452,9 @@ describe("admin-api", () => {
     it("throws on non-ok response", async () => {
       mockFetch.mockResolvedValue({ ok: false, status: 403 });
 
-      await expect(putChannelConfig("org1", "email", { settings: "{}", enabled: false })).rejects.toThrow(
-        "Failed to update channel config: 403",
-      );
+      await expect(
+        putChannelConfig("org1", "email", { settings: "{}", enabled: false }),
+      ).rejects.toThrow("Failed to update channel config: 403");
     });
   });
 
