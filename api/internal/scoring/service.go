@@ -42,20 +42,25 @@ func (s *Service) ScoreThread(ctx context.Context, threadID string) (*ScoreBreak
 
 	breakdown := Evaluate(rules, thread.Metadata)
 
-	// Update thread metadata with lead_score.
+	// Persist the score using a transaction so we always merge against the latest
+	// metadata, preventing a read-modify-write race with concurrent stage transitions.
 	scoreUpdate := map[string]any{"lead_score": breakdown.TotalScore}
 	updateJSON, err := json.Marshal(scoreUpdate)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling score update: %w", err)
 	}
 
-	merged, err := metadata.DeepMerge(thread.Metadata, string(updateJSON))
-	if err != nil {
-		return nil, fmt.Errorf("merging metadata: %w", err)
-	}
-	thread.Metadata = merged
-
-	if err := s.db.WithContext(ctx).Save(&thread).Error; err != nil {
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var fresh models.Thread
+		if err := tx.First(&fresh, "id = ?", threadID).Error; err != nil {
+			return fmt.Errorf("re-reading thread: %w", err)
+		}
+		merged, err := metadata.DeepMerge(fresh.Metadata, string(updateJSON))
+		if err != nil {
+			return fmt.Errorf("merging metadata: %w", err)
+		}
+		return tx.Model(&fresh).Update("metadata", merged).Error
+	}); err != nil {
 		return nil, fmt.Errorf("saving thread: %w", err)
 	}
 
