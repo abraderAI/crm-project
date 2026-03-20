@@ -113,7 +113,8 @@ func mapEventToNotification(event eventbus.Event) (notifType, title, body string
 	case "thread.updated":
 		// Route support ticket updates from the global-support space.
 		if source, ok := extractPayloadString(event.Payload, "source"); ok && source == "global-support" {
-			return TypeSupportTicketUpdated, "Support ticket updated", formatBody(event, "A support ticket was updated")
+			body := formatSupportTicketBody(event)
+			return TypeSupportTicketUpdated, "Support ticket updated", body
 		}
 		// Check if it's a stage change.
 		if hasPayloadField(event.Payload, "stage") {
@@ -163,6 +164,20 @@ func (t *TriggerEngine) determineRecipients(event eventbus.Event) []string {
 	}
 
 	return unique
+}
+
+// formatSupportTicketBody creates a support notification body that respects the
+// notification_detail_level preference. When set to "privacy", the agent reply
+// body is omitted and only a generic update message is returned.
+func formatSupportTicketBody(event eventbus.Event) string {
+	if detail, ok := extractPayloadString(event.Payload, "notification_detail_level"); ok && detail == "privacy" {
+		return "Your support ticket has been updated. Click the link to view the latest reply."
+	}
+	// Default ("full"): include the reply body snippet when present.
+	if replyBody, ok := extractPayloadString(event.Payload, "reply_body"); ok && replyBody != "" {
+		return "Support update: " + replyBody
+	}
+	return formatBody(event, "A support ticket was updated")
 }
 
 // formatBody creates a notification body from the event.

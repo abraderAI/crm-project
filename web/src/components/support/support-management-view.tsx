@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@clerk/nextjs";
+import Link from "next/link";
 import {
   AlertTriangle,
   ExternalLink,
@@ -552,9 +553,19 @@ export function SupportManagementView(): ReactNode {
                 <div className="flex min-w-0 flex-1 items-start gap-2">
                   <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <div className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {ticket.title}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {ticket.ticket_number ? (
+                        <span
+                          data-testid={`ticket-number-${ticket.id}`}
+                          className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-primary"
+                        >
+                          #{ticket.ticket_number}
+                        </span>
+                      ) : null}
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {ticket.title}
+                      </span>
+                    </div>
                     <div
                       data-testid={`ticket-creator-${ticket.id}`}
                       className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"
@@ -572,14 +583,14 @@ export function SupportManagementView(): ReactNode {
                   >
                     {status}
                   </span>
-                  <button
+                  <Link
                     data-testid={`ticket-open-btn-${ticket.id}`}
-                    onClick={() => handleOpenTicket(ticket)}
+                    href={`/support/tickets/${ticket.slug}`}
                     className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
                   >
                     <ExternalLink className="h-3 w-3" />
                     Open
-                  </button>
+                  </Link>
                 </div>
               </div>
             );

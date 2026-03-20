@@ -31,6 +31,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/scoring"
 	"github.com/abraderAI/crm-project/api/internal/search"
 	"github.com/abraderAI/crm-project/api/internal/space"
+	"github.com/abraderAI/crm-project/api/internal/support"
 	"github.com/abraderAI/crm-project/api/internal/thread"
 	"github.com/abraderAI/crm-project/api/internal/tier"
 	"github.com/abraderAI/crm-project/api/internal/upload"
@@ -82,6 +83,7 @@ type serverHandlers struct {
 	voiceLKBridge      *voicelk.BridgeHandler
 	voiceLKPhone       *voicelk.PhoneHandler
 	globalSpaceHandler *globalspace.Handler
+	supportHandler     *support.Handler
 }
 
 // newHandlers initialises all domain services and HTTP handlers from cfg,
@@ -256,6 +258,14 @@ func newHandlers(cfg Config) serverHandlers {
 	globalSpaceService := globalspace.NewService(globalSpaceRepo, cfg.EventBus, uploadService)
 	globalSpaceHandler := globalspace.NewHandler(globalSpaceService)
 
+	// Support ticket entry handler.
+	supportRepo := support.NewRepository(cfg.DB)
+	supportSvc := support.NewService(supportRepo, eventBus)
+	supportHandler := support.NewHandler(supportSvc)
+
+	// Inject ticket numberer into globalspace so new support tickets get #N assigned.
+	globalspace.SetTicketNumberer(supportRepo)
+
 	// IO Phase 4: AI Web Chat Widget.
 	chatJWTSecret := cfg.ChatJWTSecret
 	if chatJWTSecret == "" {
@@ -305,5 +315,6 @@ func newHandlers(cfg Config) serverHandlers {
 		voiceLKBridge:      voiceLKBridge,
 		voiceLKPhone:       voiceLKPhone,
 		globalSpaceHandler: globalSpaceHandler,
+		supportHandler:     supportHandler,
 	}
 }
