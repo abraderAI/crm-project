@@ -6,28 +6,57 @@ vi.mock("@clerk/nextjs/server", () => ({
   auth: vi.fn().mockResolvedValue({ getToken: () => mockGetToken() }),
 }));
 
-// Mock api-client functions.
+// Mock api-client functions (all exported symbols).
 const mockServerFetch = vi.fn();
 const mockServerFetchPaginated = vi.fn();
+const mockBuildUrl = vi.fn().mockReturnValue("http://localhost:8080/v1/test");
+const mockBuildHeaders = vi.fn().mockReturnValue({ Authorization: "Bearer test-token" });
+const mockParseResponse = vi.fn();
 vi.mock("./api-client", () => ({
   serverFetch: (...args: unknown[]) => mockServerFetch(...args),
   serverFetchPaginated: (...args: unknown[]) => mockServerFetchPaginated(...args),
+  buildUrl: (...args: unknown[]) => mockBuildUrl(...args),
+  buildHeaders: (...args: unknown[]) => mockBuildHeaders(...args),
+  parseResponse: (...args: unknown[]) => mockParseResponse(...args),
 }));
 
+// Mock global fetch for raw-fetch functions.
+const mockFetch = vi.fn();
+vi.stubGlobal("fetch", mockFetch);
+
 import {
+  createEmailInbox,
+  deleteEmailInbox,
+  dismissDLQEvent,
   fetchAdminOrg,
   fetchAdminOrgs,
   fetchAdminSettings,
   fetchAdminStats,
+  fetchAdminUser,
   fetchAdminUsers,
+  fetchApiUsage,
   fetchAuditLog,
   fetchBillingInfo,
+  fetchChannelConfig,
+  fetchChannelHealth,
+  fetchDLQEvents,
+  fetchEmailInboxes,
+  fetchExports,
+  fetchFailedAuths,
   fetchFeatureFlags,
+  fetchFirstOrgId,
   fetchFlags,
+  fetchLlmUsage,
   fetchMemberships,
   fetchPlatformAdmins,
+  fetchRBACPolicy,
+  fetchRecentLogins,
   fetchWebhookDeliveries,
   fetchWebhookSubscriptions,
+  patchFeatureFlag,
+  putChannelConfig,
+  retryDLQEvent,
+  updateEmailInbox,
 } from "./admin-api";
 
 describe("admin-api", () => {
@@ -253,6 +282,391 @@ describe("admin-api", () => {
         token: "test-token",
       });
       expect(result).toEqual(response);
+    });
+  });
+
+  describe("fetchAdminUser", () => {
+    it("fetches a single user by ID", async () => {
+      const user = { clerk_user_id: "u1", email: "u@example.com", display_name: "User" };
+      mockServerFetch.mockResolvedValue(user);
+
+      const result = await fetchAdminUser("u1");
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/users/u1", {
+        token: "test-token",
+      });
+      expect(result).toEqual(user);
+    });
+  });
+
+  describe("fetchRecentLogins", () => {
+    it("fetches paginated recent logins", async () => {
+      const response = { data: [{ id: "l1" }], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      const result = await fetchRecentLogins({ cursor: "c" });
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/security/recent-logins",
+        { cursor: "c" },
+        { token: "test-token" },
+      );
+      expect(result).toEqual(response);
+    });
+  });
+
+  describe("fetchFailedAuths", () => {
+    it("fetches paginated failed auths", async () => {
+      const response = { data: [], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      await fetchFailedAuths();
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/security/failed-auths",
+        undefined,
+        { token: "test-token" },
+      );
+    });
+  });
+
+  describe("fetchRBACPolicy", () => {
+    it("fetches the effective RBAC policy", async () => {
+      const policy = { rules: [] };
+      mockServerFetch.mockResolvedValue(policy);
+
+      const result = await fetchRBACPolicy();
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/rbac-policy", { token: "test-token" });
+      expect(result).toEqual(policy);
+    });
+  });
+
+  describe("fetchLlmUsage", () => {
+    it("fetches LLM usage", async () => {
+      const usage = { entries: [] };
+      mockServerFetch.mockResolvedValue(usage);
+
+      const result = await fetchLlmUsage();
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/admin/llm-usage", { token: "test-token" });
+      expect(result).toEqual(usage);
+    });
+  });
+
+  describe("fetchExports", () => {
+    it("fetches paginated exports", async () => {
+      const response = { data: [], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      await fetchExports({ status: "done" });
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/exports",
+        { status: "done" },
+        { token: "test-token" },
+      );
+    });
+  });
+
+  describe("fetchApiUsage", () => {
+    it("builds url and delegates to parseResponse", async () => {
+      const data = { periods: [] };
+      mockFetch.mockResolvedValue({ ok: true });
+      mockParseResponse.mockResolvedValue(data);
+
+      const result = await fetchApiUsage("7d");
+
+      expect(mockBuildUrl).toHaveBeenCalledWith("/admin/api-usage", { period: "7d" });
+      expect(mockBuildHeaders).toHaveBeenCalledWith("test-token");
+      expect(result).toEqual(data);
+    });
+
+    it("uses 24h as default period", async () => {
+      mockFetch.mockResolvedValue({ ok: true });
+      mockParseResponse.mockResolvedValue({});
+
+      await fetchApiUsage();
+
+      expect(mockBuildUrl).toHaveBeenCalledWith("/admin/api-usage", { period: "24h" });
+    });
+  });
+
+  describe("fetchFirstOrgId", () => {
+    it("returns first org id when orgs exist", async () => {
+      mockServerFetchPaginated.mockResolvedValue({
+        data: [{ id: "org_real" }],
+        page_info: { has_more: false },
+      });
+
+      const id = await fetchFirstOrgId();
+
+      expect(id).toBe("org_real");
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/admin/orgs",
+        { limit: "1" },
+        { token: "test-token" },
+      );
+    });
+
+    it('falls back to "default" when data is empty', async () => {
+      mockServerFetchPaginated.mockResolvedValue({
+        data: [],
+        page_info: { has_more: false },
+      });
+
+      const id = await fetchFirstOrgId();
+
+      expect(id).toBe("default");
+    });
+  });
+
+  describe("fetchChannelConfig", () => {
+    it("fetches channel config via serverFetch", async () => {
+      const config = { id: "c1", channel_type: "email", settings: "{}", enabled: true };
+      mockServerFetch.mockResolvedValue(config);
+
+      const result = await fetchChannelConfig("org1", "email");
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/orgs/org1/channels/email", {
+        token: "test-token",
+      });
+      expect(result).toEqual(config);
+    });
+  });
+
+  describe("putChannelConfig", () => {
+    it("PUTs channel config and returns updated config", async () => {
+      const updated = { id: "c1", channel_type: "email", settings: "{}", enabled: true };
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(updated) });
+
+      const result = await putChannelConfig("org1", "email", { settings: "{}", enabled: true });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/orgs/org1/channels/email"),
+        expect.objectContaining({ method: "PUT" }),
+      );
+      expect(result).toEqual(updated);
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 403 });
+
+      await expect(putChannelConfig("org1", "email", { settings: "{}", enabled: false })).rejects.toThrow(
+        "Failed to update channel config: 403",
+      );
+    });
+  });
+
+  describe("fetchChannelHealth", () => {
+    it("returns matching channel health", async () => {
+      const emailHealth = { channel_type: "email", status: "healthy", enabled: true };
+      mockServerFetch.mockResolvedValue({
+        channels: [emailHealth, { channel_type: "voice", status: "down", enabled: false }],
+      });
+
+      const result = await fetchChannelHealth("org1", "email");
+
+      expect(result).toEqual(emailHealth);
+    });
+
+    it("returns null when channel type not found", async () => {
+      mockServerFetch.mockResolvedValue({ channels: [] });
+
+      const result = await fetchChannelHealth("org1", "email");
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("fetchDLQEvents", () => {
+    it("fetches DLQ events with channel_type param", async () => {
+      const response = { data: [], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      await fetchDLQEvents("org1", "email");
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/orgs/org1/channels/dlq",
+        { channel_type: "email" },
+        { token: "test-token" },
+      );
+    });
+
+    it("merges extra params", async () => {
+      const response = { data: [], page_info: { has_more: false } };
+      mockServerFetchPaginated.mockResolvedValue(response);
+
+      await fetchDLQEvents("org1", "voice", { cursor: "x" });
+
+      expect(mockServerFetchPaginated).toHaveBeenCalledWith(
+        "/orgs/org1/channels/dlq",
+        { channel_type: "voice", cursor: "x" },
+        { token: "test-token" },
+      );
+    });
+  });
+
+  describe("retryDLQEvent", () => {
+    it("POSTs to retry endpoint", async () => {
+      mockFetch.mockResolvedValue({ ok: true });
+
+      await retryDLQEvent("org1", "email", "evt-1");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/channels/dlq/evt-1/retry"),
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+      await expect(retryDLQEvent("org1", "email", "evt-1")).rejects.toThrow(
+        "Failed to retry DLQ event: 404",
+      );
+    });
+  });
+
+  describe("dismissDLQEvent", () => {
+    it("POSTs to dismiss endpoint", async () => {
+      mockFetch.mockResolvedValue({ ok: true });
+
+      await dismissDLQEvent("org1", "email", "evt-1");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/channels/dlq/evt-1/dismiss"),
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+      await expect(dismissDLQEvent("org1", "email", "evt-1")).rejects.toThrow(
+        "Failed to dismiss DLQ event: 500",
+      );
+    });
+  });
+
+  describe("patchFeatureFlag", () => {
+    it("PATCHes a feature flag and returns updated flag", async () => {
+      const flag = { key: "beta", enabled: true };
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(flag) });
+
+      const result = await patchFeatureFlag("beta", true);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/admin/feature-flags/beta"),
+        expect.objectContaining({ method: "PATCH" }),
+      );
+      expect(result).toEqual(flag);
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 422 });
+
+      await expect(patchFeatureFlag("beta", false)).rejects.toThrow(
+        "Failed to update feature flag: 422",
+      );
+    });
+  });
+
+  describe("fetchEmailInboxes", () => {
+    it("fetches and unwraps inbox data array", async () => {
+      const inboxes = [{ id: "i1", name: "Support", routing_action: "support_ticket" }];
+      mockServerFetch.mockResolvedValue({ data: inboxes });
+
+      const result = await fetchEmailInboxes("org1");
+
+      expect(mockServerFetch).toHaveBeenCalledWith("/orgs/org1/channels/email/inboxes", {
+        token: "test-token",
+      });
+      expect(result).toEqual(inboxes);
+    });
+  });
+
+  describe("createEmailInbox", () => {
+    const input = {
+      name: "Support",
+      imap_host: "imap.gmail.com",
+      imap_port: 993,
+      username: "support@acme.com",
+      password: "app-pass",
+      enabled: true,
+    };
+
+    it("POSTs and returns created inbox", async () => {
+      const created = { id: "i1", ...input, routing_action: "support_ticket" };
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(created) });
+
+      const result = await createEmailInbox("org1", input);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/orgs/org1/channels/email/inboxes"),
+        expect.objectContaining({ method: "POST" }),
+      );
+      expect(result).toEqual(created);
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 400 });
+
+      await expect(createEmailInbox("org1", input)).rejects.toThrow(
+        "Failed to create email inbox: 400",
+      );
+    });
+  });
+
+  describe("updateEmailInbox", () => {
+    const input = {
+      name: "Support Renamed",
+      imap_host: "imap.gmail.com",
+      imap_port: 993,
+      username: "support@acme.com",
+      enabled: true,
+    };
+
+    it("PUTs and returns updated inbox", async () => {
+      const updated = { id: "i1", ...input, routing_action: "support_ticket" };
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(updated) });
+
+      const result = await updateEmailInbox("org1", "i1", input);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/orgs/org1/channels/email/inboxes/i1"),
+        expect.objectContaining({ method: "PUT" }),
+      );
+      expect(result).toEqual(updated);
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+      await expect(updateEmailInbox("org1", "i1", input)).rejects.toThrow(
+        "Failed to update email inbox: 404",
+      );
+    });
+  });
+
+  describe("deleteEmailInbox", () => {
+    it("DELETEs the inbox", async () => {
+      mockFetch.mockResolvedValue({ ok: true });
+
+      await deleteEmailInbox("org1", "i1");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/orgs/org1/channels/email/inboxes/i1"),
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 403 });
+
+      await expect(deleteEmailInbox("org1", "i1")).rejects.toThrow(
+        "Failed to delete email inbox: 403",
+      );
     });
   });
 
