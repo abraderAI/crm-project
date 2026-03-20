@@ -24,7 +24,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **App shell** — Sidebar navigation, topbar with search + user menu, breadcrumbs, dark/light theme toggle
 - **File preview** — Rich staged file previews (image thumbnails, icons, size) with upload progress indicators
 - **IO Channel Gateway** — Pluggable inbound channel processing with per-channel config, dead-letter queue (DLQ), and exponential-backoff retry engine
-- **Inbound Email** — MIME parsing, thread deduplication by Message-ID / In-Reply-To, lead-thread auto-creation
+- **Inbound Email** — Multiple IMAP inboxes per org (e.g. support@, sales@), each with a configurable **routing action**: `support_ticket` → Support space, `sales_lead` → CRM space, `general` → General space. Live IMAP IDLE watcher starts on server boot, reconnects with exponential backoff, and delivers unread mail on reconnect. MIME parsing, thread deduplication by Message-ID / In-Reply-To, attachment storage, and dead-letter queue.
 - **Voice / LiveKit** — LiveKit AI-first inbound calls: STT→LLM→TTS agent pipeline, human escalation, call recording, transcript stored as thread messages, phone number provisioning; swappable `VoiceProvider` interface (stub available for core CRM)
 - **AI Web Chat Widget** — Embeddable shadow-DOM widget (plain JS/TS, zero deps) with JWT session auth, WebSocket streaming, and LLM-powered responses
 - **Agentic CLI** — `deft` terminal client for natural-language CRM queries via LLM function-calling, interactive REPL, and one-shot mode
@@ -165,7 +165,8 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/admin/moderation` | Content moderation queue |
 | `/admin/audit-log` | Platform-wide audit log |
 | `/admin/channels` | IO Channel configuration hub |
-| `/admin/channels/[type]` | Per-channel config, health, and DLQ monitor (`email` \| `voice` \| `chat`) |
+|| `/admin/channels/[type]` | Per-channel config, health, and DLQ monitor (`email` \| `voice` \| `chat`) |
+|| `/admin/channels/email` | Email channel — includes **Email Inboxes** panel: add/edit/delete IMAP inboxes with routing action selector |
 | `/admin/feature-flags` | Feature flag management |
 | `/admin/settings` | System settings — editable key-value platform configuration |
 | `/admin/security` | Security monitoring — recent logins and failed authentication events |
@@ -357,12 +358,16 @@ The `global-support` and `global-leads` spaces are served under `/v1/global-spac
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/v1/orgs/{org}/channels/{type}` | Get channel config (`email` \| `voice` \| `chat`) |
-| `PUT` | `/v1/orgs/{org}/channels/{type}` | Upsert channel config |
-| `GET` | `/v1/orgs/{org}/channels/{type}/health` | Channel health check |
-| `GET` | `/v1/orgs/{org}/channels/{type}/dlq` | List dead-letter queue events |
-| `POST` | `/v1/orgs/{org}/channels/{type}/dlq/{id}/retry` | Retry a DLQ event |
-| `POST` | `/v1/orgs/{org}/channels/{type}/dlq/{id}/dismiss` | Dismiss a DLQ event |
-| `GET` | `/v1/orgs/{org}/channels/voice/numbers` | List owned phone numbers |
+| `PUT` | `/v1/orgs/{org}/channels/{type}` | Upsert channel config (platform admin bypasses org-membership check) |
+|| `GET` | `/v1/orgs/{org}/channels/{type}/health` | Channel health check |
+|| `GET` | `/v1/orgs/{org}/channels/{type}/dlq` | List dead-letter queue events |
+|| `POST` | `/v1/orgs/{org}/channels/{type}/dlq/{id}/retry` | Retry a DLQ event |
+|| `POST` | `/v1/orgs/{org}/channels/{type}/dlq/{id}/dismiss` | Dismiss a DLQ event |
+|| `GET` | `/v1/orgs/{org}/channels/email/inboxes` | List email inboxes |
+|| `POST` | `/v1/orgs/{org}/channels/email/inboxes` | Create email inbox (IMAP credentials + routing action) |
+|| `PUT` | `/v1/orgs/{org}/channels/email/inboxes/{id}` | Update email inbox |
+|| `DELETE` | `/v1/orgs/{org}/channels/email/inboxes/{id}` | Delete email inbox |
+|| `GET` | `/v1/orgs/{org}/channels/voice/numbers` | List owned phone numbers |
 | `POST` | `/v1/orgs/{org}/channels/voice/numbers/search` | Search available numbers by area code / country |
 | `POST` | `/v1/orgs/{org}/channels/voice/numbers/purchase` | Purchase a phone number (confirmation required) |
 | `POST` | `/v1/chat/session` | Create anonymous chat session (JWT issued) |
@@ -498,7 +503,7 @@ All external integrations are behind interfaces, making them testable and swappa
 
 Roles are resolved bottom-up: **board membership → space membership → org membership → no access**. A lower-level role completely replaces the inherited one (explicit override). Strategy is configurable in `api/config/rbac-policy.yaml` and can be overridden at runtime via `/v1/admin/rbac-policy`.
 
-Platform admins exist outside the Org-scoped RBAC hierarchy. They are stored in a separate `platform_admins` table and resolved before normal RBAC checks.
+Platform admins exist outside the Org-scoped RBAC hierarchy. They are stored in a separate `platform_admins` table and resolved before normal RBAC checks. Channel config mutations and email inbox management bypass the org-membership check when the caller is a platform admin.
 
 ### Database
 
@@ -506,7 +511,7 @@ SQLite in WAL mode with FTS5 virtual tables for full-text search, JSON-extracted
 
 Admin-specific tables: `platform_admins`, `users_shadow`, `system_settings`, `feature_flags`, `admin_exports`, `api_usage_stats`, `login_events`.
 
-IO channel tables: `channel_configs` (per-org, per-type config with masked secrets), `dead_letter_events` (DLQ with status, retry count, next-retry timestamp).
+IO channel tables: `channel_configs` (per-org, per-type enable/disable toggle with masked secrets), `email_inboxes` (per-org IMAP credentials, routing action, enabled flag — one row per inbox address), `dead_letter_events` (DLQ with status, retry count, next-retry timestamp).
 
 ### RBAC User Tiers
 
@@ -530,9 +535,12 @@ Four system-seeded **global spaces** exist outside any customer org: `global-doc
 All inbound channels share a common processing pipeline:
 
 1. **Normalise** — each channel implements `Normalizer` to produce a typed `InboundEvent`
-2. **Process** — the `Gateway` resolves or creates a lead thread, appends the message, and fires domain events
-3. **Retry** — `RetryEngine` wraps processing with exponential backoff (`1s → 2s → 4s … 30s max`); on exhaustion the event is written to the DLQ
-4. **DLQ** — operators can inspect, retry, or dismiss failed events via the channel health API
+2. **Route** — for email, the inbox's `routing_action` selects the target space type: `support_ticket` → `SpaceTypeSupport`, `sales_lead` → `SpaceTypeCRM`, `general` → `SpaceTypeGeneral`; falls back to any available space
+3. **Process** — the `Gateway` resolves or creates a thread (deduplicating by Message-ID / In-Reply-To for email), appends the message, stores attachments, and fires domain events
+4. **Retry** — `RetryEngine` wraps processing with exponential backoff (`1s → 2s → 4s … 30s max`); on exhaustion the event is written to the DLQ
+5. **DLQ** — operators can inspect, retry, or dismiss failed events via the channel health API
+
+**Email Inbox Watcher** (`InboxWatcher`): On server startup all enabled `EmailInbox` records are loaded and one `IDLEManager` is started per inbox. Each manager connects with implicit TLS, authenticates with username + App Password, selects the mailbox, processes any existing unread mail, then enters IMAP IDLE. New arrivals are fetched and processed with the inbox's routing action. Managers reconnect with exponential backoff on disconnection. Adding, editing, or deleting an inbox via the API restarts its manager immediately — no server restart needed.
 
 ### Embeddable Chat Widget
 
