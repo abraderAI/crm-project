@@ -3,11 +3,14 @@ import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Phone } from "lucide-react";
 import {
+  createEmailInbox,
+  deleteEmailInbox,
   fetchChannelConfig,
   fetchChannelHealth,
   fetchEmailInboxes,
   fetchFirstOrgId,
   putChannelConfig,
+  updateEmailInbox,
 } from "@/lib/admin-api";
 import { ChannelConfigForm } from "@/components/admin/channel-config-form";
 import { ChannelHealthBadge } from "@/components/admin/channel-health-badge";
@@ -121,9 +124,24 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
       )}
 
       {/* Email inbox management (email channel only) */}
-      {channelType === "email" && <EmailInboxList orgId={orgId} initialInboxes={inboxData} />}
-
-      {/* DLQ monitor (client component) */}
+      {channelType === "email" && (
+        <EmailInboxList
+          initialInboxes={inboxData}
+          onCreate={async (input) => {
+            "use server";
+            return createEmailInbox(orgId, input);
+          }}
+          onUpdate={async (id, input) => {
+            "use server";
+            return updateEmailInbox(orgId, id, input);
+          }}
+          onDelete={async (id) => {
+            "use server";
+            await deleteEmailInbox(orgId, id);
+            revalidatePath(`/admin/channels/email`);
+          }}
+        />
+      )}
       <ChannelDetailDLQ org={orgId} channelType={channelType} />
     </div>
   );

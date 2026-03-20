@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Plus, Pencil, Trash2, Mail, CheckCircle, XCircle } from "lucide-react";
-import { createEmailInbox, deleteEmailInbox, updateEmailInbox } from "@/lib/admin-api";
 import { EmailInboxForm } from "./email-inbox-form";
 import type { EmailInbox, EmailInboxInput } from "@/lib/api-types";
 
@@ -13,17 +12,26 @@ const ROUTING_LABELS: Record<string, string> = {
 };
 
 interface EmailInboxListProps {
-  /** Organisation ID for API calls. */
-  orgId: string;
   /** Initial inbox list (fetched server-side). */
   initialInboxes: EmailInbox[];
+  /** Server action: create a new inbox. */
+  onCreate: (input: EmailInboxInput) => Promise<EmailInbox>;
+  /** Server action: update an existing inbox. */
+  onUpdate: (id: string, input: EmailInboxInput) => Promise<EmailInbox | null>;
+  /** Server action: delete an inbox. */
+  onDelete: (id: string) => Promise<void>;
 }
 
 /**
  * Displays the list of configured email inboxes and provides add / edit / delete
  * actions. State is managed client-side after the initial server-side fetch.
  */
-export function EmailInboxList({ orgId, initialInboxes }: EmailInboxListProps): React.ReactNode {
+export function EmailInboxList({
+  initialInboxes,
+  onCreate,
+  onUpdate,
+  onDelete,
+}: EmailInboxListProps): React.ReactNode {
   const [inboxes, setInboxes] = useState<EmailInbox[]>(initialInboxes);
   const [showForm, setShowForm] = useState(false);
   const [editingInbox, setEditingInbox] = useState<EmailInbox | undefined>(undefined);
@@ -47,10 +55,12 @@ export function EmailInboxList({ orgId, initialInboxes }: EmailInboxListProps): 
 
   const handleSave = async (input: EmailInboxInput): Promise<void> => {
     if (editingInbox) {
-      const updated = await updateEmailInbox(orgId, editingInbox.id, input);
-      setInboxes((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      const updated = await onUpdate(editingInbox.id, input);
+      if (updated) {
+        setInboxes((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      }
     } else {
-      const created = await createEmailInbox(orgId, input);
+      const created = await onCreate(input);
       setInboxes((prev) => [...prev, created]);
     }
     setShowForm(false);
@@ -63,7 +73,7 @@ export function EmailInboxList({ orgId, initialInboxes }: EmailInboxListProps): 
     setDeleting(inbox.id);
     setListError("");
     try {
-      await deleteEmailInbox(orgId, inbox.id);
+      await onDelete(inbox.id);
       setInboxes((prev) => prev.filter((i) => i.id !== inbox.id));
     } catch (err) {
       setListError(err instanceof Error ? err.message : "Failed to delete inbox.");
