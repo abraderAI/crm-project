@@ -12,6 +12,8 @@ import type {
   ChannelType,
   DeadLetterEvent,
   EffectivePolicy,
+  EmailInbox,
+  EmailInboxInput,
   FeatureFlag,
   Flag,
   LlmUsageResponse,
@@ -324,6 +326,76 @@ export async function patchFeatureFlag(key: string, enabled: boolean): Promise<F
     throw new Error(`Failed to update feature flag: ${response.status}`);
   }
   return (await response.json()) as FeatureFlag;
+}
+
+/** List all email inboxes for an org. */
+export async function fetchEmailInboxes(org: string): Promise<EmailInbox[]> {
+  const token = await getToken();
+  const res = await serverFetch<{ data: EmailInbox[] }>(`/orgs/${org}/channels/email/inboxes`, {
+    token,
+  });
+  return res.data;
+}
+
+/** Create a new email inbox for an org. */
+export async function createEmailInbox(org: string, input: EmailInboxInput): Promise<EmailInbox> {
+  const token = await getToken();
+  const url = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1/orgs/${org}/channels/email/inboxes`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to create email inbox: ${response.status}`);
+  }
+  return (await response.json()) as EmailInbox;
+}
+
+/** Update an existing email inbox. */
+export async function updateEmailInbox(
+  org: string,
+  id: string,
+  input: EmailInboxInput,
+): Promise<EmailInbox> {
+  const token = await getToken();
+  const url = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1/orgs/${org}/channels/email/inboxes/${id}`;
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update email inbox: ${response.status}`);
+  }
+  return (await response.json()) as EmailInbox;
+}
+
+/** Delete an email inbox. */
+export async function deleteEmailInbox(org: string, id: string): Promise<void> {
+  const token = await getToken();
+  const url = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/v1/orgs/${org}/channels/email/inboxes/${id}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to delete email inbox: ${response.status}`);
+  }
 }
 
 /** Dismiss a dead-letter queue event. */

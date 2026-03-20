@@ -1066,6 +1066,29 @@ func TestComputeBackoff(t *testing.T) {
 	}
 }
 
+// --- ChatConfig Validate/MaskSecrets ---
+
+func TestChatConfig_Validate(t *testing.T) {
+	valid := ChatConfig{}
+	assert.NoError(t, valid.Validate())
+
+	invalid := ChatConfig{EscalationTimeoutSeconds: -1}
+	assert.Error(t, invalid.Validate())
+}
+
+func TestChatConfig_MaskSecrets(t *testing.T) {
+	cfg := ChatConfig{EmbedKey: "pub-key", AISystemPrompt: "Hello"}
+	masked := cfg.MaskSecrets()
+	assert.Equal(t, cfg.EmbedKey, masked.EmbedKey)
+}
+
+func TestNewRetryEngine(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	re := NewRetryEngine(repo)
+	assert.NotNil(t, re)
+}
+
 // --- Config type unit tests ---
 
 func TestEmailConfig_Validate(t *testing.T) {

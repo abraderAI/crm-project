@@ -49,7 +49,8 @@ type ProcessResult struct {
 
 // ProcessInbound handles a raw email message for an org: parses it,
 // matches/creates thread, creates message, processes attachments, updates metadata.
-func (s *Service) ProcessInbound(ctx context.Context, orgID string, msg *mail.Message) (*ProcessResult, error) {
+// routingAction controls which space type is targeted for new threads.
+func (s *Service) ProcessInbound(ctx context.Context, orgID string, routingAction models.RoutingAction, msg *mail.Message) (*ProcessResult, error) {
 	if msg == nil {
 		return nil, fmt.Errorf("message is nil")
 	}
@@ -63,8 +64,8 @@ func (s *Service) ProcessInbound(ctx context.Context, orgID string, msg *mail.Me
 		return nil, fmt.Errorf("parsing email: %w", err)
 	}
 
-	// Match to thread.
-	matchResult, err := s.threadMatcher.Match(ctx, orgID, parsed)
+	// Match to thread using the inbox's routing action.
+	matchResult, err := s.threadMatcher.Match(ctx, orgID, parsed, routingAction)
 	if err != nil {
 		return nil, fmt.Errorf("matching thread: %w", err)
 	}

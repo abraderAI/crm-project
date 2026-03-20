@@ -332,7 +332,7 @@ func TestThreadMatcher_MatchByMessageID(t *testing.T) {
 		Body:      "Reply body",
 	}
 
-	result, err := matcher.Match(context.Background(), org.ID, parsed)
+	result, err := matcher.Match(context.Background(), org.ID, parsed, models.RoutingActionSalesLead)
 	require.NoError(t, err)
 	assert.False(t, result.IsNew)
 	assert.Equal(t, "message_id", result.MatchBy)
@@ -361,7 +361,7 @@ func TestThreadMatcher_MatchByReferences(t *testing.T) {
 		Body:       "Response",
 	}
 
-	result, err := matcher.Match(context.Background(), org.ID, parsed)
+	result, err := matcher.Match(context.Background(), org.ID, parsed, models.RoutingActionSalesLead)
 	require.NoError(t, err)
 	assert.False(t, result.IsNew)
 	assert.Equal(t, "message_id", result.MatchBy)
@@ -388,7 +388,7 @@ func TestThreadMatcher_MatchBySenderEmail(t *testing.T) {
 		Body:    "Another message from Dave",
 	}
 
-	result, err := matcher.Match(context.Background(), org.ID, parsed)
+	result, err := matcher.Match(context.Background(), org.ID, parsed, models.RoutingActionSalesLead)
 	require.NoError(t, err)
 	assert.False(t, result.IsNew)
 	assert.Equal(t, "sender_email", result.MatchBy)
@@ -408,7 +408,7 @@ func TestThreadMatcher_CreateNewLead(t *testing.T) {
 		Body:      "I want to learn more about your product.",
 	}
 
-	result, err := matcher.Match(context.Background(), org.ID, parsed)
+	result, err := matcher.Match(context.Background(), org.ID, parsed, models.RoutingActionSalesLead)
 	require.NoError(t, err)
 	assert.True(t, result.IsNew)
 	assert.Equal(t, "new_lead", result.MatchBy)
@@ -421,7 +421,7 @@ func TestThreadMatcher_CreateNewLead(t *testing.T) {
 func TestThreadMatcher_NilParsedEmail(t *testing.T) {
 	db := setupTestDB(t)
 	matcher := NewThreadMatcher(db)
-	_, err := matcher.Match(context.Background(), "org-1", nil)
+	_, err := matcher.Match(context.Background(), "org-1", nil, models.RoutingActionSalesLead)
 	assert.Error(t, err)
 }
 
@@ -965,7 +965,7 @@ func TestService_ProcessInbound_NewLead(t *testing.T) {
 		"Subject":    "Product Inquiry",
 	}, "I'm interested in your product.")
 
-	result, err := svc.ProcessInbound(context.Background(), org.ID, msg)
+	result, err := svc.ProcessInbound(context.Background(), org.ID, models.RoutingActionSalesLead, msg)
 	require.NoError(t, err)
 	assert.True(t, result.IsNewLead)
 	assert.Equal(t, "new_lead", result.MatchBy)
@@ -1000,7 +1000,7 @@ func TestService_ProcessInbound_ExistingThread(t *testing.T) {
 		"Subject":     "Re: Existing Lead",
 	}, "Follow-up message.")
 
-	result, err := svc.ProcessInbound(context.Background(), org.ID, msg)
+	result, err := svc.ProcessInbound(context.Background(), org.ID, models.RoutingActionSalesLead, msg)
 	require.NoError(t, err)
 	assert.False(t, result.IsNewLead)
 	assert.Equal(t, thread.ID, result.Thread.ID)
@@ -1025,7 +1025,7 @@ func TestService_ProcessInbound_WithAttachments(t *testing.T) {
 		"Subject":    "Contract attached",
 	}, boundary, parts)
 
-	result, err := svc.ProcessInbound(context.Background(), org.ID, msg)
+	result, err := svc.ProcessInbound(context.Background(), org.ID, models.RoutingActionSalesLead, msg)
 	require.NoError(t, err)
 	assert.NotNil(t, result.Message)
 	assert.Len(t, result.Uploads, 1)
@@ -1035,7 +1035,7 @@ func TestService_ProcessInbound_WithAttachments(t *testing.T) {
 func TestService_ProcessInbound_NilMessage(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db, NewMockStorageProvider(), nil)
-	_, err := svc.ProcessInbound(context.Background(), "org-1", nil)
+	_, err := svc.ProcessInbound(context.Background(), "org-1", models.RoutingActionSalesLead, nil)
 	assert.Error(t, err)
 }
 
@@ -1043,7 +1043,7 @@ func TestService_ProcessInbound_EmptyOrgID(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db, NewMockStorageProvider(), nil)
 	msg := makeMessage(map[string]string{"From": "test@example.com"}, "body")
-	_, err := svc.ProcessInbound(context.Background(), "", msg)
+	_, err := svc.ProcessInbound(context.Background(), "", models.RoutingActionSalesLead, msg)
 	assert.Error(t, err)
 }
 
@@ -1081,6 +1081,222 @@ func TestIsImageContentType(t *testing.T) {
 	assert.True(t, isImageContentType("Image/GIF"))
 	assert.False(t, isImageContentType("application/pdf"))
 	assert.False(t, isImageContentType("text/plain"))
+}
+
+// --- LiveIMAPProvider unit tests (no real IMAP connection) ---
+
+func TestLiveIMAPProvider_NotConnected_Errors(t *testing.T) {
+	p := NewLiveIMAPProvider(nil) // nil logger falls back to slog.Default()
+
+	// FetchMessage without connecting should return an error.
+	_, err := p.FetchMessage(context.Background(), 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	// StartIDLE without connecting should return an error.
+	err = p.StartIDLE("INBOX", func(_ uint32) {})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	// Close without connecting should be a no-op.
+	err = p.Close()
+	assert.NoError(t, err)
+}
+
+func TestLiveIMAPProvider_DrainNotify(t *testing.T) {
+	p := NewLiveIMAPProvider(nil)
+
+	// Drain empty channel — should return immediately.
+	p.drainNotify()
+
+	// Pre-load notifications then drain.
+	for i := 0; i < 5; i++ {
+		select {
+		case p.notifyCh <- struct{}{}:
+		default:
+		}
+	}
+	p.drainNotify()
+	assert.Equal(t, 0, len(p.notifyCh))
+}
+
+// --- InboxWatcher unit tests ---
+
+func TestInboxWatcher_StartWithNoInboxes(t *testing.T) {
+	db := setupTestDB(t)
+	storage := NewMockStorageProvider()
+	watcher := NewInboxWatcher(db, storage, nil)
+
+	// With no EmailInbox records, Start should succeed and register 0 managers.
+	err := watcher.Start(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 0, watcher.registry.Size())
+
+	watcher.Stop()
+	assert.Equal(t, 0, watcher.registry.Size())
+}
+
+func TestInboxWatcher_RestartInbox_Disabled(t *testing.T) {
+	db := setupTestDB(t)
+	storage := NewMockStorageProvider()
+	watcher := NewInboxWatcher(db, storage, nil)
+
+	// Register a mock manager first.
+	mock := NewMockIMAPProvider()
+	mock.StartIDLEFunc = func(_ string, _ func(uint32)) error { return nil }
+	cfg := IDLEManagerConfig{
+		OrgID:       "test-org",
+		EmailConfig: channel.EmailConfig{IMAPHost: "mail.test", IMAPPort: 993, Username: "u"},
+		Provider:    mock,
+		OnMessage:   func(_ uint32) {},
+	}
+	watcher.registry.Register("inbox-id-1", NewIDLEManager(cfg))
+	assert.Equal(t, 1, watcher.registry.Size())
+
+	// RestartInbox with Enabled=false should deregister but not re-add.
+	watcher.RestartInbox(models.EmailInbox{BaseModel: models.BaseModel{ID: "inbox-id-1"}, Enabled: false})
+	assert.Equal(t, 0, watcher.registry.Size())
+}
+
+// --- Routing action tests ---
+
+func TestRoutingActionToSpaceType(t *testing.T) {
+	assert.Equal(t, models.SpaceTypeSupport, routingActionToSpaceType(models.RoutingActionSupportTicket))
+	assert.Equal(t, models.SpaceTypeCRM, routingActionToSpaceType(models.RoutingActionSalesLead))
+	assert.Equal(t, models.SpaceTypeGeneral, routingActionToSpaceType(models.RoutingActionGeneral))
+	// Unknown falls back to CRM.
+	assert.Equal(t, models.SpaceTypeCRM, routingActionToSpaceType("unknown"))
+}
+
+func TestService_ProcessInbound_SupportTicketRouting(t *testing.T) {
+	db := setupTestDB(t)
+	org := createTestOrg(t, db, "svc-support-org")
+	// Create CRM and support spaces with distinct slugs to avoid UNIQUE constraint.
+	crmSpace := &models.Space{OrgID: org.ID, Name: "CRM", Slug: "crm-space", Type: models.SpaceTypeCRM, Metadata: "{}"}
+	require.NoError(t, db.Create(crmSpace).Error)
+	crmBoard := &models.Board{SpaceID: crmSpace.ID, Name: "CRM Board", Slug: "crm-board", Metadata: "{}"}
+	require.NoError(t, db.Create(crmBoard).Error)
+
+	supportSpace := &models.Space{OrgID: org.ID, Name: "Support", Slug: "support-space", Type: models.SpaceTypeSupport, Metadata: "{}"}
+	require.NoError(t, db.Create(supportSpace).Error)
+	supportBoard := &models.Board{SpaceID: supportSpace.ID, Name: "Support Board", Slug: "support-board", Metadata: "{}"}
+	require.NoError(t, db.Create(supportBoard).Error)
+
+	svc := NewService(db, NewMockStorageProvider(), nil)
+	msg := makeMessage(map[string]string{
+		"From":    "customer@example.com",
+		"Subject": "Help needed",
+	}, "I need support please.")
+
+	result, err := svc.ProcessInbound(context.Background(), org.ID, models.RoutingActionSupportTicket, msg)
+	require.NoError(t, err)
+	assert.True(t, result.IsNewLead)
+	assert.NotNil(t, result.Thread)
+
+	// The thread should be in the support space.
+	var space models.Space
+	var board models.Board
+	require.NoError(t, db.First(&board, "id = ?", result.Thread.BoardID).Error)
+	require.NoError(t, db.First(&space, "id = ?", board.SpaceID).Error)
+	assert.Equal(t, models.SpaceTypeSupport, space.Type)
+}
+
+// --- IDLEManager accessor tests ---
+
+func TestIDLEManager_Accessors(t *testing.T) {
+	mock := NewMockIMAPProvider()
+	cfg := IDLEManagerConfig{
+		OrgID:       "org-acc",
+		EmailConfig: channel.EmailConfig{IMAPHost: "mail.test", IMAPPort: 993, Username: "u"},
+		Provider:    mock,
+		OnMessage:   func(_ uint32) {},
+	}
+	mgr := NewIDLEManager(cfg)
+
+	// Initial state: no error, zero reconnect attempts, not healthy.
+	assert.Nil(t, mgr.LastError())
+	assert.Equal(t, 0, mgr.ReconnectAttempts())
+	assert.False(t, mgr.IsHealthy()) // disconnected state
+}
+
+func TestIDLEManagerRegistry_HealthReportsAndIsHealthy(t *testing.T) {
+	registry := NewIDLEManagerRegistry()
+
+	mock := NewMockIMAPProvider()
+	mock.StartIDLEFunc = func(_ string, _ func(uint32)) error { return nil }
+	cfg := IDLEManagerConfig{
+		OrgID:       "org-hr",
+		EmailConfig: channel.EmailConfig{IMAPHost: "mail.test", IMAPPort: 993, Username: "u"},
+		Provider:    mock,
+		OnMessage:   func(_ uint32) {},
+	}
+	mgr := NewIDLEManager(cfg)
+	registry.Register("org-hr", mgr)
+
+	// HealthReports returns one report per manager.
+	reports := registry.HealthReports()
+	assert.Len(t, reports, 1)
+	assert.Equal(t, "org-hr", reports[0]["org_id"])
+
+	// IsHealthy returns false for disconnected org and for unknown org.
+	assert.False(t, registry.IsHealthy("org-hr"))
+	assert.False(t, registry.IsHealthy("unknown-org"))
+
+	mgr.Stop()
+}
+
+// --- NewGoogleOAuthService tests ---
+
+func TestNewGoogleOAuthService_Valid(t *testing.T) {
+	creds := OAuthCredentials{ClientID: "id", ClientSecret: "secret", RefreshToken: "token"}
+	svc, err := NewGoogleOAuthService(creds)
+	require.NoError(t, err)
+	assert.NotNil(t, svc)
+}
+
+func TestNewGoogleOAuthService_Invalid(t *testing.T) {
+	_, err := NewGoogleOAuthService(OAuthCredentials{})
+	assert.Error(t, err)
+}
+
+// --- MockStorageProvider Get/Delete tests ---
+
+func TestMockStorageProvider_GetAndDelete(t *testing.T) {
+	storage := NewMockStorageProvider()
+
+	// Store a file.
+	path, err := storage.Store("test.pdf", strings.NewReader("content"))
+	require.NoError(t, err)
+
+	// Get it back.
+	r, err := storage.Get(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = r.Close() })
+
+	// Get non-existent file → error.
+	_, err = storage.Get("missing.pdf")
+	assert.Error(t, err)
+
+	// Delete the file.
+	err = storage.Delete(path)
+	require.NoError(t, err)
+
+	// After delete, Get should fail.
+	_, err = storage.Get(path)
+	assert.Error(t, err)
+
+	// Delete error propagation.
+	storage.DeleteErr = fmt.Errorf("disk error")
+	err = storage.Delete("any-path")
+	assert.Error(t, err)
+}
+
+// --- defaultRefreshFunc test ---
+
+func TestDefaultRefreshFunc_ReturnsError(t *testing.T) {
+	_, _, err := defaultRefreshFunc(OAuthCredentials{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not implemented")
 }
 
 // --- mockClock tests ---

@@ -35,7 +35,8 @@ type MatchResult struct {
 }
 
 // Match finds or creates a thread for the given parsed email within the org.
-func (m *ThreadMatcher) Match(ctx context.Context, orgID string, parsed *ParsedEmail) (*MatchResult, error) {
+// routingAction controls which space type is targeted when creating a new thread.
+func (m *ThreadMatcher) Match(ctx context.Context, orgID string, parsed *ParsedEmail, routingAction models.RoutingAction) (*MatchResult, error) {
 	if parsed == nil {
 		return nil, fmt.Errorf("parsed email is nil")
 	}
@@ -78,8 +79,8 @@ func (m *ThreadMatcher) Match(ctx context.Context, orgID string, parsed *ParsedE
 		}
 	}
 
-	// Strategy 3: No match — create new lead thread.
-	thread, err := m.createLeadThread(ctx, orgID, parsed)
+	// Strategy 3: No match — create new lead thread routed by routingAction.
+	thread, err := m.createLeadThread(ctx, orgID, parsed, routingAction)
 	if err != nil {
 		return nil, err
 	}
@@ -145,12 +146,27 @@ func (m *ThreadMatcher) findThreadBySenderEmail(ctx context.Context, orgID, send
 	return &thread, nil
 }
 
-// createLeadThread creates a new lead thread in the org's CRM space (or any space).
-func (m *ThreadMatcher) createLeadThread(ctx context.Context, orgID string, parsed *ParsedEmail) (*models.Thread, error) {
-	// Prefer a CRM space; fall back to any space.
+// routingActionToSpaceType maps a RoutingAction to the preferred SpaceType.
+func routingActionToSpaceType(action models.RoutingAction) models.SpaceType {
+	switch action {
+	case models.RoutingActionSupportTicket:
+		return models.SpaceTypeSupport
+	case models.RoutingActionGeneral:
+		return models.SpaceTypeGeneral
+	default: // RoutingActionSalesLead and unknown values
+		return models.SpaceTypeCRM
+	}
+}
+
+// createLeadThread creates a new thread in the space matching routingAction,
+// falling back to any available space when the preferred type has no board.
+func (m *ThreadMatcher) createLeadThread(ctx context.Context, orgID string, parsed *ParsedEmail, routingAction models.RoutingAction) (*models.Thread, error) {
+	preferred := routingActionToSpaceType(routingAction)
+
+	// Try preferred space type first, then any space as fallback.
 	var space models.Space
 	err := m.db.WithContext(ctx).
-		Where("org_id = ? AND type = ? AND deleted_at IS NULL", orgID, models.SpaceTypeCRM).
+		Where("org_id = ? AND type = ? AND deleted_at IS NULL", orgID, preferred).
 		First(&space).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		err = m.db.WithContext(ctx).
