@@ -203,6 +203,15 @@ export async function fetchExports(
   return serverFetchPaginated<AdminExport>("/admin/exports", params, { token });
 }
 
+/**
+ * Fetch the ID of the first org in the platform.
+ * Falls back to "default" when no orgs exist (dev / seed environment).
+ */
+export async function fetchFirstOrgId(): Promise<string> {
+  const result = await fetchAdminOrgs({ limit: "1" });
+  return result.data[0]?.id ?? "default";
+}
+
 // --- IO Channel API functions ---
 
 /** Fetch channel configuration for a specific channel type. */

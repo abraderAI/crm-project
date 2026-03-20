@@ -1,13 +1,13 @@
-import { fetchChannelHealth } from "@/lib/admin-api";
+import { fetchChannelHealth, fetchFirstOrgId } from "@/lib/admin-api";
 import { ChannelOverview } from "@/components/admin/channel-overview";
 import type { ChannelHealth, ChannelType } from "@/lib/api-types";
 
 const CHANNEL_TYPES: ChannelType[] = ["email", "voice", "chat"];
-const DEFAULT_ORG = "default";
 
 export default async function AdminChannelsPage(): Promise<React.ReactNode> {
+  const orgId = await fetchFirstOrgId();
   const results = await Promise.allSettled(
-    CHANNEL_TYPES.map((type) => fetchChannelHealth(DEFAULT_ORG, type)),
+    CHANNEL_TYPES.map((type) => fetchChannelHealth(orgId, type)),
   );
 
   const healthMap: Record<ChannelType, ChannelHealth | null> = {

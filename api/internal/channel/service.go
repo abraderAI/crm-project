@@ -170,6 +170,11 @@ func (s *Service) DismissDLQEvent(ctx context.Context, orgID, id string) (*model
 	return evt, nil
 }
 
+// IsPlatformAdmin returns true when the user is an active platform admin.
+func (s *Service) IsPlatformAdmin(ctx context.Context, userID string) (bool, error) {
+	return s.repo.IsPlatformAdmin(ctx, userID)
+}
+
 // IsOrgAdmin returns true when the user has admin or owner role in the org.
 func (s *Service) IsOrgAdmin(ctx context.Context, orgID, userID string) (bool, error) {
 	return s.repo.IsOrgAdmin(ctx, orgID, userID)
