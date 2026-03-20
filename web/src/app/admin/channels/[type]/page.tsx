@@ -2,7 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Phone } from "lucide-react";
-import { fetchChannelConfig, fetchChannelHealth, fetchFirstOrgId, putChannelConfig } from "@/lib/admin-api";
+import {
+  fetchChannelConfig,
+  fetchChannelHealth,
+  fetchFirstOrgId,
+  putChannelConfig,
+} from "@/lib/admin-api";
 import { ChannelConfigForm } from "@/components/admin/channel-config-form";
 import { ChannelHealthBadge } from "@/components/admin/channel-health-badge";
 import { ChatChannelPanel } from "@/components/admin/chat-channel-panel";
