@@ -157,7 +157,7 @@ func TestIntegration_FullEmailProcessingPipeline(t *testing.T) {
 		"Subject":    "Integration Test Email",
 	}, "This is an integration test email body.")
 
-	result, err := svc.ProcessInbound(context.Background(), org.ID, msg)
+	result, err := svc.ProcessInbound(context.Background(), org.ID, models.RoutingActionSalesLead, msg)
 	require.NoError(t, err)
 	assert.True(t, result.IsNewLead)
 	assert.NotNil(t, result.Thread)
@@ -171,7 +171,7 @@ func TestIntegration_FullEmailProcessingPipeline(t *testing.T) {
 		"Subject":     "Re: Integration Test Email",
 	}, "This is a reply.")
 
-	result2, err := svc.ProcessInbound(context.Background(), org.ID, reply)
+	result2, err := svc.ProcessInbound(context.Background(), org.ID, models.RoutingActionSalesLead, reply)
 	require.NoError(t, err)
 	assert.False(t, result2.IsNewLead)
 	assert.Equal(t, result.Thread.ID, result2.Thread.ID)

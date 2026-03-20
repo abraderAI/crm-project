@@ -3,16 +3,21 @@ import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Phone } from "lucide-react";
 import {
+  createEmailInbox,
+  deleteEmailInbox,
   fetchChannelConfig,
   fetchChannelHealth,
+  fetchEmailInboxes,
   fetchFirstOrgId,
   putChannelConfig,
+  updateEmailInbox,
 } from "@/lib/admin-api";
 import { ChannelConfigForm } from "@/components/admin/channel-config-form";
 import { ChannelHealthBadge } from "@/components/admin/channel-health-badge";
 import { ChatChannelPanel } from "@/components/admin/chat-channel-panel";
+import { EmailInboxList } from "@/components/admin/email-inbox-list";
 import { ChannelDetailDLQ } from "./channel-detail-dlq";
-import type { ChannelType } from "@/lib/api-types";
+import type { EmailInbox, ChannelType } from "@/lib/api-types";
 
 const VALID_TYPES = new Set<string>(["email", "voice", "chat"]);
 
@@ -36,13 +41,15 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
   const channelType = type as ChannelType;
   const orgId = await fetchFirstOrgId();
 
-  const [config, health] = await Promise.allSettled([
+  const [config, health, inboxes] = await Promise.allSettled([
     fetchChannelConfig(orgId, channelType),
     fetchChannelHealth(orgId, channelType),
+    channelType === "email" ? fetchEmailInboxes(orgId) : Promise.resolve<EmailInbox[]>([]),
   ]);
 
   const configData = config.status === "fulfilled" ? config.value : null;
   const healthData = health.status === "fulfilled" ? health.value : null;
+  const inboxData = inboxes.status === "fulfilled" ? inboxes.value : [];
 
   return (
     <div data-testid="channel-detail-page" className="flex flex-col gap-6">
@@ -116,7 +123,25 @@ export default async function ChannelDetailPage({ params }: PageProps): Promise<
         />
       )}
 
-      {/* DLQ monitor (client component) */}
+      {/* Email inbox management (email channel only) */}
+      {channelType === "email" && (
+        <EmailInboxList
+          initialInboxes={inboxData}
+          onCreate={async (input) => {
+            "use server";
+            return createEmailInbox(orgId, input);
+          }}
+          onUpdate={async (id, input) => {
+            "use server";
+            return updateEmailInbox(orgId, id, input);
+          }}
+          onDelete={async (id) => {
+            "use server";
+            await deleteEmailInbox(orgId, id);
+            revalidatePath(`/admin/channels/email`);
+          }}
+        />
+      )}
       <ChannelDetailDLQ org={orgId} channelType={channelType} />
     </div>
   );

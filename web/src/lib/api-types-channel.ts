@@ -37,6 +37,40 @@ export interface DeadLetterEvent {
   created_at: string;
 }
 
+/** Routing action for an email inbox — determines where inbound threads are created. */
+export type RoutingAction = "support_ticket" | "sales_lead" | "general";
+
+/** Per-org email inbox configuration with IMAP credentials and routing. */
+export interface EmailInbox {
+  id: string;
+  org_id: string;
+  name: string;
+  email_address: string;
+  imap_host: string;
+  imap_port: number;
+  username: string;
+  /** Always "[REDACTED]" in GET responses. Send a new value to update. */
+  password?: string;
+  mailbox: string;
+  routing_action: RoutingAction;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Input for creating or updating an EmailInbox. */
+export interface EmailInboxInput {
+  name: string;
+  email_address?: string;
+  imap_host: string;
+  imap_port: number;
+  username: string;
+  password?: string;
+  mailbox?: string;
+  routing_action?: RoutingAction;
+  enabled: boolean;
+}
+
 /** Owned phone number from LiveKit. */
 export interface PhoneNumber {
   phone_number: string;

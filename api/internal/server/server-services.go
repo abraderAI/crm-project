@@ -1,6 +1,9 @@
 package server
 
 import (
+	"context"
+	"log/slog"
+
 	"github.com/abraderAI/crm-project/api/internal/admin"
 	"github.com/abraderAI/crm-project/api/internal/audit"
 	"github.com/abraderAI/crm-project/api/internal/auth"
@@ -8,6 +11,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/board"
 	"github.com/abraderAI/crm-project/api/internal/channel"
 	"github.com/abraderAI/crm-project/api/internal/channel/chat"
+	emailpkg "github.com/abraderAI/crm-project/api/internal/channel/email"
 	voicelk "github.com/abraderAI/crm-project/api/internal/channel/voice"
 	"github.com/abraderAI/crm-project/api/internal/conversion"
 	"github.com/abraderAI/crm-project/api/internal/event"
@@ -72,6 +76,8 @@ type serverHandlers struct {
 	conversionHandler  *conversion.Handler
 	chatHandler        *chat.Handler
 	channelHandler     *channel.Handler
+	emailInboxHandler  *channel.EmailInboxHandler
+	inboxWatcher       *emailpkg.InboxWatcher
 	voiceLKWebhook     *voicelk.WebhookHandler
 	voiceLKBridge      *voicelk.BridgeHandler
 	voiceLKPhone       *voicelk.PhoneHandler
@@ -202,8 +208,27 @@ func newHandlers(cfg Config) serverHandlers {
 	// Subscribe provisioning to pipeline stage changes (auto-provision on closed_won).
 	eventBus.Subscribe(event.PipelineStageChanged, provisionService.HandleStageChanged)
 
-	// IO Phase 1: Channel Gateway.
-	channelHandler := channel.NewHandler(channel.NewService(channel.NewRepository(cfg.DB)))
+	// IO Phase 1: Channel Gateway + EmailInbox management.
+	channelRepo := channel.NewRepository(cfg.DB)
+	channelSvc := channel.NewService(channelRepo)
+	channelHandler := channel.NewHandler(channelSvc)
+
+	// Email inbox CRUD + watcher.
+	var inboxStorage upload.StorageProvider
+	if storage, err := upload.NewLocalStorage(uploadDir); err == nil {
+		inboxStorage = storage
+	}
+	inboxWatcher := emailpkg.NewInboxWatcher(cfg.DB, inboxStorage, cfg.Logger)
+	inboxRepo := channel.NewEmailInboxRepository(cfg.DB)
+	inboxSvc := channel.NewEmailInboxService(inboxRepo)
+	emailInboxHandler := channel.NewEmailInboxHandler(inboxSvc, channelSvc, inboxWatcher)
+
+	// Start inbox watcher in background (non-blocking; reconnects on failure).
+	go func() {
+		if err := inboxWatcher.Start(context.Background()); err != nil {
+			cfg.Logger.Error("inbox watcher start failed", slog.String("error", err.Error()))
+		}
+	}()
 
 	// IO Phase 3: Voice LiveKit integration.
 	lkProvider := voicelk.NewMockProvider()
@@ -274,6 +299,8 @@ func newHandlers(cfg Config) serverHandlers {
 		conversionHandler:  conversionHandler,
 		chatHandler:        chatHandler,
 		channelHandler:     channelHandler,
+		emailInboxHandler:  emailInboxHandler,
+		inboxWatcher:       inboxWatcher,
 		voiceLKWebhook:     voiceLKWebhook,
 		voiceLKBridge:      voiceLKBridge,
 		voiceLKPhone:       voiceLKPhone,

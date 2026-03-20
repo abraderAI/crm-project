@@ -330,6 +330,12 @@ func NewRouter(cfg Config) http.Handler {
 				ch.Get("/{type}", h.channelHandler.GetConfig)
 				ch.Put("/{type}", h.channelHandler.PutConfig)
 
+				// Email inbox management (admin-only; auth checked per handler).
+				ch.Get("/email/inboxes", h.emailInboxHandler.ListInboxes)
+				ch.Post("/email/inboxes", h.emailInboxHandler.CreateInbox)
+				ch.Put("/email/inboxes/{id}", h.emailInboxHandler.UpdateInbox)
+				ch.Delete("/email/inboxes/{id}", h.emailInboxHandler.DeleteInbox)
+
 				// Voice phone number admin routes.
 				ch.Get("/voice/numbers", h.voiceLKPhone.ListNumbers)
 				ch.Post("/voice/numbers/search", h.voiceLKPhone.SearchNumbers)
