@@ -250,27 +250,27 @@ func (s *Service) ListUsers(ctx context.Context, params UserListParams) ([]UserS
 			result[i] = UserShadowWithOrg{UserShadow: u}
 		}
 
-		// Fetch first org membership per user (ordered by created_at ASC = oldest/primary).
+		// Fetch all active memberships with org info, then pick one per user in Go.
 		type orgRow struct {
-			UserID  string
-			OrgName string
-			OrgSlug string
+			UserID    string
+			OrgName   string
+			OrgSlug   string
+			CreatedAt time.Time
 		}
 		var orgRows []orgRow
 		_ = s.db.WithContext(ctx).Raw(`
-			SELECT om.user_id, o.name AS org_name, o.slug AS org_slug
+			SELECT om.user_id, o.name AS org_name, o.slug AS org_slug, om.created_at
 			FROM org_memberships om
-			JOIN orgs o ON o.id = om.org_id
-			WHERE om.user_id IN (?)
-			AND om.id = (
-				SELECT om2.id FROM org_memberships om2
-				WHERE om2.user_id = om.user_id
-				ORDER BY om2.created_at ASC LIMIT 1
-			)`, userIDs).Scan(&orgRows).Error
+			JOIN orgs o ON o.id = om.org_id AND o.deleted_at IS NULL
+			WHERE om.user_id IN (?) AND om.deleted_at IS NULL
+			ORDER BY om.created_at ASC`, userIDs).Scan(&orgRows).Error
 
-		orgMap := make(map[string]orgRow, len(orgRows))
+		// Pick first (oldest) membership per user.
+		orgMap := make(map[string]orgRow, len(userIDs))
 		for _, row := range orgRows {
-			orgMap[row.UserID] = row
+			if _, exists := orgMap[row.UserID]; !exists {
+				orgMap[row.UserID] = row
+			}
 		}
 		for i := range result {
 			if row, ok := orgMap[result[i].ClerkUserID]; ok {
