@@ -1,6 +1,8 @@
 "use client";
 
-import type { UserShadow } from "@/lib/api-types";
+import { useMemo, useState } from "react";
+import { Building2, Plus, Search } from "lucide-react";
+import type { AdminOrgDetail, UserShadow } from "@/lib/api-types";
 
 // --- Ban / Unban Dialog ---
 
@@ -140,45 +142,226 @@ export function UserPurgeDialog({
 // --- Add to Org Form ---
 
 export interface UserAddToOrgFormProps {
-  addToOrgSlug: string;
-  setAddToOrgSlug: (v: string) => void;
+  /** Available orgs to select from. */
+  orgs: AdminOrgDetail[];
+  /** Whether the org list is still loading. */
+  orgsLoading: boolean;
+  /** Currently selected org, or null if none. */
+  selectedOrg: AdminOrgDetail | null;
+  /** Select an org from the list. */
+  setSelectedOrg: (org: AdminOrgDetail | null) => void;
+  /** Role to assign in the org. */
   addToOrgRole: string;
   setAddToOrgRole: (v: string) => void;
+  /** Whether the add-to-org mutation is in progress. */
   addingToOrg: boolean;
+  /** Called to submit the selected org + role. */
   onSubmit: () => void;
+  /** Called to close the form. */
   onCancel: () => void;
+  /** Called to create a new org; resolves with the created org. */
+  onCreateOrg: (name: string, description?: string) => Promise<AdminOrgDetail>;
 }
 
 export function UserAddToOrgForm({
-  addToOrgSlug,
-  setAddToOrgSlug,
+  orgs,
+  orgsLoading,
+  selectedOrg,
+  setSelectedOrg,
   addToOrgRole,
   setAddToOrgRole,
   addingToOrg,
   onSubmit,
   onCancel,
+  onCreateOrg,
 }: UserAddToOrgFormProps): React.ReactNode {
+  const [search, setSearch] = useState("");
+  const [showCreateOrg, setShowCreateOrg] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [newOrgDesc, setNewOrgDesc] = useState("");
+  const [creatingOrg, setCreatingOrg] = useState(false);
+  const [createError, setCreateError] = useState("");
+
+  const filteredOrgs = useMemo(() => {
+    if (!search.trim()) return orgs;
+    const q = search.toLowerCase();
+    return orgs.filter((o) => o.name.toLowerCase().includes(q) || o.slug.toLowerCase().includes(q));
+  }, [orgs, search]);
+
+  const handleCreateOrg = async (): Promise<void> => {
+    if (!newOrgName.trim()) return;
+    setCreateError("");
+    setCreatingOrg(true);
+    try {
+      const created = await onCreateOrg(newOrgName.trim(), newOrgDesc.trim() || undefined);
+      setSelectedOrg(created);
+      setNewOrgName("");
+      setNewOrgDesc("");
+      setShowCreateOrg(false);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create org");
+    } finally {
+      setCreatingOrg(false);
+    }
+  };
+
   return (
     <div
       data-testid="add-to-org-form"
       className="rounded-lg border border-border bg-background p-4"
     >
       <h3 className="text-sm font-semibold text-foreground">Add to Organization</h3>
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        <div>
-          <label htmlFor="add-to-org-slug" className="text-xs font-medium text-foreground">
-            Org Slug <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="add-to-org-slug"
-            data-testid="add-to-org-slug-input"
-            type="text"
-            value={addToOrgSlug}
-            onChange={(e) => setAddToOrgSlug(e.target.value)}
-            placeholder="my-org-slug"
-            className="mt-1 block w-48 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-          />
+
+      {/* Selected org indicator */}
+      {selectedOrg && (
+        <div
+          data-testid="selected-org-indicator"
+          className="mt-2 flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800"
+        >
+          <Building2 className="h-4 w-4" />
+          <span>
+            Selected: <strong>{selectedOrg.name}</strong> ({selectedOrg.slug})
+          </span>
+          <button
+            data-testid="clear-selected-org"
+            onClick={() => setSelectedOrg(null)}
+            className="ml-auto text-xs text-green-600 hover:text-green-800"
+          >
+            Change
+          </button>
         </div>
+      )}
+
+      {/* Org picker (shown when no org is selected) */}
+      {!selectedOrg && (
+        <div className="mt-3">
+          {orgsLoading ? (
+            <p
+              data-testid="orgs-loading"
+              className="py-4 text-center text-sm text-muted-foreground"
+            >
+              Loading organizations...
+            </p>
+          ) : (
+            <>
+              {/* Search + Create new row */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <input
+                    data-testid="org-search-input"
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search orgs by name or slug..."
+                    className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm text-foreground"
+                  />
+                </div>
+                <button
+                  data-testid="show-create-org-btn"
+                  onClick={() => setShowCreateOrg((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Org
+                </button>
+              </div>
+
+              {/* Inline create org form */}
+              {showCreateOrg && (
+                <div
+                  data-testid="create-org-inline"
+                  className="mt-2 rounded-md border border-dashed border-border bg-muted/30 p-3"
+                >
+                  <div className="flex flex-col gap-2">
+                    <input
+                      data-testid="new-org-name-input"
+                      type="text"
+                      value={newOrgName}
+                      onChange={(e) => setNewOrgName(e.target.value)}
+                      placeholder="Organization name *"
+                      className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    <input
+                      data-testid="new-org-desc-input"
+                      type="text"
+                      value={newOrgDesc}
+                      onChange={(e) => setNewOrgDesc(e.target.value)}
+                      placeholder="Description (optional)"
+                      className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    {createError && (
+                      <p data-testid="create-org-error" className="text-xs text-red-600">
+                        {createError}
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        data-testid="create-org-submit-btn"
+                        onClick={() => void handleCreateOrg()}
+                        disabled={creatingOrg || !newOrgName.trim()}
+                        className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {creatingOrg ? "Creating..." : "Create & Select"}
+                      </button>
+                      <button
+                        data-testid="create-org-cancel-btn"
+                        onClick={() => {
+                          setShowCreateOrg(false);
+                          setNewOrgName("");
+                          setNewOrgDesc("");
+                          setCreateError("");
+                        }}
+                        className="rounded-md bg-muted px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/80"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Org list */}
+              <div
+                data-testid="org-picker-list"
+                className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border divide-y divide-border"
+              >
+                {filteredOrgs.length === 0 ? (
+                  <p
+                    data-testid="org-picker-empty"
+                    className="px-3 py-4 text-center text-sm text-muted-foreground"
+                  >
+                    {orgs.length === 0
+                      ? "No organizations exist yet."
+                      : "No orgs match your search."}
+                  </p>
+                ) : (
+                  filteredOrgs.map((org) => (
+                    <button
+                      key={org.id}
+                      data-testid={`org-picker-item-${org.id}`}
+                      onClick={() => setSelectedOrg(org)}
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+                    >
+                      <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-foreground">{org.name}</span>
+                        <span className="text-xs text-muted-foreground">{org.slug}</span>
+                      </div>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {org.member_count} members
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Role selector + actions (always visible) */}
+      <div className="mt-3 flex flex-wrap items-end gap-3">
         <div>
           <label htmlFor="add-to-org-role" className="text-xs font-medium text-foreground">
             Role
@@ -198,7 +381,7 @@ export function UserAddToOrgForm({
         <button
           data-testid="add-to-org-submit"
           onClick={onSubmit}
-          disabled={addingToOrg || !addToOrgSlug.trim()}
+          disabled={addingToOrg || !selectedOrg}
           className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {addingToOrg ? "Adding..." : "Add"}

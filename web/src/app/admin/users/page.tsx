@@ -50,6 +50,15 @@ export default async function AdminUsersPage(): Promise<React.ReactNode> {
                 <span className="text-xs text-muted-foreground">{user.email}</span>
               </div>
 
+              {user.primary_org_name && (
+                <span
+                  className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
+                  data-testid={`user-org-${user.clerk_user_id}`}
+                >
+                  {user.primary_org_name}
+                </span>
+              )}
+
               <span className="ml-auto text-xs text-muted-foreground">
                 Last seen: {formatDate(user.last_seen_at)}
               </span>

@@ -1,0 +1,34 @@
+# Version control
+.git
+.gitmodules
+
+# Node modules (rebuilt inside Docker)
+node_modules
+web/node_modules
+widget/node_modules
+
+# Build artifacts
+web/.next
+web/coverage
+widget/dist
+api/bin
+api/coverage.out
+api/cover.out
+
+# IDE / OS
+.DS_Store
+*.swp
+*.swo
+
+# Fly config (not needed inside image)
+fly.toml
+fly.web.toml
+
+# Deft framework docs (not needed in production image)
+deft/
+vbrief/
+history/
+docs/
+
+# Secrets (handled via fly secrets)
+secrets/

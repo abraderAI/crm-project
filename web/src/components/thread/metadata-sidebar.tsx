@@ -12,6 +12,8 @@ export interface MetadataSidebarProps {
   metadata?: string | Record<string, unknown>;
   isPinned?: boolean;
   isLocked?: boolean;
+  /** Resolve a user ID to a display label. */
+  formatUser?: (userId: string) => string;
 }
 
 interface FieldRowProps {
@@ -39,6 +41,7 @@ export function MetadataSidebar({
   metadata,
   isPinned,
   isLocked,
+  formatUser,
 }: MetadataSidebarProps): React.ReactNode {
   const parsed = typeof metadata === "string" ? parseMetadata(metadata) : (metadata ?? {});
   const customFields = Object.entries(parsed).filter(
@@ -58,7 +61,11 @@ export function MetadataSidebar({
           {priority && <FieldRow label="Priority" value={priority} testId="sidebar-priority" />}
           {stage && <FieldRow label="Stage" value={stage} testId="sidebar-stage" />}
           {assignedTo && (
-            <FieldRow label="Assigned to" value={assignedTo} testId="sidebar-assigned" />
+            <FieldRow
+              label="Assigned to"
+              value={formatUser ? formatUser(assignedTo) : assignedTo}
+              testId="sidebar-assigned"
+            />
           )}
           <FieldRow label="Votes" value={voteScore} testId="sidebar-votes" />
         </div>

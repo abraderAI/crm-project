@@ -423,4 +423,70 @@ describe("OrgDetailAdmin", () => {
       expect(screen.getByTestId("org-detail-error")).toHaveTextContent("Purge failed");
     });
   });
+
+  // --- Delete org ---
+
+  it("shows error when unsuspend fails", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockRejectedValue(new Error("Unsuspend failed"));
+    render(<OrgDetailAdmin org={suspendedOrg} />);
+
+    await user.click(screen.getByTestId("unsuspend-org-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("org-detail-error")).toHaveTextContent("Unsuspend failed");
+    });
+  });
+
+  it("shows org description when present", () => {
+    const orgWithDesc = { ...baseOrg, description: "A great org" };
+    render(<OrgDetailAdmin org={orgWithDesc} />);
+    expect(screen.getByTestId("org-detail-description")).toHaveTextContent("A great org");
+  });
+
+  it("shows delete org button", () => {
+    render(<OrgDetailAdmin org={baseOrg} />);
+    expect(screen.getByTestId("delete-org-btn")).toBeInTheDocument();
+  });
+
+  it("calls delete endpoint when confirm is accepted", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<OrgDetailAdmin org={baseOrg} />);
+
+    await user.click(screen.getByTestId("delete-org-btn"));
+
+    expect(mockClientMutate).toHaveBeenCalledWith(
+      "DELETE",
+      "/orgs/acme-corp",
+      expect.objectContaining({ token: "test-token" }),
+    );
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/admin/orgs");
+    });
+  });
+
+  it("does not delete when confirm is cancelled", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<OrgDetailAdmin org={baseOrg} />);
+
+    await user.click(screen.getByTestId("delete-org-btn"));
+    expect(mockClientMutate).not.toHaveBeenCalled();
+  });
+
+  it("shows error when delete fails", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockRejectedValue(new Error("Delete failed"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<OrgDetailAdmin org={baseOrg} />);
+
+    await user.click(screen.getByTestId("delete-org-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("org-detail-error")).toHaveTextContent("Delete failed");
+    });
+  });
 });

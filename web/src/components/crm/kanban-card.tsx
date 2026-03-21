@@ -10,6 +10,8 @@ export interface KanbanCardProps {
   onClick?: (threadId: string) => void;
   href?: string;
   isDragging?: boolean;
+  /** Resolve a user ID to a display label. */
+  formatUser?: (userId: string) => string;
 }
 
 /** Single lead card displayed in a Kanban column. */
@@ -18,6 +20,7 @@ export function KanbanCard({
   onClick,
   href,
   isDragging = false,
+  formatUser,
 }: KanbanCardProps): React.ReactNode {
   const { thread, lead } = card;
 
@@ -95,7 +98,9 @@ export function KanbanCard({
           data-testid={`kanban-card-assignee-${thread.id}`}
         >
           <User className="h-3 w-3" />
-          <span className="truncate">{lead.assigned_to}</span>
+          <span className="truncate">
+            {formatUser ? formatUser(lead.assigned_to) : lead.assigned_to}
+          </span>
         </div>
       )}
     </div>

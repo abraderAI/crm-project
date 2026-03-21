@@ -8,6 +8,7 @@ import { AlertTriangle, ExternalLink, LifeBuoy, Plus, User } from "lucide-react"
 import type { ThreadWithAuthor } from "@/lib/api-types";
 import { fetchGlobalSupportTickets, type GlobalSupportParams } from "@/lib/global-api";
 import { useTier } from "@/hooks/use-tier";
+import { useUserDirectory } from "@/lib/use-user-directory";
 
 /** Badge styles keyed by ticket status. */
 const STATUS_STYLES: Record<string, string> = {
@@ -54,6 +55,7 @@ const DEFAULT_FILTERS: TicketFilterValues = {
 export function SupportManagementView(): ReactNode {
   const { tier, subType, orgId, isLoading: tierLoading } = useTier();
   const { getToken } = useAuth();
+  const userDir = useUserDirectory();
 
   const [threads, setThreads] = useState<ThreadWithAuthor[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -335,8 +337,13 @@ export function SupportManagementView(): ReactNode {
           {sortedThreads.map((ticket) => {
             const status = ticket.status ?? "open";
             const badgeClass = STATUS_STYLES[status] ?? STATUS_STYLES["open"];
-            const creatorLabel = ticket.author_name ?? ticket.author_email ?? ticket.author_id;
-            const orgLabel = ticket.org_name ?? null;
+            const resolved = userDir.resolve(ticket.author_id);
+            const creatorLabel =
+              ticket.author_name ??
+              resolved?.display_name ??
+              ticket.author_email ??
+              ticket.author_id;
+            const orgLabel = resolved?.org_name || ticket.org_name || null;
             return (
               <div
                 key={ticket.id}
@@ -365,7 +372,14 @@ export function SupportManagementView(): ReactNode {
                     >
                       <User className="h-3 w-3 shrink-0" />
                       <span className="truncate">{creatorLabel}</span>
-                      {orgLabel && <span className="truncate">&middot; {orgLabel}</span>}
+                      {orgLabel && (
+                        <span
+                          className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
+                          data-testid={`ticket-org-badge-${ticket.id}`}
+                        >
+                          {orgLabel}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

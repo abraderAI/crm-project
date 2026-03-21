@@ -229,6 +229,69 @@ func TestService_GetUser_WithMemberships(t *testing.T) {
 	assert.Len(t, detail.Memberships, 1)
 }
 
+func TestService_GetUser_EnrichedOrgNames(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	ctx := context.Background()
+
+	svc.SyncUserShadow(ctx, "user1", "alice@example.com", "Alice")
+	org1 := models.Org{Name: "Acme Corp", Slug: "acme-corp", Metadata: "{}"}
+	require.NoError(t, db.Create(&org1).Error)
+	org2 := models.Org{Name: "Beta Inc", Slug: "beta-inc", Metadata: "{}"}
+	require.NoError(t, db.Create(&org2).Error)
+
+	require.NoError(t, db.Create(&models.OrgMembership{OrgID: org1.ID, UserID: "user1", Role: models.RoleOwner}).Error)
+	require.NoError(t, db.Create(&models.OrgMembership{OrgID: org2.ID, UserID: "user1", Role: models.RoleAdmin}).Error)
+
+	detail, err := svc.GetUser(ctx, "user1")
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	require.Len(t, detail.Memberships, 2)
+
+	// Verify org names are resolved.
+	names := map[string]string{}
+	for _, m := range detail.Memberships {
+		names[m.OrgSlug] = m.OrgName
+	}
+	assert.Equal(t, "Acme Corp", names["acme-corp"])
+	assert.Equal(t, "Beta Inc", names["beta-inc"])
+}
+
+func TestService_ListUsers_WithPrimaryOrg(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	ctx := context.Background()
+
+	svc.SyncUserShadow(ctx, "user1", "alice@example.com", "Alice")
+	svc.SyncUserShadow(ctx, "user2", "bob@example.com", "Bob")
+
+	org := models.Org{Name: "Acme Corp", Slug: "acme-corp", Metadata: "{}"}
+	require.NoError(t, db.Create(&org).Error)
+	require.NoError(t, db.Create(&models.OrgMembership{OrgID: org.ID, UserID: "user1", Role: models.RoleOwner}).Error)
+
+	users, _, err := svc.ListUsers(ctx, UserListParams{
+		Params: pagination.Params{Limit: 50},
+	})
+	require.NoError(t, err)
+	require.Len(t, users, 2)
+
+	// user1 should have primary org info.
+	var user1, user2 UserShadowWithOrg
+	for _, u := range users {
+		if u.ClerkUserID == "user1" {
+			user1 = u
+		} else {
+			user2 = u
+		}
+	}
+	assert.Equal(t, "Acme Corp", user1.PrimaryOrgName)
+	assert.Equal(t, "acme-corp", user1.PrimaryOrgSlug)
+
+	// user2 has no org — fields should be empty.
+	assert.Empty(t, user2.PrimaryOrgName)
+	assert.Empty(t, user2.PrimaryOrgSlug)
+}
+
 // --- User Handler Tests ---
 
 func TestHandler_ListUsers(t *testing.T) {

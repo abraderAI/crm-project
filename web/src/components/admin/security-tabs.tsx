@@ -5,6 +5,7 @@ import { ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SecurityLog } from "./security-log";
 import type { SecurityLogEntry } from "@/lib/api-types";
+import { useUserDirectory } from "@/lib/use-user-directory";
 
 type TabKey = "recent-logins" | "failed-auths";
 
@@ -32,6 +33,7 @@ export function SecurityTabs({
   failedHasMore,
 }: SecurityTabsProps): React.ReactNode {
   const [activeTab, setActiveTab] = useState<TabKey>("recent-logins");
+  const userDir = useUserDirectory();
 
   return (
     <div data-testid="security-tabs" className="flex flex-col gap-4">
@@ -65,10 +67,10 @@ export function SecurityTabs({
 
       <div role="tabpanel">
         {activeTab === "recent-logins" && (
-          <SecurityLog entries={recentLogins} hasMore={loginsHasMore} />
+          <SecurityLog entries={recentLogins} hasMore={loginsHasMore} formatUser={userDir.format} />
         )}
         {activeTab === "failed-auths" && (
-          <SecurityLog entries={failedAuths} hasMore={failedHasMore} />
+          <SecurityLog entries={failedAuths} hasMore={failedHasMore} formatUser={userDir.format} />
         )}
       </div>
     </div>

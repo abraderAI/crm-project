@@ -14,6 +14,8 @@ export interface AuditLogViewerProps {
   hasMore?: boolean;
   /** Called when the user requests the next page. */
   onLoadMore?: () => void;
+  /** Resolve a user ID to a display label (e.g. "Alice (DEFT)"). */
+  formatUser?: (userId: string) => string;
 }
 
 /** Format a date string for display. */
@@ -56,6 +58,7 @@ export function AuditLogViewer({
   loading = false,
   hasMore = false,
   onLoadMore,
+  formatUser,
 }: AuditLogViewerProps): React.ReactNode {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -106,7 +109,7 @@ export function AuditLogViewer({
                   className="text-xs text-muted-foreground"
                   data-testid={`audit-user-${entry.id}`}
                 >
-                  {entry.user_id}
+                  {formatUser ? formatUser(entry.user_id) : entry.user_id}
                 </span>
                 <span
                   className="ml-auto text-xs text-muted-foreground"

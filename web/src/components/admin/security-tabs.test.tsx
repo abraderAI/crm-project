@@ -32,6 +32,10 @@ const failed1: SecurityLogEntry = {
 
 /* ---------- mocks ---------- */
 
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({ getToken: vi.fn().mockResolvedValue(null) }),
+}));
+
 vi.mock("next/link", () => ({
   __esModule: true,
   default: ({
