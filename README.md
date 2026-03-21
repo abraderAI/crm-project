@@ -19,6 +19,8 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Webhooks** — Org/space/board-scoped subscriptions, HMAC-SHA256 signing, delivery retries
 - **Audit log** — Every mutation logged: who, what, when, before/after diff, IP, request ID
 - **Administration console** — Platform-level admin with user/org management, impersonation, system settings, feature flags, security monitoring
+- **Organization identity** — Org badges displayed site-wide next to every user reference (admin user list, user detail memberships, support tickets, ticket timelines, message timelines, audit log, security log, CRM kanban cards, metadata sidebars). Backend enriches user list with primary org name via batch JOIN; `useUserDirectory` hook provides client-side user ID → name + org resolution across all surfaces
+- **Org membership management** — Add users to orgs via searchable org picker with inline org creation; remove users from orgs; delete orgs (soft-delete) from list and detail views
 - **GDPR** — Hard-purge admin endpoints; soft delete everywhere else
 - **Observability** — Structured `slog` logging + OpenTelemetry traces and metrics
 - **App shell** — Sidebar navigation, topbar with search + user menu, breadcrumbs, dark/light theme toggle
@@ -104,7 +106,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   ├── src/
 │   │   ├── app/                # App Router pages
 │   │   ├── components/
-│   │   │   ├── admin/          # Billing, webhooks, audit log, membership
+│   │   │   ├── admin/          # Billing, webhooks, audit log, membership, org management
 │   │   │   ├── community/      # Voting, moderation, flagging
 │   │   │   ├── crm/            # Pipeline, kanban, lead detail, scoring
 │   │   │   ├── reports/        # Shared reporting components + chart components (support/, sales/)
@@ -113,9 +115,10 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   │   │   ├── layout/         # App shell: sidebar, topbar, breadcrumbs
 │   │   │   ├── realtime/       # WebSocket, notifications, typing indicators
 │   │   │   ├── thread/         # Thread list, detail, filters, message timeline
-│   │   │   └── upload/         # File upload, preview, progress
+│   │   │   ├── upload/         # File upload, preview, progress
+│   │   │   └── shared/         # Reusable UI components (UserLabel)
 │   │   ├── hooks/              # useWebSocket, useNotifications, useTyping
-│   │   └── lib/                # API client, types, utils
+│   │   └── lib/                # API client, types, utils, useUserDirectory hook
 │   └── e2e/                    # Playwright smoke tests
 ├── widget/                     # Embeddable chat widget (esbuild, shadow DOM)
 │   └── src/                    # widget.ts, chat.ts, ui.ts, fingerprint.ts
@@ -157,19 +160,19 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/notifications` | Notification feed |
 | `/notifications/preferences` | Notification channel preferences |
 | `/admin` | Admin dashboard |
-| `/admin/users` | User management list |
-| `/admin/users/[user_id]` | User detail — profile, cross-org memberships, ban/unban, GDPR purge, impersonation |
+| `/admin/users` | User management list — displays primary org badge per user |
+| `/admin/users/[user_id]` | User detail — profile, cross-org memberships (with org names + links), add-to-org picker with inline create, remove from org, ban/unban, GDPR purge, impersonation |
 | `/admin/billing` | Billing dashboard (FlexPoint) |
 | `/admin/webhooks` | Webhook management + delivery log |
 | `/admin/members` | Organization membership manager |
 | `/admin/moderation` | Content moderation queue |
-| `/admin/audit-log` | Platform-wide audit log |
+| `/admin/audit-log` | Platform-wide audit log — user names with org badges |
 | `/admin/channels` | IO Channel configuration hub |
 || `/admin/channels/[type]` | Per-channel config, health, and DLQ monitor (`email` \| `voice` \| `chat`) |
 || `/admin/channels/email` | Email channel — includes **Email Inboxes** panel: add/edit/delete IMAP inboxes with routing action selector |
 | `/admin/feature-flags` | Feature flag management |
 | `/admin/settings` | System settings — editable key-value platform configuration |
-| `/admin/security` | Security monitoring — recent logins and failed authentication events |
+| `/admin/security` | Security monitoring — recent logins and failed authentication events, user names with org badges |
 | `/admin/rbac-policy` | RBAC policy editor — resolution strategy, role hierarchy, and dry-run role preview |
 | `/admin/api-usage` | API usage stats by endpoint (24 h / 7 d / 30 d windows) |
 | `/admin/llm-usage` | LLM enrichment call log (thread, model, tokens, latency) |
