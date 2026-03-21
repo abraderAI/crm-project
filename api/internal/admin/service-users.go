@@ -171,14 +171,28 @@ type UserListParams struct {
 	SeenBefore *time.Time
 }
 
-// UserDetail contains a user shadow with their org memberships.
-type UserDetail struct {
-	models.UserShadow
-	Memberships []models.OrgMembership `json:"memberships,omitempty"`
+// OrgMembershipEnriched is an org membership with resolved org name and slug.
+type OrgMembershipEnriched struct {
+	models.OrgMembership
+	OrgName string `json:"org_name"`
+	OrgSlug string `json:"org_slug"`
 }
 
-// ListUsers returns a filtered, paginated list of user shadows.
-func (s *Service) ListUsers(ctx context.Context, params UserListParams) ([]models.UserShadow, *pagination.PageInfo, error) {
+// UserDetail contains a user shadow with their enriched org memberships.
+type UserDetail struct {
+	models.UserShadow
+	Memberships []OrgMembershipEnriched `json:"memberships,omitempty"`
+}
+
+// UserShadowWithOrg extends UserShadow with primary org info for list views.
+type UserShadowWithOrg struct {
+	models.UserShadow
+	PrimaryOrgName string `json:"primary_org_name,omitempty"`
+	PrimaryOrgSlug string `json:"primary_org_slug,omitempty"`
+}
+
+// ListUsers returns a filtered, paginated list of user shadows with primary org info.
+func (s *Service) ListUsers(ctx context.Context, params UserListParams) ([]UserShadowWithOrg, *pagination.PageInfo, error) {
 	var users []models.UserShadow
 	query := s.db.WithContext(ctx).Order("clerk_user_id ASC")
 
@@ -227,10 +241,49 @@ func (s *Service) ListUsers(ctx context.Context, params UserListParams) ([]model
 		users = users[:params.Limit]
 	}
 
-	return users, pageInfo, nil
+	// Resolve primary org for each user in a single batch query.
+	result := make([]UserShadowWithOrg, len(users))
+	if len(users) > 0 {
+		userIDs := make([]string, len(users))
+		for i, u := range users {
+			userIDs[i] = u.ClerkUserID
+			result[i] = UserShadowWithOrg{UserShadow: u}
+		}
+
+		// Fetch first org membership per user (ordered by created_at ASC = oldest/primary).
+		type orgRow struct {
+			UserID  string
+			OrgName string
+			OrgSlug string
+		}
+		var orgRows []orgRow
+		_ = s.db.WithContext(ctx).Raw(`
+			SELECT om.user_id, o.name AS org_name, o.slug AS org_slug
+			FROM org_memberships om
+			JOIN orgs o ON o.id = om.org_id
+			WHERE om.user_id IN (?)
+			AND om.id = (
+				SELECT om2.id FROM org_memberships om2
+				WHERE om2.user_id = om.user_id
+				ORDER BY om2.created_at ASC LIMIT 1
+			)`, userIDs).Scan(&orgRows).Error
+
+		orgMap := make(map[string]orgRow, len(orgRows))
+		for _, row := range orgRows {
+			orgMap[row.UserID] = row
+		}
+		for i := range result {
+			if row, ok := orgMap[result[i].ClerkUserID]; ok {
+				result[i].PrimaryOrgName = row.OrgName
+				result[i].PrimaryOrgSlug = row.OrgSlug
+			}
+		}
+	}
+
+	return result, pageInfo, nil
 }
 
-// GetUser returns a user with all their org memberships.
+// GetUser returns a user with all their enriched org memberships.
 func (s *Service) GetUser(ctx context.Context, userID string) (*UserDetail, error) {
 	var shadow models.UserShadow
 	if err := s.db.WithContext(ctx).Where("clerk_user_id = ?", userID).First(&shadow).Error; err != nil {
@@ -243,9 +296,33 @@ func (s *Service) GetUser(ctx context.Context, userID string) (*UserDetail, erro
 	var memberships []models.OrgMembership
 	_ = s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&memberships).Error
 
+	// Resolve org names in a single query.
+	enriched := make([]OrgMembershipEnriched, len(memberships))
+	if len(memberships) > 0 {
+		orgIDs := make([]string, len(memberships))
+		for i, m := range memberships {
+			orgIDs[i] = m.OrgID
+			enriched[i] = OrgMembershipEnriched{OrgMembership: m}
+		}
+
+		var orgs []models.Org
+		_ = s.db.WithContext(ctx).Select("id", "name", "slug").Where("id IN ?", orgIDs).Find(&orgs).Error
+
+		orgMap := make(map[string]models.Org, len(orgs))
+		for _, o := range orgs {
+			orgMap[o.ID] = o
+		}
+		for i := range enriched {
+			if o, ok := orgMap[enriched[i].OrgID]; ok {
+				enriched[i].OrgName = o.Name
+				enriched[i].OrgSlug = o.Slug
+			}
+		}
+	}
+
 	return &UserDetail{
 		UserShadow:  shadow,
-		Memberships: memberships,
+		Memberships: enriched,
 	}, nil
 }
 

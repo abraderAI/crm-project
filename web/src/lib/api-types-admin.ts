@@ -31,6 +31,10 @@ export interface UserShadow {
   synced_at: string;
   banned_at?: string | null;
   banned_by?: string;
+  /** Primary org name (from ListUsers enrichment). */
+  primary_org_name?: string;
+  /** Primary org slug (from ListUsers enrichment). */
+  primary_org_slug?: string;
 }
 
 /** Platform admin record. */
@@ -47,6 +51,18 @@ export interface FeatureFlag {
   enabled: boolean;
   org_scope?: string | null;
   updated_at: string;
+}
+
+/** Org membership with resolved org name and slug from GET /v1/admin/users/{id}. */
+export interface OrgMembershipEnriched {
+  id: string;
+  org_id: string;
+  user_id: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+  org_name: string;
+  org_slug: string;
 }
 
 /** Response from POST /v1/admin/users/{user_id}/impersonate. */

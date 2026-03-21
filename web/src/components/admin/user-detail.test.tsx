@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import type { UserShadow, OrgMembership } from "@/lib/api-types";
+import type { UserShadow, OrgMembershipEnriched } from "@/lib/api-types";
 
 // Mock Clerk auth.
 const mockGetToken = vi.fn();
@@ -52,7 +52,7 @@ const bannedUser: UserShadow = {
   banned_by: "admin_xyz",
 };
 
-const memberships: OrgMembership[] = [
+const memberships: OrgMembershipEnriched[] = [
   {
     id: "mem1",
     user_id: "user_abc123",
@@ -60,6 +60,8 @@ const memberships: OrgMembership[] = [
     role: "admin",
     created_at: "2026-01-15T00:00:00Z",
     updated_at: "2026-01-15T00:00:00Z",
+    org_name: "Acme Corp",
+    org_slug: "acme-corp",
   },
   {
     id: "mem2",
@@ -68,6 +70,8 @@ const memberships: OrgMembership[] = [
     role: "viewer",
     created_at: "2026-02-01T00:00:00Z",
     updated_at: "2026-02-01T00:00:00Z",
+    org_name: "Beta Inc",
+    org_slug: "beta-inc",
   },
 ];
 
@@ -169,10 +173,17 @@ describe("UserDetail", () => {
     expect(screen.getByTestId("membership-row-mem2")).toBeInTheDocument();
   });
 
-  it("displays org ID and role for each membership", () => {
+  it("displays org name and role for each membership", () => {
     render(<UserDetail user={baseUser} memberships={memberships} />);
-    expect(screen.getByTestId("membership-org-mem1")).toHaveTextContent("org1");
+    expect(screen.getByTestId("membership-org-mem1")).toHaveTextContent("Acme Corp");
     expect(screen.getByTestId("membership-role-mem1")).toHaveTextContent("admin");
+  });
+
+  it("links org name to admin org detail page", () => {
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+    const orgLink = screen.getByTestId("membership-org-mem1");
+    expect(orgLink.tagName).toBe("A");
+    expect(orgLink).toHaveAttribute("href", "/admin/orgs/org1");
   });
 
   it("shows empty state when no memberships", () => {

@@ -7,7 +7,7 @@ import { Ban, Crown, ShieldCheck, Trash2, UserCog, UserPlus, X, AlertTriangle } 
 import type {
   AdminOrgDetail,
   UserShadow,
-  OrgMembership,
+  OrgMembershipEnriched,
   ImpersonationResponse,
 } from "@/lib/api-types";
 import { clientMutate } from "@/lib/api-client";
@@ -44,8 +44,8 @@ function formatCountdown(ms: number): string {
 export interface UserDetailProps {
   /** User data from the admin API. */
   user: UserShadow;
-  /** Cross-org memberships for this user. */
-  memberships: OrgMembership[];
+  /** Cross-org memberships for this user (enriched with org names). */
+  memberships: OrgMembershipEnriched[];
 }
 
 /** Admin user detail component with ban/unban, GDPR purge, and impersonation. */
@@ -491,9 +491,13 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
                 data-testid={`membership-row-${mem.id}`}
                 className="flex gap-4 px-4 py-3 text-sm"
               >
-                <span data-testid={`membership-org-${mem.id}`} className="w-1/3 text-foreground">
-                  {mem.org_id}
-                </span>
+                <a
+                  href={`/admin/orgs/${mem.org_id}`}
+                  data-testid={`membership-org-${mem.id}`}
+                  className="w-1/3 text-foreground hover:underline"
+                >
+                  {mem.org_name || mem.org_slug || mem.org_id}
+                </a>
                 <span
                   data-testid={`membership-role-${mem.id}`}
                   className="w-1/3 capitalize text-foreground"
