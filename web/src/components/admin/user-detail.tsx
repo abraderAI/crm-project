@@ -4,8 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { Ban, Crown, ShieldCheck, Trash2, UserCog, UserPlus, X, AlertTriangle } from "lucide-react";
-import type { UserShadow, OrgMembership, ImpersonationResponse } from "@/lib/api-types";
+import type {
+  AdminOrgDetail,
+  UserShadow,
+  OrgMembership,
+  ImpersonationResponse,
+} from "@/lib/api-types";
 import { clientMutate } from "@/lib/api-client";
+import { fetchOrgsClient, createOrgClient } from "@/lib/org-api";
 import { UserBanDialog, UserPurgeDialog, UserAddToOrgForm } from "./user-detail-dialogs";
 
 /** Format a date string for display. */
@@ -67,10 +73,12 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
 
   // --- Add to org state ---
   const [showAddToOrgForm, setShowAddToOrgForm] = useState(false);
-  const [addToOrgSlug, setAddToOrgSlug] = useState("");
+  const [selectedOrg, setSelectedOrg] = useState<AdminOrgDetail | null>(null);
   const [addToOrgRole, setAddToOrgRole] = useState("member");
   const [addingToOrg, setAddingToOrg] = useState(false);
   const [addToOrgSuccess, setAddToOrgSuccess] = useState("");
+  const [orgList, setOrgList] = useState<AdminOrgDetail[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
 
   // --- Promote to platform admin state ---
   const [promotingToAdmin, setPromotingToAdmin] = useState(false);
@@ -168,30 +176,69 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
     setImpersonationExpiresAt(null);
   }, []);
 
+  // --- Load orgs for picker ---
+  const loadOrgs = useCallback(async () => {
+    setOrgsLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const orgs = await fetchOrgsClient(token);
+      setOrgList(orgs);
+    } catch {
+      // Silently fall back to empty list; user can still create a new org.
+    } finally {
+      setOrgsLoading(false);
+    }
+  }, [getToken]);
+
+  // --- Toggle add-to-org form (lazy-loads orgs on first open) ---
+  const toggleAddToOrgForm = useCallback(() => {
+    setShowAddToOrgForm((prev) => {
+      const willShow = !prev;
+      if (willShow && orgList.length === 0) {
+        void loadOrgs();
+      }
+      return willShow;
+    });
+  }, [loadOrgs, orgList.length]);
+
+  // --- Create org inline ---
+  const handleCreateOrg = useCallback(
+    async (name: string, description?: string): Promise<AdminOrgDetail> => {
+      const token = await getToken();
+      if (!token) throw new Error("Unauthenticated");
+      const created = await createOrgClient(token, name, description);
+      setOrgList((prev) => [created, ...prev]);
+      return created;
+    },
+    [getToken],
+  );
+
   // --- Add to org ---
   const handleAddToOrg = useCallback(async () => {
-    if (!addToOrgSlug.trim()) return;
+    if (!selectedOrg) return;
     setError("");
     setAddToOrgSuccess("");
     setAddingToOrg(true);
     try {
       const token = await getToken();
       if (!token) return;
-      await clientMutate<void>("POST", `/orgs/${addToOrgSlug.trim()}/members`, {
+      await clientMutate<void>("POST", `/orgs/${selectedOrg.slug}/members`, {
         token,
         body: { user_id: user.clerk_user_id, role: addToOrgRole },
       });
-      setAddToOrgSlug("");
+      const orgName = selectedOrg.name;
+      setSelectedOrg(null);
       setAddToOrgRole("member");
       setShowAddToOrgForm(false);
-      setAddToOrgSuccess(`Added to org "${addToOrgSlug.trim()}" as ${addToOrgRole}.`);
+      setAddToOrgSuccess(`Added to org "${orgName}" as ${addToOrgRole}.`);
       setTimeout(() => setAddToOrgSuccess(""), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add to org");
     } finally {
       setAddingToOrg(false);
     }
-  }, [getToken, user.clerk_user_id, addToOrgSlug, addToOrgRole]);
+  }, [getToken, user.clerk_user_id, selectedOrg, addToOrgRole]);
 
   // --- Promote to platform admin ---
   const handlePromoteToAdmin = useCallback(async () => {
@@ -336,7 +383,7 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
 
         <button
           data-testid="add-to-org-btn"
-          onClick={() => setShowAddToOrgForm((v) => !v)}
+          onClick={toggleAddToOrgForm}
           className="inline-flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
         >
           <UserPlus className="h-4 w-4" />
@@ -377,17 +424,20 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
       {/* Add to org form */}
       {showAddToOrgForm && (
         <UserAddToOrgForm
-          addToOrgSlug={addToOrgSlug}
-          setAddToOrgSlug={setAddToOrgSlug}
+          orgs={orgList}
+          orgsLoading={orgsLoading}
+          selectedOrg={selectedOrg}
+          setSelectedOrg={setSelectedOrg}
           addToOrgRole={addToOrgRole}
           setAddToOrgRole={setAddToOrgRole}
           addingToOrg={addingToOrg}
           onSubmit={() => void handleAddToOrg()}
           onCancel={() => {
             setShowAddToOrgForm(false);
-            setAddToOrgSlug("");
+            setSelectedOrg(null);
             setAddToOrgRole("member");
           }}
+          onCreateOrg={handleCreateOrg}
         />
       )}
 

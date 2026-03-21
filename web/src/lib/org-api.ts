@@ -1,4 +1,12 @@
-import type { Org, OrgMembership, PaginatedResponse, Role, Space, Thread } from "./api-types";
+import type {
+  AdminOrgDetail,
+  Org,
+  OrgMembership,
+  PaginatedResponse,
+  Role,
+  Space,
+  Thread,
+} from "./api-types";
 import { buildHeaders, buildUrl, clientMutate, parseResponse } from "./api-client";
 
 /** Org overview data for the org overview widget. */
@@ -157,6 +165,36 @@ export async function fetchOrgSpaces(
     cache: "no-store",
   });
   return parseResponse<PaginatedResponse<Space>>(response);
+}
+
+/**
+ * Fetch all orgs from the admin endpoint (client-side).
+ * Used by the "Add to Org" dialog to list available orgs.
+ */
+export async function fetchOrgsClient(token: string): Promise<AdminOrgDetail[]> {
+  const url = buildUrl("/admin/orgs");
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  const result = await parseResponse<PaginatedResponse<AdminOrgDetail>>(response);
+  return result.data;
+}
+
+/**
+ * Create a new org (client-side).
+ * Returns the newly created org detail.
+ */
+export async function createOrgClient(
+  token: string,
+  name: string,
+  description?: string,
+): Promise<AdminOrgDetail> {
+  return clientMutate<AdminOrgDetail>("POST", "/orgs", {
+    token,
+    body: { name, description: description || undefined },
+  });
 }
 
 /**

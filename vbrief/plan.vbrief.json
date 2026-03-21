@@ -1,0 +1,54 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.5",
+    "author": "agent:warp-oz",
+    "description": "Display org name alongside user activity across the site",
+    "created": "2026-03-21T20:15:00Z"
+  },
+  "plan": {
+    "id": "org-name-across-site",
+    "title": "Display Org Name Alongside User Activity",
+    "status": "proposed",
+    "tags": ["backend", "frontend", "admin", "user-management"],
+    "items": [
+      {
+        "id": "be-enrich-get-user",
+        "title": "Phase 1a: Add OrgMembershipWithOrg response type; enrich GetUser",
+        "status": "pending",
+        "narrative": { "Problem": "GetUser returns memberships with raw org_id only; need org_name + org_slug via JOIN" }
+      },
+      {
+        "id": "be-enrich-list-users",
+        "title": "Phase 1b: Add primary_org_name/slug to ListUsers response",
+        "status": "pending",
+        "narrative": { "Problem": "ListUsers returns bare UserShadow with no org context; need LEFT JOIN for primary org" }
+      },
+      {
+        "id": "fe-types",
+        "title": "Phase 2: Update frontend types (UserShadow, OrgMembershipEnriched)",
+        "status": "pending"
+      },
+      {
+        "id": "fe-users-list",
+        "title": "Phase 3: Show org badge on admin users list rows",
+        "status": "pending"
+      },
+      {
+        "id": "fe-user-detail",
+        "title": "Phase 4: Show org name + link in memberships table",
+        "status": "pending"
+      },
+      {
+        "id": "fe-other-surfaces",
+        "title": "Phase 5 (stretch): Org context on messages, audit, reports, CRM",
+        "status": "pending",
+        "narrative": { "Problem": "Lower priority — depends on backend enrichment or client-side lookup cache" }
+      },
+      {
+        "id": "tests-verify",
+        "title": "Tests + task check",
+        "status": "pending"
+      }
+    ]
+  }
+}
