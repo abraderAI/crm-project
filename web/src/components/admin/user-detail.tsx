@@ -54,7 +54,9 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
   const router = useRouter();
 
   const [user, setUser] = useState<UserShadow>(initialUser);
+  const [membershipList, setMembershipList] = useState<OrgMembershipEnriched[]>(memberships);
   const [error, setError] = useState("");
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
   // --- Ban/unban state ---
   const [showBanDialog, setShowBanDialog] = useState(false);
@@ -239,6 +241,28 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
       setAddingToOrg(false);
     }
   }, [getToken, user.clerk_user_id, selectedOrg, addToOrgRole]);
+
+  // --- Remove from org ---
+  const handleRemoveFromOrg = useCallback(
+    async (mem: OrgMembershipEnriched) => {
+      setError("");
+      setRemovingMemberId(mem.id);
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const orgSlug = mem.org_slug || mem.org_id;
+        await clientMutate<void>("DELETE", `/orgs/${orgSlug}/members/${user.clerk_user_id}`, {
+          token,
+        });
+        setMembershipList((prev) => prev.filter((m) => m.id !== mem.id));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to remove from org");
+      } finally {
+        setRemovingMemberId(null);
+      }
+    },
+    [getToken, user.clerk_user_id],
+  );
 
   // --- Promote to platform admin ---
   const handlePromoteToAdmin = useCallback(async () => {
@@ -474,37 +498,49 @@ export function UserDetail({ user: initialUser, memberships }: UserDetailProps):
       {/* Memberships table */}
       <div>
         <h3 className="text-base font-semibold text-foreground">Organization Memberships</h3>
-        {memberships.length === 0 ? (
+        {membershipList.length === 0 ? (
           <p data-testid="memberships-empty" className="mt-2 text-sm text-muted-foreground">
             No organization memberships found.
           </p>
         ) : (
           <div className="mt-2 divide-y divide-border rounded-lg border border-border">
             <div className="flex gap-4 bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
-              <span className="w-1/3">Organization</span>
-              <span className="w-1/3">Role</span>
-              <span className="w-1/3">Joined</span>
+              <span className="w-1/4">Organization</span>
+              <span className="w-1/4">Role</span>
+              <span className="w-1/4">Joined</span>
+              <span className="w-1/4">Actions</span>
             </div>
-            {memberships.map((mem) => (
+            {membershipList.map((mem) => (
               <div
                 key={mem.id}
                 data-testid={`membership-row-${mem.id}`}
-                className="flex gap-4 px-4 py-3 text-sm"
+                className="flex items-center gap-4 px-4 py-3 text-sm"
               >
                 <a
                   href={`/admin/orgs/${mem.org_id}`}
                   data-testid={`membership-org-${mem.id}`}
-                  className="w-1/3 text-foreground hover:underline"
+                  className="w-1/4 text-foreground hover:underline"
                 >
                   {mem.org_name || mem.org_slug || mem.org_id}
                 </a>
                 <span
                   data-testid={`membership-role-${mem.id}`}
-                  className="w-1/3 capitalize text-foreground"
+                  className="w-1/4 capitalize text-foreground"
                 >
                   {mem.role}
                 </span>
-                <span className="w-1/3 text-muted-foreground">{formatDate(mem.created_at)}</span>
+                <span className="w-1/4 text-muted-foreground">{formatDate(mem.created_at)}</span>
+                <span className="w-1/4">
+                  <button
+                    data-testid={`remove-membership-${mem.id}`}
+                    onClick={() => void handleRemoveFromOrg(mem)}
+                    disabled={removingMemberId === mem.id}
+                    className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    <X className="h-3 w-3" />
+                    {removingMemberId === mem.id ? "Removing..." : "Remove"}
+                  </button>
+                </span>
               </div>
             ))}
           </div>

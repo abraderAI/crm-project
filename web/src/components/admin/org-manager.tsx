@@ -312,6 +312,32 @@ export function OrgManager({ initialOrgs }: OrgManagerProps): React.ReactNode {
                       Suspend
                     </button>
                   )}
+                  <button
+                    data-testid={`delete-org-btn-${org.id}`}
+                    onClick={() => {
+                      if (window.confirm(`Delete "${org.name}"? This will soft-delete the org.`)) {
+                        void (async () => {
+                          setError("");
+                          setLoadingId(org.id);
+                          try {
+                            const token = await getToken();
+                            if (!token) return;
+                            await clientMutate<void>("DELETE", `/orgs/${org.slug}`, { token });
+                            setOrgs((prev) => prev.filter((o) => o.id !== org.id));
+                            showSuccess(`Org "${org.name}" deleted.`);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Failed to delete org");
+                          } finally {
+                            setLoadingId(null);
+                          }
+                        })();
+                      }
+                    }}
+                    disabled={loadingId === org.id}
+                    className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    {loadingId === org.id ? "..." : "Delete"}
+                  </button>
                   <Link
                     href={`/admin/orgs/${org.id}`}
                     data-testid={`org-detail-link-${org.id}`}

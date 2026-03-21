@@ -45,6 +45,9 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
   const [purgeConfirm, setPurgeConfirm] = useState("");
   const [purging, setPurging] = useState(false);
 
+  // --- Delete state ---
+  const [deleting, setDeleting] = useState(false);
+
   const showSuccess = (msg: string): void => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(""), 3000);
@@ -136,6 +139,21 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
       setTransferring(false);
     }
   }, [getToken, org.id, newOwnerUserId]);
+
+  // --- Delete org ---
+  const handleDeleteOrg = useCallback(async () => {
+    setError("");
+    setDeleting(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await clientMutate<void>("DELETE", `/orgs/${org.slug}`, { token });
+      router.push("/admin/orgs");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete org");
+      setDeleting(false);
+    }
+  }, [getToken, org.slug, router]);
 
   // --- Purge ---
   const handlePurge = useCallback(async () => {
@@ -363,6 +381,19 @@ export function OrgDetailAdmin({ org: initialOrg }: OrgDetailAdminProps): React.
           className="inline-flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
         >
           Transfer Ownership
+        </button>
+
+        <button
+          data-testid="delete-org-btn"
+          onClick={() => {
+            if (window.confirm(`Delete "${org.name}"? This will soft-delete the org.`)) {
+              void handleDeleteOrg();
+            }
+          }}
+          disabled={deleting}
+          className="inline-flex items-center gap-1.5 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+        >
+          {deleting ? "Deleting..." : "Delete Org"}
         </button>
 
         <button

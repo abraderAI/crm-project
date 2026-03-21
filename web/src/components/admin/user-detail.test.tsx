@@ -718,6 +718,54 @@ describe("UserDetail", () => {
     expect(screen.getByTestId("add-to-org-submit")).toBeDisabled();
   });
 
+  // --- Remove from Org ---
+
+  it("shows remove button for each membership", () => {
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+    expect(screen.getByTestId("remove-membership-mem1")).toBeInTheDocument();
+    expect(screen.getByTestId("remove-membership-mem2")).toBeInTheDocument();
+  });
+
+  it("removes membership from list on successful remove", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockResolvedValue(undefined);
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    expect(screen.getByTestId("membership-row-mem1")).toBeInTheDocument();
+    await user.click(screen.getByTestId("remove-membership-mem1"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("membership-row-mem1")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("membership-row-mem2")).toBeInTheDocument();
+  });
+
+  it("calls DELETE /orgs/{slug}/members/{userId} on remove", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockResolvedValue(undefined);
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("remove-membership-mem1"));
+
+    expect(mockClientMutate).toHaveBeenCalledWith(
+      "DELETE",
+      "/orgs/acme-corp/members/user_abc123",
+      expect.objectContaining({ token: "test-token" }),
+    );
+  });
+
+  it("shows error when remove from org fails", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockRejectedValue(new Error("Cannot remove last owner"));
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("remove-membership-mem1"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("action-error")).toHaveTextContent("Cannot remove last owner");
+    });
+  });
+
   // --- Promote to Platform Admin ---
 
   it("shows promote-admin button", () => {
