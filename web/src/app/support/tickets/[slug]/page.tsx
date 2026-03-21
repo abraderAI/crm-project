@@ -17,6 +17,7 @@ import {
 import { fetchTicketEntries, createTicketEntry } from "@/lib/support-api";
 import { useTier } from "@/hooks/use-tier";
 import { useUser } from "@clerk/nextjs";
+import { useUserDirectory } from "@/lib/use-user-directory";
 import { ContentEditorLayout } from "@/components/editor/content-editor-layout";
 import { TicketTimeline } from "@/components/support/ticket-timeline";
 import { TicketEntryComposer } from "@/components/support/ticket-entry-composer";
@@ -87,6 +88,7 @@ export default function TicketDetailPage(): ReactNode {
   // Tier 4+ (DEFT employees, platform admins) are considered DEFT members.
   const isDeftMember = tier >= 4;
   const currentUserId = user?.id ?? "";
+  const userDir = useUserDirectory();
 
   const loadData = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -348,6 +350,7 @@ export default function TicketDetailPage(): ReactNode {
           isDeftMember={isDeftMember}
           currentUserId={currentUserId}
           onMutated={() => void loadData()}
+          formatUser={userDir.format}
         />
       </ContentEditorLayout>
     </div>

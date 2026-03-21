@@ -39,6 +39,8 @@ export interface MessageTimelineProps {
   onEdit?: (messageId: string) => void;
   /** Currently logged-in user ID for showing edit buttons. */
   currentUserId?: string;
+  /** Resolve a user ID to a display label (e.g. "Alice (DEFT)"). */
+  formatUser?: (userId: string) => string;
 }
 
 /** Chronological timeline of messages with type badges and optional edit. */
@@ -46,6 +48,7 @@ export function MessageTimeline({
   messages,
   onEdit,
   currentUserId,
+  formatUser,
 }: MessageTimelineProps): React.ReactNode {
   if (messages.length === 0) {
     return (
@@ -74,6 +77,12 @@ export function MessageTimeline({
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Icon className="h-4 w-4 text-muted-foreground" />
+                <span
+                  className="text-xs font-medium text-foreground"
+                  data-testid={`message-author-${msg.id}`}
+                >
+                  {formatUser ? formatUser(msg.author_id) : msg.author_id}
+                </span>
                 <span
                   className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                   data-testid={`message-type-${msg.id}`}

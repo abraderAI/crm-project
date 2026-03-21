@@ -54,10 +54,12 @@ export interface TicketTimelineProps {
   ticketSlug: string;
   /** Whether the current viewer is a DEFT member. */
   isDeftMember: boolean;
-  /** The authenticated user’s ID — used to gate draft editing to the author. */
+  /** The authenticated user's ID — used to gate draft editing to the author. */
   currentUserId?: string;
   /** Called after an entry is mutated so the parent can reload. */
   onMutated?: () => void;
+  /** Resolve a user ID to a display label (e.g. "Alice (DEFT)"). */
+  formatUser?: (userId: string) => string;
 }
 
 /**
@@ -73,6 +75,7 @@ export function TicketTimeline({
   isDeftMember,
   currentUserId,
   onMutated,
+  formatUser,
 }: TicketTimelineProps): ReactNode {
   const { getToken } = useAuth();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -194,6 +197,14 @@ export function TicketTimeline({
                   className="h-3 w-3 text-muted-foreground"
                   aria-label="Immutable"
                 />
+              )}
+              {formatUser && (
+                <span
+                  className="text-xs font-medium text-foreground"
+                  data-testid={`entry-author-${entry.id}`}
+                >
+                  {formatUser(entry.author_id)}
+                </span>
               )}
               <span className="ml-auto text-xs text-muted-foreground">
                 {new Date(entry.created_at).toLocaleString()}

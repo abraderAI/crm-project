@@ -4,14 +4,16 @@ import Link from "next/link";
 import type { SecurityLogEntry } from "@/lib/api-types";
 
 export interface SecurityLogProps {
-  /** Security log entries to display. */
+  /** Security log entries. */
   entries: SecurityLogEntry[];
   /** Whether data is loading. */
   loading?: boolean;
-  /** Whether more pages are available. */
+  /** Whether there are more pages. */
   hasMore?: boolean;
   /** Called when the user requests the next page. */
   onLoadMore?: () => void;
+  /** Resolve a user ID to a display label. */
+  formatUser?: (userId: string) => string;
 }
 
 /** Format an ISO timestamp for display. */
@@ -37,6 +39,7 @@ export function SecurityLog({
   loading = false,
   hasMore = false,
   onLoadMore,
+  formatUser,
 }: SecurityLogProps): React.ReactNode {
   return (
     <div data-testid="security-log" className="flex flex-col gap-4">
@@ -77,7 +80,9 @@ export function SecurityLog({
                       href={`/admin/users/${entry.user_id}`}
                       className="text-primary underline-offset-4 hover:underline"
                     >
-                      <span data-testid={`security-user-${entry.id}`}>{entry.user_id}</span>
+                      <span data-testid={`security-user-${entry.id}`}>
+                        {formatUser ? formatUser(entry.user_id) : entry.user_id}
+                      </span>
                     </Link>
                   </td>
                   <td
