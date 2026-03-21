@@ -102,6 +102,33 @@ const sampleOrgs = [
   },
 ];
 
+const sampleOrgs = [
+  {
+    id: "org-1",
+    name: "Acme Corp",
+    slug: "acme-corp",
+    metadata: "",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    member_count: 5,
+    space_count: 2,
+    board_count: 3,
+    thread_count: 10,
+  },
+  {
+    id: "org-2",
+    name: "Beta Inc",
+    slug: "beta-inc",
+    metadata: "",
+    created_at: "2026-02-01T00:00:00Z",
+    updated_at: "2026-02-01T00:00:00Z",
+    member_count: 12,
+    space_count: 4,
+    board_count: 8,
+    thread_count: 25,
+  },
+];
+
 describe("UserDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -789,7 +816,6 @@ describe("UserDetail", () => {
     render(<UserDetail user={badDateUser} memberships={[]} />);
     expect(screen.getByTestId("user-joined")).toBeInTheDocument();
   });
-
   // --- Promote to Platform Admin ---
 
   it("shows promote-admin button", () => {
