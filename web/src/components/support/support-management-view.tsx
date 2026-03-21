@@ -12,10 +12,10 @@ import { useUserDirectory } from "@/lib/use-user-directory";
 
 /** Badge styles keyed by ticket status. */
 const STATUS_STYLES: Record<string, string> = {
-  open: "bg-yellow-100 text-yellow-800",
-  pending: "bg-blue-100 text-blue-800",
-  resolved: "bg-green-100 text-green-800",
-  closed: "bg-gray-100 text-gray-800",
+  open: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  pending: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  resolved: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  closed: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
 };
 
 /** Status options for the filter dropdown. */
@@ -244,7 +244,7 @@ export function SupportManagementView(): ReactNode {
       {error && (
         <div
           data-testid="support-error"
-          className="flex items-center gap-2 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
+          className="flex items-center gap-2 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/50 dark:text-red-300"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {error}
@@ -256,24 +256,30 @@ export function SupportManagementView(): ReactNode {
         <div data-testid="support-stats" className="grid grid-cols-3 gap-3">
           <div
             data-testid="stats-open"
-            className="rounded-lg border border-border bg-yellow-50 p-3 text-center"
+            className="rounded-lg border border-border bg-yellow-50 p-3 text-center dark:bg-yellow-950 dark:border-yellow-800"
           >
-            <span className="block text-xl font-bold text-yellow-700">{statsOpen}</span>
-            <span className="text-xs text-yellow-600">Open</span>
+            <span className="block text-xl font-bold text-yellow-700 dark:text-yellow-200">
+              {statsOpen}
+            </span>
+            <span className="text-xs text-yellow-600 dark:text-yellow-300">Open</span>
           </div>
           <div
             data-testid="stats-pending"
-            className="rounded-lg border border-border bg-blue-50 p-3 text-center"
+            className="rounded-lg border border-border bg-blue-50 p-3 text-center dark:bg-blue-950 dark:border-blue-800"
           >
-            <span className="block text-xl font-bold text-blue-700">{statsPending}</span>
-            <span className="text-xs text-blue-600">Pending</span>
+            <span className="block text-xl font-bold text-blue-700 dark:text-blue-200">
+              {statsPending}
+            </span>
+            <span className="text-xs text-blue-600 dark:text-blue-300">Pending</span>
           </div>
           <div
             data-testid="stats-resolved"
-            className="rounded-lg border border-border bg-green-50 p-3 text-center"
+            className="rounded-lg border border-border bg-green-50 p-3 text-center dark:bg-green-950 dark:border-green-800"
           >
-            <span className="block text-xl font-bold text-green-700">{statsResolved}</span>
-            <span className="text-xs text-green-600">Resolved</span>
+            <span className="block text-xl font-bold text-green-700 dark:text-green-200">
+              {statsResolved}
+            </span>
+            <span className="text-xs text-green-600 dark:text-green-300">Resolved</span>
           </div>
         </div>
       )}
@@ -374,7 +380,7 @@ export function SupportManagementView(): ReactNode {
                       <span className="truncate">{creatorLabel}</span>
                       {orgLabel && (
                         <span
-                          className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
+                          className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200"
                           data-testid={`ticket-org-badge-${ticket.id}`}
                         >
                           {orgLabel}
