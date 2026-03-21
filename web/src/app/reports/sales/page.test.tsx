@@ -148,6 +148,27 @@ describe("SalesPage", () => {
     });
   });
 
+  it("shows status-code error when API responds non-ok", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response("{}", {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    render(<SalesPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId("sales-error")).toHaveTextContent("Failed to load sales data: 500");
+    });
+  });
+
+  it("shows fallback error message for non-Error rejections", async () => {
+    fetchSpy.mockRejectedValue("oops");
+    render(<SalesPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId("sales-error")).toHaveTextContent("Failed to load sales data");
+    });
+  });
+
   it("renders the page title", async () => {
     render(<SalesPage />);
 
@@ -179,5 +200,20 @@ describe("SalesPage", () => {
     expect(screen.getByText("35.0%")).toBeInTheDocument();
     expect(screen.getByText("15.0%")).toBeInTheDocument();
     expect(screen.getByText("$25,000")).toBeInTheDocument();
+  });
+
+  it("handles null payload by keeping chart areas mounted without chart components", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response("null", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    render(<SalesPage />);
+    await waitFor(() => {
+      expect(screen.queryAllByTestId("chart-skeleton")).toHaveLength(0);
+    });
+    expect(screen.getByTestId("chart-section-pipeline-funnel")).toBeInTheDocument();
+    expect(screen.getByTestId("chart-section-time-in-stage")).toBeInTheDocument();
   });
 });

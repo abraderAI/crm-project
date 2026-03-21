@@ -47,6 +47,7 @@ func allModels() []any {
 		&models.ChatVisitor{},
 		&models.UserHomePreferences{},
 		&models.Lead{},
+		&models.TicketCounter{},
 	}
 }
 
@@ -262,6 +263,12 @@ func createIndexes(db *gorm.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_threads_thread_type ON threads(thread_type) WHERE thread_type IS NOT NULL",
 		"CREATE INDEX IF NOT EXISTS idx_threads_visibility ON threads(visibility) WHERE visibility IS NOT NULL",
 		"CREATE INDEX IF NOT EXISTS idx_threads_org_id ON threads(org_id) WHERE org_id IS NOT NULL",
+
+		// Support ticket number index.
+		"CREATE INDEX IF NOT EXISTS idx_threads_ticket_number ON threads(ticket_number) WHERE ticket_number > 0",
+
+		// Support entry lookup indexes.
+		"CREATE INDEX IF NOT EXISTS idx_messages_thread_type ON messages(thread_id, type)",
 	}
 
 	for _, idx := range indexes {

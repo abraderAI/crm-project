@@ -121,6 +121,14 @@ describe("SupportDashboardPage", () => {
     });
   });
 
+  it("shows fallback error for non-Error failures", async () => {
+    mockParseResponse.mockRejectedValue("boom");
+    render(<SupportDashboardPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId("error-alert")).toHaveTextContent("Failed to load metrics");
+    });
+  });
+
   it("re-fetches when date range changes", async () => {
     const user = userEvent.setup();
     render(<SupportDashboardPage />);
@@ -184,5 +192,15 @@ describe("SupportDashboardPage", () => {
       const link = screen.getByTestId("metric-card-link");
       expect(link).toHaveAttribute("href", "/crm?status=open&overdue=true");
     });
+  });
+
+  it("handles null metrics payload with KPI fallback values", async () => {
+    mockParseResponse.mockResolvedValue(null);
+    render(<SupportDashboardPage />);
+    await waitFor(() => {
+      expect(screen.queryAllByTestId("chart-skeleton")).toHaveLength(0);
+    });
+    expect(screen.getByText("Avg Resolution Time")).toBeInTheDocument();
+    expect(screen.getByText("Avg First Response")).toBeInTheDocument();
   });
 });

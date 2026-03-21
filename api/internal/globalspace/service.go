@@ -323,6 +323,21 @@ func (s *Service) UploadAttachment(ctx context.Context, spaceSlug, threadSlug, u
 	return s.uploadSvc.Create(ctx, orgID, "thread", t.ID, uploaderID, filename, size, file)
 }
 
+// TicketNumberer can assign sequential ticket numbers to support threads.
+// It is satisfied by the support.Repository type.
+type TicketNumberer interface {
+	AssignTicketNumber(ctx context.Context, t *models.Thread, orgID string) error
+}
+
+// ticketNumberer is an optional injected dependency for assigning ticket numbers.
+var ticketNumberer TicketNumberer
+
+// SetTicketNumberer injects the ticket numbering implementation. Called from
+// server-services during startup.
+func SetTicketNumberer(tn TicketNumberer) {
+	ticketNumberer = tn
+}
+
 // CreateThread creates a new thread in the specified global space.
 // Returns an error if the title is empty, the board does not exist, or the board is locked.
 func (s *Service) CreateThread(ctx context.Context, spaceSlug, authorID string, input CreateInput) (*models.Thread, error) {
@@ -365,8 +380,32 @@ func (s *Service) CreateThread(ctx context.Context, spaceSlug, authorID string, 
 		Visibility: models.ThreadVisibilityOrgOnly,
 		OrgID:      input.OrgID,
 	}
-	if err := s.repo.CreateThread(ctx, t); err != nil {
+	var initialEntry *models.Message
+	if spaceSlug == "global-support" && input.Body != "" {
+		now := time.Now()
+		initialEntry = &models.Message{
+			Body:        input.Body,
+			AuthorID:    authorID,
+			Metadata:    "{}",
+			Type:        models.MessageTypeCustomer,
+			IsDeftOnly:  false,
+			IsPublished: true,
+			IsImmutable: true,
+			PublishedAt: &now,
+		}
+	}
+	if err := s.repo.CreateThreadWithInitialEntry(ctx, t, initialEntry); err != nil {
 		return nil, err
 	}
+
+	// Assign a sequential ticket number for support threads — best effort.
+	if spaceSlug == "global-support" && ticketNumberer != nil {
+		orgID := "_system"
+		if t.OrgID != nil && *t.OrgID != "" {
+			orgID = *t.OrgID
+		}
+		_ = ticketNumberer.AssignTicketNumber(ctx, t, orgID)
+	}
+
 	return t, nil
 }

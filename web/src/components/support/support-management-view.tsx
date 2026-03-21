@@ -2,27 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@clerk/nextjs";
-import {
-  AlertTriangle,
-  ExternalLink,
-  LifeBuoy,
-  Paperclip,
-  Plus,
-  Save,
-  User,
-  X,
-} from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ExternalLink, LifeBuoy, Plus, User } from "lucide-react";
 
-import type { ThreadWithAuthor, Upload } from "@/lib/api-types";
-import {
-  fetchGlobalSupportTickets,
-  createSupportTicket,
-  updateSupportTicket,
-  fetchThreadAttachments,
-  uploadThreadAttachment,
-  downloadUpload,
-  type GlobalSupportParams,
-} from "@/lib/global-api";
+import type { ThreadWithAuthor } from "@/lib/api-types";
+import { fetchGlobalSupportTickets, type GlobalSupportParams } from "@/lib/global-api";
 import { useTier } from "@/hooks/use-tier";
 
 /** Badge styles keyed by ticket status. */
@@ -46,19 +30,13 @@ const STATUS_OPTIONS = [
 interface TicketFilterValues {
   status: string;
   search: string;
+  sort: "newest" | "oldest" | "updated";
 }
-
-/** Status transitions available in the work-view. */
-const WORK_STATUS_OPTIONS = [
-  { value: "open", label: "Open" },
-  { value: "pending", label: "Pending" },
-  { value: "resolved", label: "Resolved" },
-  { value: "closed", label: "Closed" },
-];
 
 const DEFAULT_FILTERS: TicketFilterValues = {
   status: "all",
   search: "",
+  sort: "newest",
 };
 
 /**
@@ -84,26 +62,7 @@ export function SupportManagementView(): ReactNode {
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [filters, setFilters] = useState<TicketFilterValues>(DEFAULT_FILTERS);
 
-  // Create form state.
-  const [showCreate, setShowCreate] = useState(false);
-  const [createTitle, setCreateTitle] = useState("");
-  const [createBody, setCreateBody] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [createError, setCreateError] = useState("");
-
-  // Work-view modal state.
-  const [workTicket, setWorkTicket] = useState<ThreadWithAuthor | null>(null);
-  const [workBody, setWorkBody] = useState("");
-  const [workStatus, setWorkStatus] = useState("");
-  const [workSaving, setWorkSaving] = useState(false);
-  const [workError, setWorkError] = useState("");
-
-  // Attachments state.
-  const [attachments, setAttachments] = useState<Upload[]>([]);
-  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const [attachmentError, setAttachmentError] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // (Create form removed — new tickets are created at /support/tickets/new)
 
   const mountedRef = useRef(true);
 
@@ -199,6 +158,15 @@ export function SupportManagementView(): ReactNode {
     }
     return true;
   });
+  const sortedThreads = [...filteredThreads].sort((a, b) => {
+    if (filters.sort === "oldest") {
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    }
+    if (filters.sort === "updated") {
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   // Compute stats from all loaded tickets (for the stats strip).
   let statsOpen = 0;
@@ -211,124 +179,6 @@ export function SupportManagementView(): ReactNode {
     else if (status === "resolved" || status === "closed") statsResolved++;
     else statsOpen++;
   }
-
-  // ---------------------------------------------------------------------------
-  // Create ticket handler
-  // ---------------------------------------------------------------------------
-
-  // Open a ticket in the work-view modal and load its attachments.
-  const handleOpenTicket = (ticket: ThreadWithAuthor): void => {
-    setWorkTicket(ticket);
-    setWorkBody(ticket.body ?? "");
-    setWorkStatus(ticket.status ?? "open");
-    setWorkError("");
-    setAttachments([]);
-    setAttachmentError("");
-    // Fetch attachments asynchronously.
-    setAttachmentsLoading(true);
-    void getToken().then((token) => {
-      if (!token) {
-        setAttachmentsLoading(false);
-        return;
-      }
-      return fetchThreadAttachments(token, ticket.slug)
-        .then((uploads) => {
-          setAttachments(uploads);
-        })
-        .catch((err: unknown) => {
-          setAttachmentError(err instanceof Error ? err.message : "Failed to load attachments");
-        })
-        .finally(() => {
-          setAttachmentsLoading(false);
-        });
-    });
-  };
-
-  // Handle file upload in the work-view.
-  const handleAttachFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = e.target.files?.[0];
-    if (!file || !workTicket) return;
-    // Reset input so the same file can be re-selected.
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setUploadingFile(true);
-    setAttachmentError("");
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const uploaded = await uploadThreadAttachment(token, workTicket.slug, file);
-      setAttachments((prev) => [...prev, uploaded]);
-    } catch (err) {
-      setAttachmentError(err instanceof Error ? err.message : "Failed to upload file");
-    } finally {
-      setUploadingFile(false);
-    }
-  };
-
-  // Trigger a browser download for an attachment.
-  const handleDownloadAttachment = useCallback(
-    async (uploadId: string, filename: string): Promise<void> => {
-      try {
-        const token = await getToken();
-        if (!token) return;
-        await downloadUpload(token, uploadId, filename);
-      } catch (err) {
-        setAttachmentError(err instanceof Error ? err.message : "Failed to download file");
-      }
-    },
-    [getToken],
-  );
-
-  // Close the work-view modal without saving.
-  const handleCloseWork = (): void => {
-    setWorkTicket(null);
-    setWorkError("");
-    setAttachments([]);
-    setAttachmentError("");
-  };
-
-  // Save changes from the work-view modal.
-  const handleSaveWork = async (): Promise<void> => {
-    if (!workTicket) return;
-    setWorkSaving(true);
-    setWorkError("");
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const updated = await updateSupportTicket(token, workTicket.slug, {
-        body: workBody,
-        status: workStatus,
-      });
-      setThreads((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-      setWorkTicket(updated);
-    } catch (err) {
-      setWorkError(err instanceof Error ? err.message : "Failed to save changes");
-    } finally {
-      setWorkSaving(false);
-    }
-  };
-
-  const handleCreate = async (): Promise<void> => {
-    if (!createTitle.trim()) return;
-    setCreateError("");
-    setSubmitting(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const newTicket = await createSupportTicket(token, {
-        title: createTitle.trim(),
-        body: createBody.trim() || undefined,
-        org_id: orgId ?? undefined,
-      });
-      setThreads((prev) => [newTicket, ...prev]);
-      setCreateTitle("");
-      setCreateBody("");
-      setShowCreate(false);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create ticket");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   // ---------------------------------------------------------------------------
   // Loading / access guard
@@ -351,11 +201,9 @@ export function SupportManagementView(): ReactNode {
         data-testid="support-access-denied"
         className="flex flex-col items-center gap-3 py-12 text-center"
       >
-        <LifeBuoy className="h-8 w-8 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">Sign in to view support tickets</p>
-        <p className="text-sm text-muted-foreground">
-          Please sign in or register to create and manage support tickets.
-        </p>
+        <LifeBuoy className="h-8 w-8 text-primary/80" />
+        <p className="text-sm font-semibold text-foreground">DEFT.support</p>
+        <p className="text-xs text-muted-foreground">Loading support workspace…</p>
       </div>
     );
   }
@@ -376,18 +224,18 @@ export function SupportManagementView(): ReactNode {
               className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
               data-testid="tickets-count"
             >
-              {filteredThreads.length}
+              {sortedThreads.length}
             </span>
           )}
         </div>
-        <button
+        <Link
           data-testid="new-ticket-btn"
-          onClick={() => setShowCreate((v) => !v)}
+          href="/support/tickets/new"
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          {showCreate ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showCreate ? "Cancel" : "New Ticket"}
-        </button>
+          <Plus className="h-4 w-4" />
+          New Ticket
+        </Link>
       </div>
 
       {/* Fetch error banner */}
@@ -428,75 +276,6 @@ export function SupportManagementView(): ReactNode {
         </div>
       )}
 
-      {/* Inline create form */}
-      {showCreate && (
-        <div
-          data-testid="create-ticket-form"
-          className="rounded-lg border border-border bg-background p-4"
-        >
-          <h3 className="mb-3 text-sm font-semibold text-foreground">New Support Ticket</h3>
-          {createError && (
-            <div
-              data-testid="create-error"
-              className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
-            >
-              {createError}
-            </div>
-          )}
-          <div className="flex flex-col gap-3">
-            <div>
-              <label htmlFor="smv-ticket-title" className="text-xs font-medium text-foreground">
-                Title <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="smv-ticket-title"
-                data-testid="ticket-title-input"
-                type="text"
-                value={createTitle}
-                onChange={(e) => setCreateTitle(e.target.value)}
-                placeholder="Describe your issue"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-              />
-            </div>
-            <div>
-              <label htmlFor="smv-ticket-body" className="text-xs font-medium text-foreground">
-                Details
-              </label>
-              <textarea
-                id="smv-ticket-body"
-                data-testid="ticket-body-input"
-                value={createBody}
-                onChange={(e) => setCreateBody(e.target.value)}
-                placeholder="Additional details (optional)"
-                rows={3}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                data-testid="ticket-submit-btn"
-                onClick={() => void handleCreate()}
-                disabled={submitting || !createTitle.trim()}
-                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {submitting ? "Submitting..." : "Submit Ticket"}
-              </button>
-              <button
-                data-testid="ticket-cancel-btn"
-                onClick={() => {
-                  setShowCreate(false);
-                  setCreateTitle("");
-                  setCreateBody("");
-                }}
-                className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3" data-testid="tickets-filters">
         <input
@@ -519,6 +298,21 @@ export function SupportManagementView(): ReactNode {
             </option>
           ))}
         </select>
+        <select
+          value={filters.sort}
+          onChange={(e) =>
+            setFilters((f) => ({
+              ...f,
+              sort: e.target.value as TicketFilterValues["sort"],
+            }))
+          }
+          data-testid="tickets-sort-filter"
+          className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+        >
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="updated">Recently updated</option>
+        </select>
       </div>
 
       {/* Ticket list */}
@@ -529,7 +323,7 @@ export function SupportManagementView(): ReactNode {
         >
           Loading tickets...
         </div>
-      ) : filteredThreads.length === 0 ? (
+      ) : sortedThreads.length === 0 ? (
         <div data-testid="tickets-empty" className="py-8 text-center text-sm text-muted-foreground">
           No tickets found.
         </div>
@@ -538,7 +332,7 @@ export function SupportManagementView(): ReactNode {
           data-testid="tickets-list"
           className="divide-y divide-border rounded-lg border border-border"
         >
-          {filteredThreads.map((ticket) => {
+          {sortedThreads.map((ticket) => {
             const status = ticket.status ?? "open";
             const badgeClass = STATUS_STYLES[status] ?? STATUS_STYLES["open"];
             const creatorLabel = ticket.author_name ?? ticket.author_email ?? ticket.author_id;
@@ -552,9 +346,19 @@ export function SupportManagementView(): ReactNode {
                 <div className="flex min-w-0 flex-1 items-start gap-2">
                   <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <div className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {ticket.title}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {ticket.ticket_number ? (
+                        <span
+                          data-testid={`ticket-number-${ticket.id}`}
+                          className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-primary"
+                        >
+                          #{ticket.ticket_number}
+                        </span>
+                      ) : null}
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {ticket.title}
+                      </span>
+                    </div>
                     <div
                       data-testid={`ticket-creator-${ticket.id}`}
                       className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"
@@ -572,193 +376,18 @@ export function SupportManagementView(): ReactNode {
                   >
                     {status}
                   </span>
-                  <button
+                  <Link
                     data-testid={`ticket-open-btn-${ticket.id}`}
-                    onClick={() => handleOpenTicket(ticket)}
+                    href={`/support/tickets/${ticket.slug}`}
                     className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
                   >
                     <ExternalLink className="h-3 w-3" />
                     Open
-                  </button>
+                  </Link>
                 </div>
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Work-view modal */}
-      {workTicket && (
-        <div
-          data-testid="work-view-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Support ticket work view"
-        >
-          <div className="relative flex w-full max-w-lg flex-col gap-4 rounded-lg border border-border bg-background p-6 shadow-lg">
-            {/* Modal header */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3
-                  data-testid="work-view-title"
-                  className="text-base font-semibold text-foreground"
-                >
-                  {workTicket.title}
-                </h3>
-                <div
-                  data-testid="work-view-creator"
-                  className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"
-                >
-                  <User className="h-3 w-3 shrink-0" />
-                  <span>
-                    {workTicket.author_name ?? workTicket.author_email ?? workTicket.author_id}
-                  </span>
-                  {workTicket.org_name && <span>&middot; {workTicket.org_name}</span>}
-                </div>
-              </div>
-              <button
-                data-testid="work-view-close-btn"
-                onClick={handleCloseWork}
-                className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Error banner */}
-            {workError && (
-              <div
-                data-testid="work-view-error"
-                className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
-              >
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {workError}
-              </div>
-            )}
-
-            {/* Status selector — only operators/admins may change status */}
-            {scopesAll && (
-              <div>
-                <label htmlFor="work-view-status" className="text-xs font-medium text-foreground">
-                  Status
-                </label>
-                <select
-                  id="work-view-status"
-                  data-testid="work-view-status-select"
-                  value={workStatus}
-                  onChange={(e) => setWorkStatus(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
-                >
-                  {WORK_STATUS_OPTIONS.map(({ value, label }) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Issue body */}
-            <div>
-              <label htmlFor="work-view-body" className="text-xs font-medium text-foreground">
-                Description
-              </label>
-              <textarea
-                id="work-view-body"
-                data-testid="work-view-body-input"
-                value={workBody}
-                onChange={(e) => setWorkBody(e.target.value)}
-                rows={5}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-              />
-            </div>
-
-            {/* Last updated timestamp */}
-            {workTicket.updated_at && (
-              <p data-testid="work-view-updated-at" className="text-xs text-muted-foreground">
-                Last updated: {new Date(workTicket.updated_at).toLocaleString()}
-              </p>
-            )}
-
-            {/* Attachments section */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-foreground">Attachments</label>
-                <label
-                  htmlFor="work-view-file-input"
-                  data-testid="work-view-attach-btn"
-                  className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-accent"
-                >
-                  <Paperclip className="h-3 w-3" />
-                  {uploadingFile ? "Uploading..." : "Attach file"}
-                </label>
-                <input
-                  id="work-view-file-input"
-                  data-testid="work-view-file-input"
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => void handleAttachFile(e)}
-                  disabled={uploadingFile}
-                />
-              </div>
-              {attachmentError && (
-                <p data-testid="work-view-attachment-error" className="mt-1 text-xs text-red-600">
-                  {attachmentError}
-                </p>
-              )}
-              {attachmentsLoading ? (
-                <p
-                  data-testid="work-view-attachments-loading"
-                  className="mt-1 text-xs text-muted-foreground"
-                >
-                  Loading attachments...
-                </p>
-              ) : attachments.length > 0 ? (
-                <ul data-testid="work-view-attachments-list" className="mt-2 space-y-1">
-                  {attachments.map((a) => (
-                    <li key={a.id} className="flex items-center gap-1 text-xs">
-                      <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      <button
-                        data-testid={`attachment-download-${a.id}`}
-                        onClick={() => void handleDownloadAttachment(a.id, a.filename)}
-                        className="truncate text-foreground underline hover:no-underline"
-                      >
-                        {a.filename}
-                      </button>
-                      <span className="shrink-0 text-muted-foreground">
-                        ({(a.size / 1024).toFixed(1)} KB)
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">No attachments.</p>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2">
-              <button
-                data-testid="work-view-save-btn"
-                onClick={() => void handleSaveWork()}
-                disabled={workSaving}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                <Save className="h-4 w-4" />
-                {workSaving ? "Saving..." : "Save changes"}
-              </button>
-              <button
-                data-testid="work-view-cancel-btn"
-                onClick={handleCloseWork}
-                className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/80"
-              >
-                Close
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

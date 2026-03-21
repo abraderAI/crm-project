@@ -354,6 +354,16 @@ func NewRouter(cfg Config) http.Handler {
 			// Pipeline stages route.
 			authed.Get("/orgs/{org}/pipeline/stages", h.pipelineHandler.GetStages)
 
+			// Support ticket entry routes.
+			authed.Route("/support/tickets/{slug}", func(st chi.Router) {
+				st.Get("/entries", h.supportHandler.ListEntries)
+				st.Post("/entries", h.supportHandler.CreateEntry)
+				st.Patch("/entries/{id}", h.supportHandler.UpdateEntry)
+				st.Post("/entries/{id}/publish", h.supportHandler.PublishEntry)
+				st.Patch("/entries/{id}/deft-visibility", h.supportHandler.SetDeftVisibility)
+				st.Patch("/notifications", h.supportHandler.SetNotificationPref)
+			})
+
 			// Global space routes — slug-based access to platform-wide spaces.
 			authed.Route("/global-spaces/{space}/threads", func(gs chi.Router) {
 				gs.Get("/", h.globalSpaceHandler.ListThreads)

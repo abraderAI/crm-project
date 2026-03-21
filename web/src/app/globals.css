@@ -55,3 +55,14 @@ body {
   color: var(--foreground);
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* Support timeline and editor readability in dark theme. */
+.dark .support-entry-body,
+.dark .support-entry-body * {
+  color: var(--foreground) !important;
+}
+
+.dark .tiptap-content .ProseMirror,
+.dark .tiptap-content .ProseMirror * {
+  color: var(--foreground) !important;
+}

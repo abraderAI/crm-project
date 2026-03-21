@@ -39,10 +39,13 @@ func testDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, database.Migrate(db))
 	require.NoError(t, seed.Run(db))
-	// Close the connection before TempDir cleanup removes the directory.
-	// WAL mode creates -wal and -shm files that remain open until Close;
-	// without this, t.TempDir() cleanup fails with "directory not empty".
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	// Checkpoint + close before TempDir cleanup removes the directory.
+	// WAL mode creates -wal and -shm files; truncating the checkpoint ensures
+	// those files are empty/removed before t.TempDir() runs RemoveAll.
+	t.Cleanup(func() {
+		_, _ = sqlDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		_ = sqlDB.Close()
+	})
 	return db
 }
 

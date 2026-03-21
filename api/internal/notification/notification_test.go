@@ -1048,3 +1048,30 @@ func FuzzNotificationPayload(f *testing.F) {
 		}
 	})
 }
+
+func TestFormatSupportTicketBody_PrivacyMode(t *testing.T) {
+	evt := eventbus.Event{
+		Type:    "thread.updated",
+		Payload: map[string]any{"source": "global-support", "notification_detail_level": "privacy"},
+	}
+	body := formatSupportTicketBody(evt)
+	assert.Contains(t, body, "link")
+}
+
+func TestFormatSupportTicketBody_FullWithReply(t *testing.T) {
+	evt := eventbus.Event{
+		Type:    "thread.updated",
+		Payload: map[string]any{"source": "global-support", "reply_body": "Agent said hello"},
+	}
+	body := formatSupportTicketBody(evt)
+	assert.Contains(t, body, "hello")
+}
+
+func TestFormatSupportTicketBody_FullDefault(t *testing.T) {
+	evt := eventbus.Event{
+		Type:    "thread.updated",
+		Payload: map[string]any{"source": "global-support", "title": "My ticket"},
+	}
+	body := formatSupportTicketBody(evt)
+	assert.Contains(t, body, "updated")
+}

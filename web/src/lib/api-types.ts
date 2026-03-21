@@ -74,11 +74,26 @@ export interface Thread extends BaseEntity {
   priority?: string;
   stage?: string;
   assigned_to?: string;
+  /** Sequential human-readable ticket number; only set for support threads. */
+  ticket_number?: number;
   messages?: Message[];
 }
 
 /** Message type enum matching Go MessageType. */
 export type MessageType = "note" | "email" | "call_log" | "comment" | "system";
+
+/**
+ * Support-specific entry type enum.
+ * customer     — Message from the ticket creator (manual or from inbound email).
+ * agent_reply  — Published DEFT agent reply visible to the customer.
+ * draft        — Unpublished agent reply, invisible to the customer.
+ * context      — DEFT-internal note, never shown to the customer.
+ * system_event — System-inserted event (ticket created, closed, reopened, etc.).
+ */
+export type SupportEntryType = "customer" | "agent_reply" | "draft" | "context" | "system_event";
+
+/** Union of all valid message type values. */
+export type AnyMessageType = MessageType | SupportEntryType;
 
 /** Message — single message within a Thread. */
 export interface Message extends BaseEntity {
@@ -86,7 +101,27 @@ export interface Message extends BaseEntity {
   body: string;
   author_id: string;
   metadata: string;
-  type: MessageType;
+  type: AnyMessageType;
+}
+
+/**
+ * SupportEntry extends Message with support-specific lifecycle fields.
+ * Returned by GET /v1/support/tickets/{slug}/entries.
+ */
+export interface SupportEntry extends BaseEntity {
+  thread_id: string;
+  body: string;
+  author_id: string;
+  metadata: string;
+  type: SupportEntryType;
+  /** When true the entry is hidden from any caller outside the DEFT org. */
+  is_deft_only: boolean;
+  /** Whether the entry has been published to the customer. */
+  is_published: boolean;
+  /** Whether the entry is locked against further edits. */
+  is_immutable: boolean;
+  /** ISO timestamp when a draft was promoted to agent_reply. */
+  published_at?: string | null;
 }
 
 /** RBAC role enum matching Go Role. */

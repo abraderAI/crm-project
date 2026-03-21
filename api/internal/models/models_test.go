@@ -873,3 +873,48 @@ func FuzzUUIDv7Generation(f *testing.F) {
 		}
 	})
 }
+
+func TestMessageType_IsSupportType(t *testing.T) {
+	supportTypes := []models.MessageType{
+		models.MessageTypeCustomer, models.MessageTypeAgentReply, models.MessageTypeDraft,
+		models.MessageTypeContext, models.MessageTypeSystemEvent,
+	}
+	for _, mt := range supportTypes {
+		assert.True(t, mt.IsSupportType(), "expected %s to be a support type", mt)
+	}
+	nonSupport := []models.MessageType{
+		models.MessageTypeNote, models.MessageTypeEmail,
+		models.MessageTypeCallLog, models.MessageTypeComment, models.MessageTypeSystem,
+	}
+	for _, mt := range nonSupport {
+		assert.False(t, mt.IsSupportType(), "expected %s to NOT be a support type", mt)
+	}
+}
+
+func TestMessageType_IsVisibleToCustomer(t *testing.T) {
+	visible := []models.MessageType{
+		models.MessageTypeCustomer, models.MessageTypeAgentReply, models.MessageTypeSystemEvent,
+	}
+	for _, mt := range visible {
+		assert.True(t, mt.IsVisibleToCustomer(), "%s should be visible to customer", mt)
+	}
+	hidden := []models.MessageType{
+		models.MessageTypeDraft, models.MessageTypeContext,
+		models.MessageTypeNote, models.MessageTypeComment,
+	}
+	for _, mt := range hidden {
+		assert.False(t, mt.IsVisibleToCustomer(), "%s should NOT be visible to customer", mt)
+	}
+}
+
+func TestThread_TicketNumber(t *testing.T) {
+	thread := &models.Thread{}
+	assert.Equal(t, int64(0), thread.TicketNumber)
+}
+
+func TestTicketCounter_Fields(t *testing.T) {
+	tc := &models.TicketCounter{OrgID: "org-1", ThreadType: "support", LastNumber: 5}
+	assert.Equal(t, "org-1", tc.OrgID)
+	assert.Equal(t, "support", tc.ThreadType)
+	assert.Equal(t, int64(5), tc.LastNumber)
+}

@@ -85,6 +85,10 @@ type Thread struct {
 	Stage      string `gorm:"type:text;->;-:migration" json:"stage,omitempty"`
 	AssignedTo string `gorm:"type:text;->;-:migration" json:"assigned_to,omitempty"`
 
+	// TicketNumber is a sequential, human-readable identifier assigned when a
+	// support thread is created. Zero means not yet assigned (non-support threads).
+	TicketNumber int64 `gorm:"default:0;index" json:"ticket_number,omitempty"`
+
 	// Associations.
 	Board    Board     `gorm:"foreignKey:BoardID;constraint:OnDelete:CASCADE" json:"-"`
 	Messages []Message `gorm:"foreignKey:ThreadID;constraint:OnDelete:CASCADE" json:"messages,omitempty"`
