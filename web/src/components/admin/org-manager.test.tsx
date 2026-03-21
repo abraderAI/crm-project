@@ -346,4 +346,48 @@ describe("OrgManager", () => {
     await user.click(screen.getByTestId("create-org-btn"));
     expect(screen.queryByTestId("create-org-form")).not.toBeInTheDocument();
   });
+
+  it("deletes an org when confirm is accepted", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<OrgManager initialOrgs={[baseOrg]} />);
+
+    await user.click(screen.getByTestId("delete-org-btn-org_1"));
+
+    await waitFor(() => {
+      expect(mockClientMutate).toHaveBeenCalledWith(
+        "DELETE",
+        "/orgs/acme-corp",
+        expect.objectContaining({ token: "test-token" }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("org-row-org_1")).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not delete when confirm is cancelled", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<OrgManager initialOrgs={[baseOrg]} />);
+
+    await user.click(screen.getByTestId("delete-org-btn-org_1"));
+    expect(mockClientMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId("org-row-org_1")).toBeInTheDocument();
+  });
+
+  it("shows error when delete fails", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockRejectedValue(new Error("Delete failed"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<OrgManager initialOrgs={[baseOrg]} />);
+
+    await user.click(screen.getByTestId("delete-org-btn-org_1"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("org-manager-error")).toHaveTextContent("Delete failed");
+    });
+  });
 });

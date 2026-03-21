@@ -766,6 +766,30 @@ describe("UserDetail", () => {
     });
   });
 
+  it("shows error string when remove throws non-Error", async () => {
+    const user = userEvent.setup();
+    mockClientMutate.mockRejectedValue("string error");
+    render(<UserDetail user={baseUser} memberships={memberships} />);
+
+    await user.click(screen.getByTestId("remove-membership-mem1"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("action-error")).toHaveTextContent("Failed to remove from org");
+    });
+  });
+
+  it("handles user without display_name using email as fallback", () => {
+    const noNameUser = { ...baseUser, display_name: "", avatar_url: undefined };
+    render(<UserDetail user={noNameUser} memberships={[]} />);
+    expect(screen.getByTestId("user-display-name")).toHaveTextContent("alice@example.com");
+  });
+
+  it("handles invalid date string in formatDate gracefully", () => {
+    const badDateUser = { ...baseUser, synced_at: "not-a-date" };
+    render(<UserDetail user={badDateUser} memberships={[]} />);
+    expect(screen.getByTestId("user-joined")).toBeInTheDocument();
+  });
+
   // --- Promote to Platform Admin ---
 
   it("shows promote-admin button", () => {

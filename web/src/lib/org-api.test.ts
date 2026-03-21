@@ -8,6 +8,8 @@ import {
   removeMember,
   fetchOrgSpaces,
   updateSpaceRoleOverride,
+  fetchOrgsClient,
+  createOrgClient,
 } from "./org-api";
 
 const mockFetch = vi.fn();
@@ -229,6 +231,47 @@ describe("org-api", () => {
         "/orgs/org-1/members/m1/space-roles/s1",
         { token: "token", body: { role: null } },
       );
+    });
+  });
+
+  describe("fetchOrgsClient", () => {
+    it("fetches orgs from admin endpoint and returns data array", async () => {
+      const orgs = {
+        data: [{ id: "org-1", name: "Acme", slug: "acme" }],
+        page_info: { has_more: false },
+      };
+      mockFetch.mockResolvedValue(jsonResponse(orgs));
+
+      const result = await fetchOrgsClient("token");
+      expect(result).toHaveLength(1);
+      expect(result[0]!.name).toBe("Acme");
+
+      const calledUrl = mockFetch.mock.calls[0]![0] as string;
+      expect(calledUrl).toContain("/admin/orgs");
+    });
+  });
+
+  describe("createOrgClient", () => {
+    it("calls clientMutate with POST /orgs", async () => {
+      const created = { id: "org-new", name: "New Org", slug: "new-org" };
+      mockClientMutate.mockResolvedValue(created);
+
+      const result = await createOrgClient("token", "New Org", "A description");
+      expect(result.name).toBe("New Org");
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/orgs", {
+        token: "token",
+        body: { name: "New Org", description: "A description" },
+      });
+    });
+
+    it("omits description when empty", async () => {
+      mockClientMutate.mockResolvedValue({ id: "org-new", name: "X", slug: "x" });
+
+      await createOrgClient("token", "X", "");
+      expect(mockClientMutate).toHaveBeenCalledWith("POST", "/orgs", {
+        token: "token",
+        body: { name: "X", description: undefined },
+      });
     });
   });
 });
