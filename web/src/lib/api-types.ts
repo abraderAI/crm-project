@@ -90,12 +90,7 @@ export type MessageType = "note" | "email" | "call_log" | "comment" | "system";
  * context      — DEFT-internal note, never shown to the customer.
  * system_event — System-inserted event (ticket created, closed, reopened, etc.).
  */
-export type SupportEntryType =
-  | "customer"
-  | "agent_reply"
-  | "draft"
-  | "context"
-  | "system_event";
+export type SupportEntryType = "customer" | "agent_reply" | "draft" | "context" | "system_event";
 
 /** Union of all valid message type values. */
 export type AnyMessageType = MessageType | SupportEntryType;

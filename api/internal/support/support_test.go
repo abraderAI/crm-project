@@ -144,6 +144,74 @@ func TestMessageType_IsValid(t *testing.T) {
 	assert.False(t, models.MessageType("unknown").IsValid())
 }
 
+// --- Repository: ListEntries own-draft visibility ---
+
+func TestRepository_ListEntries_OwnDraftVisible(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	ticket := createTicket(t, db, board.ID, "customer1")
+	repo := NewRepository(db)
+	svc := NewService(repo, nil)
+	ctx := context.Background()
+
+	// Create a draft authored by customer1.
+	draft, err := svc.CreateEntry(ctx, "test-ticket", "customer1", false, CreateEntryInput{
+		Type: models.MessageTypeCustomer, // use customer to create as non-DEFT
+		Body: "<p>initial</p>",
+	})
+	require.NoError(t, err)
+	// Manually flip to draft type for this test (bypass service permission).
+	draft.Type = models.MessageTypeDraft
+	draft.IsPublished = false
+	draft.IsImmutable = false
+	require.NoError(t, db.Save(draft).Error)
+	_ = ticket
+
+	// Customer1 sees own draft.
+	entries, err := repo.ListEntries(ctx, ticket.ID, false, "customer1")
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, models.MessageTypeDraft, entries[0].Type)
+
+	// Different customer does NOT see the draft.
+	visible, err := repo.ListEntries(ctx, ticket.ID, false, "customer2")
+	require.NoError(t, err)
+	assert.Empty(t, visible)
+}
+
+func TestService_IsDeftMember_PlatformAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	// Create a platform admin.
+	admin := &models.PlatformAdmin{UserID: "admin1", IsActive: true}
+	require.NoError(t, db.Create(admin).Error)
+
+	svc := NewService(NewRepository(db), nil)
+	isDeft, err := svc.IsDeftMember(context.Background(), "admin1")
+	require.NoError(t, err)
+	assert.True(t, isDeft)
+}
+
+func TestService_IsDeftMember_NotMember(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(NewRepository(db), nil)
+	isDeft, err := svc.IsDeftMember(context.Background(), "random-user")
+	require.NoError(t, err)
+	assert.False(t, isDeft)
+}
+
+func TestService_IsDeftMember_DeftOrgMember(t *testing.T) {
+	db := setupTestDB(t)
+	org := &models.Org{Name: "DEFT", Slug: "deft", Metadata: "{}"}
+	require.NoError(t, db.Create(org).Error)
+	membership := &models.OrgMembership{OrgID: org.ID, UserID: "deft-user", Role: models.RoleContributor}
+	require.NoError(t, db.Create(membership).Error)
+
+	svc := NewService(NewRepository(db), nil)
+	isDeft, err := svc.IsDeftMember(context.Background(), "deft-user")
+	require.NoError(t, err)
+	assert.True(t, isDeft)
+}
+
 // --- Repository: ticket number tests ---
 
 func TestRepository_NextTicketNumber_Sequential(t *testing.T) {
@@ -395,8 +463,8 @@ func TestService_ListEntries_NonDeftFiltered(t *testing.T) {
 	_, err = svc.CreateEntry(ctx, "test-ticket", "agent1", true, CreateEntryInput{Type: models.MessageTypeSystemEvent, Body: "<p>e</p>"})
 	require.NoError(t, err)
 
-	// Non-DEFT sees only customer + agent_reply + system_event.
-	visible, err := svc.ListEntries(ctx, "test-ticket", false)
+	// Non-DEFT sees only customer + agent_reply + system_event (not their own draft since ownerID = unknown).
+	visible, err := svc.ListEntries(ctx, "test-ticket", false, "other-user")
 	require.NoError(t, err)
 	for _, m := range visible {
 		assert.True(t, m.Type.IsVisibleToCustomer(), "non-DEFT should not see %s", m.Type)
@@ -405,7 +473,7 @@ func TestService_ListEntries_NonDeftFiltered(t *testing.T) {
 	assert.Len(t, visible, 3)
 
 	// DEFT sees all 5.
-	all, err := svc.ListEntries(ctx, "test-ticket", true)
+	all, err := svc.ListEntries(ctx, "test-ticket", true, "")
 	require.NoError(t, err)
 	assert.Len(t, all, 5)
 }
@@ -426,7 +494,7 @@ func TestService_ListEntries_DeftOnlyHiddenFromCustomer(t *testing.T) {
 	_, err = svc.SetDeftVisibility(ctx, msg.ID, true, true)
 	require.NoError(t, err)
 
-	visible, err := svc.ListEntries(ctx, "test-ticket", false)
+	visible, err := svc.ListEntries(ctx, "test-ticket", false, "other-user")
 	require.NoError(t, err)
 	assert.Empty(t, visible, "deft-only entry must not be visible to customer")
 }
@@ -483,6 +551,32 @@ func TestHandler_ListEntries_Unauthenticated(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/v1/support/tickets/test-ticket/entries", nil)
 	w := routeRequest(router, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestHandler_ListEntries_WithTicketAndEntries(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "u1")
+	router, svc := buildRouter(t, db)
+	ctx := context.Background()
+
+	// Create an entry so the list has something.
+	_, err := svc.CreateEntry(ctx, "test-ticket", "u1", false, CreateEntryInput{
+		Type: models.MessageTypeCustomer,
+		Body: "<p>hello</p>",
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/support/tickets/test-ticket/entries", nil)
+	req = withUser(req, "u1")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	data, ok := body["data"].([]any)
+	require.True(t, ok)
+	assert.Len(t, data, 1)
 }
 
 func TestHandler_ListEntries_TicketNotFound(t *testing.T) {
@@ -579,6 +673,251 @@ func TestHandler_PublishEntry_NonDeftForbidden(t *testing.T) {
 	req = withUser(req, "external-user")
 	w := routeRequest(router, req)
 	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestHandler_SetDeftVisibility_NonDeftForbidden(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "u1")
+	svc := NewService(NewRepository(db), nil)
+	msg, err := svc.CreateEntry(context.Background(), "test-ticket", "u1", false, CreateEntryInput{
+		Type: models.MessageTypeCustomer,
+		Body: "<p>hi</p>",
+	})
+	require.NoError(t, err)
+
+	router, _ := buildRouter(t, db)
+	body, _ := json.Marshal(map[string]any{"is_deft_only": true})
+	req := httptest.NewRequest(http.MethodPatch,
+		"/v1/support/tickets/test-ticket/entries/"+msg.ID+"/deft-visibility",
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withUser(req, "external-user")
+	w := routeRequest(router, req)
+	// non-DEFT user is forbidden
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestHandler_UpdateEntry_NotFound(t *testing.T) {
+	db := setupTestDB(t)
+	router, _ := buildRouter(t, db)
+	body, _ := json.Marshal(map[string]any{"body": "<p>Updated</p>"})
+	req := httptest.NewRequest(http.MethodPatch,
+		"/v1/support/tickets/test-ticket/entries/nonexistent",
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withUser(req, "u1")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestHandler_PublishEntry_DraftSuccess(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "agent1")
+
+	// Create DEFT org member so IsDeftMember returns true.
+	var org models.Org
+	require.NoError(t, db.Where("slug = ?", "deft").First(&org).Error)
+	membership := &models.OrgMembership{OrgID: org.ID, UserID: "deft-agent", Role: models.RoleContributor}
+	require.NoError(t, db.Create(membership).Error)
+
+	svc := NewService(NewRepository(db), nil)
+	draft, err := svc.CreateEntry(context.Background(), "test-ticket", "deft-agent", true, CreateEntryInput{
+		Type: models.MessageTypeDraft,
+		Body: "<p>Draft reply</p>",
+	})
+	require.NoError(t, err)
+
+	router, _ := buildRouter(t, db)
+	req := httptest.NewRequest(http.MethodPost,
+		"/v1/support/tickets/test-ticket/entries/"+draft.ID+"/publish",
+		nil)
+	req = withUser(req, "deft-agent")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var result models.Message
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Equal(t, models.MessageTypeAgentReply, result.Type)
+	assert.True(t, result.IsPublished)
+}
+
+// createTicketWithSlug creates a support thread with a custom slug.
+func createTicketWithSlug(t *testing.T, db *gorm.DB, boardID, authorID, slug string) *models.Thread {
+	t.Helper()
+	ticket := &models.Thread{
+		BoardID:    boardID,
+		Title:      "Ticket " + slug,
+		Slug:       slug,
+		Metadata:   "{}",
+		AuthorID:   authorID,
+		ThreadType: models.ThreadTypeSupport,
+		Visibility: models.ThreadVisibilityOrgOnly,
+	}
+	require.NoError(t, db.Create(ticket).Error)
+	return ticket
+}
+
+func TestRepository_AssignTicketNumber(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	ticket := createTicketWithSlug(t, db, board.ID, "u1", "ticket-a")
+	repo := NewRepository(db)
+
+	err := repo.AssignTicketNumber(context.Background(), ticket, "org-1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), ticket.TicketNumber)
+
+	// Second assignment for same org gets next number.
+	ticket2 := createTicketWithSlug(t, db, board.ID, "u2", "ticket-b")
+	err = repo.AssignTicketNumber(context.Background(), ticket2, "org-1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), ticket2.TicketNumber)
+}
+
+func TestHandler_UpdateEntry_Success(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "agent1")
+	router, svc := buildRouter(t, db)
+	ctx := context.Background()
+
+	// Create a draft (mutable).
+	draft, err := svc.CreateEntry(ctx, "test-ticket", "agent1", true, CreateEntryInput{
+		Type: models.MessageTypeDraft,
+		Body: "<p>Original</p>",
+	})
+	require.NoError(t, err)
+
+	body, _ := json.Marshal(map[string]any{"body": "<p>Updated draft</p>"})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/support/tickets/test-ticket/entries/"+draft.ID, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withUser(req, "agent1")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var result models.Message
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Equal(t, "<p>Updated draft</p>", result.Body)
+}
+
+func TestHandler_PublishEntry_NotFound(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "agent1")
+	// Add deft org membership so IsDeftMember returns true.
+	var org models.Org
+	require.NoError(t, db.Where("slug = ?", "deft").First(&org).Error)
+	membership := &models.OrgMembership{OrgID: org.ID, UserID: "deft-a2", Role: models.RoleContributor}
+	require.NoError(t, db.Create(membership).Error)
+
+	router, _ := buildRouter(t, db)
+	req := httptest.NewRequest(http.MethodPost, "/v1/support/tickets/test-ticket/entries/nonexistent/publish", nil)
+	req = withUser(req, "deft-a2")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestHandler_PublishEntry_NotDraft(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "u1")
+	var org models.Org
+	require.NoError(t, db.Where("slug = ?", "deft").First(&org).Error)
+	membership := &models.OrgMembership{OrgID: org.ID, UserID: "deft-a3", Role: models.RoleContributor}
+	require.NoError(t, db.Create(membership).Error)
+
+	svc := NewService(NewRepository(db), nil)
+	msg, err := svc.CreateEntry(context.Background(), "test-ticket", "u1", false, CreateEntryInput{
+		Type: models.MessageTypeCustomer, Body: "<p>x</p>",
+	})
+	require.NoError(t, err)
+
+	router, _ := buildRouter(t, db)
+	req := httptest.NewRequest(http.MethodPost, "/v1/support/tickets/test-ticket/entries/"+msg.ID+"/publish", nil)
+	req = withUser(req, "deft-a3")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandler_SetDeftVisibility_DeftMemberSuccess(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "u1")
+	// Add deft org membership.
+	var org models.Org
+	require.NoError(t, db.Where("slug = ?", "deft").First(&org).Error)
+	membership := &models.OrgMembership{OrgID: org.ID, UserID: "deft-vis", Role: models.RoleContributor}
+	require.NoError(t, db.Create(membership).Error)
+
+	svc := NewService(NewRepository(db), nil)
+	msg, err := svc.CreateEntry(context.Background(), "test-ticket", "u1", false, CreateEntryInput{
+		Type: models.MessageTypeCustomer, Body: "<p>hi</p>",
+	})
+	require.NoError(t, err)
+
+	router, _ := buildRouter(t, db)
+	body, _ := json.Marshal(map[string]any{"is_deft_only": true})
+	req := httptest.NewRequest(http.MethodPatch,
+		"/v1/support/tickets/test-ticket/entries/"+msg.ID+"/deft-visibility",
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withUser(req, "deft-vis")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var result models.Message
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.True(t, result.IsDeftOnly)
+}
+
+func TestHandler_SetDeftVisibility_NotFound(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "u1")
+	var org models.Org
+	require.NoError(t, db.Where("slug = ?", "deft").First(&org).Error)
+	membership := &models.OrgMembership{OrgID: org.ID, UserID: "deft-vis2", Role: models.RoleContributor}
+	require.NoError(t, db.Create(membership).Error)
+
+	router, _ := buildRouter(t, db)
+	body, _ := json.Marshal(map[string]any{"is_deft_only": false})
+	req := httptest.NewRequest(http.MethodPatch,
+		"/v1/support/tickets/test-ticket/entries/nonexistent/deft-visibility",
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withUser(req, "deft-vis2")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestHandler_CreateEntry_InvalidType(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "u1")
+	router, _ := buildRouter(t, db)
+
+	body, _ := json.Marshal(map[string]any{"type": "note", "body": "<p>hi</p>"})
+	req := httptest.NewRequest(http.MethodPost, "/v1/support/tickets/test-ticket/entries", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withUser(req, "u1")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandler_SetNotificationPref_Full(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	_ = createTicket(t, db, board.ID, "u1")
+	router, _ := buildRouter(t, db)
+
+	body, _ := json.Marshal(map[string]any{"notification_detail_level": "full"})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/support/tickets/test-ticket/notifications", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withUser(req, "u1")
+	w := routeRequest(router, req)
+	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
 func TestHandler_SetNotificationPref_InvalidLevel(t *testing.T) {

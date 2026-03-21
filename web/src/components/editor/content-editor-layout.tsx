@@ -33,7 +33,10 @@ export function ContentEditorLayout({
   return (
     <div data-testid="content-editor-layout" className="flex flex-col gap-4">
       {/* Header */}
-      <div data-testid="editor-header" className="rounded-lg border border-border bg-background p-4">
+      <div
+        data-testid="editor-header"
+        className="rounded-lg border border-border bg-background p-4"
+      >
         {header}
       </div>
 
@@ -43,7 +46,10 @@ export function ContentEditorLayout({
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <div data-testid="editor-body">{children}</div>
           {composer && (
-            <div data-testid="editor-composer" className="rounded-lg border border-border bg-background">
+            <div
+              data-testid="editor-composer"
+              className="rounded-lg border border-border bg-background"
+            >
               {composer}
             </div>
           )}
@@ -51,10 +57,7 @@ export function ContentEditorLayout({
 
         {/* Sidebar column */}
         {sidebar && (
-          <aside
-            data-testid="editor-sidebar"
-            className="w-full shrink-0 lg:w-72"
-          >
+          <aside data-testid="editor-sidebar" className="w-full shrink-0 lg:w-72">
             {sidebar}
           </aside>
         )}

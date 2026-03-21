@@ -2,23 +2,27 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Eye, EyeOff, Lock, Send } from "lucide-react";
+import { Eye, EyeOff, Lock, Pencil, Send, X } from "lucide-react";
 
 import type { SupportEntry, SupportEntryType } from "@/lib/api-types";
-import {
-  publishTicketEntry,
-  setEntryDeftVisibility,
-} from "@/lib/support-api";
+import { publishTicketEntry, setEntryDeftVisibility, updateTicketEntry } from "@/lib/support-api";
 
-/** Visual config for each entry type. */
+/**
+ * Visual config for each entry type.
+ * Colors:
+ *   customer + agent_reply (published conversation) — light green
+ *   draft                                            — light gray
+ *   context (internal / DEFT-only)                  — light red
+ *   system_event (status changes etc.)              — light orange
+ */
 const ENTRY_TYPE_CONFIG: Record<
   SupportEntryType,
   { label: string; badgeClass: string; bgClass: string }
 > = {
   customer: {
     label: "Customer",
-    badgeClass: "bg-blue-100 text-blue-800",
-    bgClass: "bg-blue-50 border-blue-200",
+    badgeClass: "bg-green-100 text-green-800",
+    bgClass: "bg-green-50 border-green-200",
   },
   agent_reply: {
     label: "Agent Reply",
@@ -27,18 +31,18 @@ const ENTRY_TYPE_CONFIG: Record<
   },
   draft: {
     label: "Draft",
-    badgeClass: "bg-yellow-100 text-yellow-800",
-    bgClass: "bg-yellow-50 border-yellow-200",
+    badgeClass: "bg-gray-200 text-gray-700",
+    bgClass: "bg-gray-100 border-gray-300",
   },
   context: {
     label: "Internal",
-    badgeClass: "bg-purple-100 text-purple-800",
-    bgClass: "bg-purple-50 border-purple-200",
+    badgeClass: "bg-red-100 text-red-800",
+    bgClass: "bg-red-50 border-red-200",
   },
   system_event: {
     label: "System",
-    badgeClass: "bg-gray-100 text-gray-600",
-    bgClass: "bg-gray-50 border-gray-200",
+    badgeClass: "bg-orange-100 text-orange-700",
+    bgClass: "bg-orange-50 border-orange-200",
   },
 };
 
@@ -50,24 +54,32 @@ export interface TicketTimelineProps {
   ticketSlug: string;
   /** Whether the current viewer is a DEFT member. */
   isDeftMember: boolean;
+  /** The authenticated user’s ID — used to gate draft editing to the author. */
+  currentUserId?: string;
   /** Called after an entry is mutated so the parent can reload. */
   onMutated?: () => void;
 }
 
 /**
  * TicketTimeline renders the chronological conversation history of a support
- * ticket. Entries are immutable once posted except for draft bodies; DEFT
- * members may publish drafts and toggle DEFT-only visibility on any entry.
+ * ticket.
+ * — Drafts are editable by their author (not yet immutable).
+ * — Drafts can be published by DEFT members OR by the customer who created them.
+ * — DEFT-only visibility toggle is restricted to DEFT members.
  */
 export function TicketTimeline({
   entries,
   ticketSlug,
   isDeftMember,
+  currentUserId,
   onMutated,
 }: TicketTimelineProps): ReactNode {
   const { getToken } = useAuth();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Track which entry is open for inline editing.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
 
   const handlePublish = useCallback(
     async (entryId: string): Promise<void> => {
@@ -105,6 +117,26 @@ export function TicketTimeline({
     [getToken, ticketSlug, onMutated],
   );
 
+  const handleSaveEdit = useCallback(
+    async (entryId: string): Promise<void> => {
+      if (!editBody.trim()) return;
+      setError(null);
+      setBusyId(entryId);
+      try {
+        const token = await getToken();
+        if (!token) return;
+        await updateTicketEntry(token, ticketSlug, entryId, editBody);
+        setEditingId(null);
+        onMutated?.();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save draft");
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [getToken, ticketSlug, editBody, onMutated],
+  );
+
   if (entries.length === 0) {
     return (
       <p
@@ -126,6 +158,13 @@ export function TicketTimeline({
       {entries.map((entry) => {
         const cfg = ENTRY_TYPE_CONFIG[entry.type] ?? ENTRY_TYPE_CONFIG.customer;
         const isBusy = busyId === entry.id;
+        const isMyDraft =
+          entry.type === "draft" && !entry.is_immutable && entry.author_id === currentUserId;
+        const isEditing = editingId === entry.id;
+        // Drafts can be published by DEFT or by the draft's own author.
+        const canPublish = entry.type === "draft" && (isDeftMember || isMyDraft);
+        const isInternalOnlyType = entry.type === "context" || entry.type === "system_event";
+        const canToggleVisibility = isDeftMember && (!entry.is_deft_only || !isInternalOnlyType);
 
         return (
           <div
@@ -161,30 +200,73 @@ export function TicketTimeline({
               </span>
             </div>
 
-            {/* Entry body (rendered HTML from Tiptap) */}
-            <div
-              data-testid={`entry-body-${entry.id}`}
-              className="prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: entry.body }}
-            />
-
-            {/* DEFT-member actions */}
-            {isDeftMember && (
-              <div className="mt-3 flex gap-2">
-                {/* Publish draft */}
-                {entry.type === "draft" && (
+            {/* Entry body — either inline editor or rendered HTML */}
+            {isEditing ? (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  data-testid={`draft-edit-textarea-${entry.id}`}
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  rows={6}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none"
+                />
+                <div className="flex gap-2">
                   <button
-                    data-testid={`publish-btn-${entry.id}`}
-                    onClick={() => void handlePublish(entry.id)}
-                    disabled={isBusy}
-                    className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                    data-testid={`draft-save-btn-${entry.id}`}
+                    onClick={() => void handleSaveEdit(entry.id)}
+                    disabled={isBusy || !editBody.trim()}
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                   >
-                    <Send className="h-3 w-3" />
-                    {isBusy ? "Publishing…" : "Publish"}
+                    {isBusy ? "Saving…" : "Save draft"}
                   </button>
-                )}
+                  <button
+                    data-testid={`draft-cancel-btn-${entry.id}`}
+                    onClick={() => setEditingId(null)}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-accent"
+                  >
+                    <X className="h-3 w-3" /> Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                data-testid={`entry-body-${entry.id}`}
+                className="prose prose-sm dark:prose-invert max-w-none text-foreground"
+                dangerouslySetInnerHTML={{ __html: entry.body }}
+              />
+            )}
 
-                {/* Toggle DEFT-only */}
+            {/* Per-entry action bar */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {/* Edit own draft (any user can edit their own drafts) */}
+              {isMyDraft && !isEditing && (
+                <button
+                  data-testid={`draft-edit-btn-${entry.id}`}
+                  onClick={() => {
+                    setEditingId(entry.id);
+                    setEditBody(entry.body);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                >
+                  <Pencil className="h-3 w-3" /> Edit draft
+                </button>
+              )}
+
+              {/* Publish draft — visible to DEFT or to the draft’s own author */}
+              {canPublish && !isEditing && (
+                <button
+                  data-testid={`publish-btn-${entry.id}`}
+                  onClick={() => void handlePublish(entry.id)}
+                  disabled={isBusy}
+                  className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  <Send className="h-3 w-3" />
+                  {isBusy ? "Publishing…" : "Send"}
+                </button>
+              )}
+
+              {/* Toggle DEFT-only — DEFT members only */}
+              {canToggleVisibility && (
                 <button
                   data-testid={`deft-only-btn-${entry.id}`}
                   onClick={() => void handleToggleDeftOnly(entry.id, entry.is_deft_only)}
@@ -199,8 +281,18 @@ export function TicketTimeline({
                   )}
                   {entry.is_deft_only ? "Unhide" : "Hide"}
                 </button>
-              </div>
-            )}
+              )}
+              {isDeftMember && !canToggleVisibility && entry.is_deft_only && (
+                <span
+                  data-testid={`deft-only-locked-${entry.id}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground"
+                  title="Internal DEFT-only entries cannot be unhidden"
+                >
+                  <Lock className="h-3 w-3" />
+                  Internal only
+                </span>
+              )}
+            </div>
           </div>
         );
       })}

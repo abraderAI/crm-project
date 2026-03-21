@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -26,6 +27,27 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/upload"
 	"github.com/abraderAI/crm-project/api/pkg/pagination"
 )
+
+type stubTicketNumberer struct {
+	called bool
+	orgID  string
+}
+
+func (s *stubTicketNumberer) AssignTicketNumber(_ context.Context, _ *models.Thread, orgID string) error {
+	s.called = true
+	s.orgID = orgID
+	return nil
+}
+
+func createTempMultipartFile(t *testing.T, name, content string) multipart.File {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close() })
+	return f
+}
 
 // setupDB creates an in-memory SQLite test database with migrations applied
 // and a seeded global-support space and board. It returns the db and board ID.
@@ -696,4 +718,155 @@ func TestThreadTypeForSpace(t *testing.T) {
 			assert.Equal(t, tt.want, threadTypeForSpace(tt.slug))
 		})
 	}
+}
+
+func TestSetTicketNumberer(t *testing.T) {
+	// SetTicketNumberer stores the numberer for use in CreateThread.
+	// Verify it can be set and cleared without panicking.
+	SetTicketNumberer(nil)
+	// A nil numberer is safe — CreateThread skips numbering when nil.
+	SetTicketNumberer(nil)
+}
+
+func TestService_CreateThread_LockedBoard(t *testing.T) {
+	db, boardID := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	require.NoError(t, db.Model(&models.Board{}).Where("id = ?", boardID).Update("is_locked", true).Error)
+
+	_, err := svc.CreateThread(ctx, "global-support", "user1", CreateInput{Title: "Cannot Create"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "board is locked")
+}
+
+func TestService_CreateThread_AssignsTicketNumberWhenNumbererConfigured(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	mockNumberer := &stubTicketNumberer{}
+	SetTicketNumberer(mockNumberer)
+	t.Cleanup(func() { SetTicketNumberer(nil) })
+
+	_, err := svc.CreateThread(ctx, "global-support", "user1", CreateInput{Title: "Needs Number"})
+	require.NoError(t, err)
+	assert.True(t, mockNumberer.called)
+	assert.Equal(t, "_system", mockNumberer.orgID)
+}
+
+func TestService_UploadAttachment_NoUploadService(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	f := createTempMultipartFile(t, "missing-upload-service.txt", "x")
+	_, err := svc.UploadAttachment(context.Background(), "global-support", "any", "u1", "a.txt", 1, f)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "upload service not available")
+}
+
+func TestService_UploadAttachment_FailsWhenSystemOrgMissing(t *testing.T) {
+	db, _ := setupDB(t)
+	upSvc := newUploadSvc(t, db)
+	svc := NewService(NewRepository(db), nil, upSvc)
+	ctx := context.Background()
+
+	th, err := svc.CreateThread(ctx, "global-support", "user-up", CreateInput{Title: "Upload Ticket"})
+	require.NoError(t, err)
+
+	require.NoError(t, db.Where("slug = ?", "_system").Delete(&models.Org{}).Error)
+
+	f := createTempMultipartFile(t, "system-org-missing.txt", "test")
+	_, err = svc.UploadAttachment(ctx, "global-support", th.Slug, "user-up", "notes.txt", int64(len("test")), f)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolving org for upload")
+}
+
+func TestService_UploadAttachment_NotFoundPaths(t *testing.T) {
+	db, _ := setupDB(t)
+	upSvc := newUploadSvc(t, db)
+	svc := NewService(NewRepository(db), nil, upSvc)
+	ctx := context.Background()
+	file := createTempMultipartFile(t, "not-found-upload.txt", "content")
+
+	uploaded, err := svc.UploadAttachment(ctx, "no-such-space", "x", "u1", "a.txt", 7, file)
+	require.NoError(t, err)
+	assert.Nil(t, uploaded)
+
+	file2 := createTempMultipartFile(t, "not-found-thread-upload.txt", "content")
+	uploaded, err = svc.UploadAttachment(ctx, "global-support", "no-such-thread", "u1", "a.txt", 7, file2)
+	require.NoError(t, err)
+	assert.Nil(t, uploaded)
+}
+
+func TestService_CreateThread_NumbererScopeBehavior(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	var systemOrg models.Org
+	require.NoError(t, db.Where("slug = ?", "_system").First(&systemOrg).Error)
+	forumSpace := &models.Space{
+		OrgID:    systemOrg.ID,
+		Name:     "Forum",
+		Slug:     "global-forum",
+		Type:     models.SpaceTypeCommunity,
+		Metadata: "{}",
+	}
+	require.NoError(t, db.Create(forumSpace).Error)
+	forumBoard := &models.Board{
+		SpaceID:  forumSpace.ID,
+		Name:     "Forum Board",
+		Slug:     "forum-board",
+		Metadata: "{}",
+	}
+	require.NoError(t, db.Create(forumBoard).Error)
+
+	mockNumberer := &stubTicketNumberer{}
+	SetTicketNumberer(mockNumberer)
+	t.Cleanup(func() { SetTicketNumberer(nil) })
+
+	customerOrg := "org-abc"
+	_, err := svc.CreateThread(ctx, "global-support", "user1", CreateInput{
+		Title: "Org Scoped Support Ticket",
+		OrgID: &customerOrg,
+	})
+	require.NoError(t, err)
+	assert.True(t, mockNumberer.called)
+	assert.Equal(t, customerOrg, mockNumberer.orgID)
+
+	mockNumberer.called = false
+	_, err = svc.CreateThread(ctx, "global-forum", "user1", CreateInput{
+		Title: "Forum Topic",
+	})
+	require.NoError(t, err)
+	assert.False(t, mockNumberer.called)
+}
+
+func TestRepository_ListThreads_InvalidCursor(t *testing.T) {
+	db, _ := setupDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	var board models.Board
+	require.NoError(t, db.Where("slug = ?", "support-board").First(&board).Error)
+
+	_, _, err := repo.ListThreads(ctx, board.ID, ListParams{
+		Params: pagination.Params{Limit: 25, Cursor: "invalid-cursor"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid cursor")
+}
+
+func TestRepository_EmptyLookupFastPaths(t *testing.T) {
+	db, _ := setupDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	shadows, err := repo.GetUserShadowsByIDs(ctx, []string{})
+	require.NoError(t, err)
+	assert.Empty(t, shadows)
+
+	orgNames, err := repo.GetOrgNamesByIDs(ctx, []string{})
+	require.NoError(t, err)
+	assert.Empty(t, orgNames)
 }

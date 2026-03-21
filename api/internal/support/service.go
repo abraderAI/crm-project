@@ -45,8 +45,9 @@ type CreateEntryInput struct {
 
 // ListEntries returns visible entries for a ticket identified by slug.
 // isDeftMember controls whether DEFT-only and draft/context entries are
-// included in the result.
-func (s *Service) ListEntries(ctx context.Context, slug string, isDeftMember bool) ([]models.Message, error) {
+// included. ownerID is the authenticated caller's user ID; it is used to
+// include the caller's own draft entries even when isDeftMember is false.
+func (s *Service) ListEntries(ctx context.Context, slug string, isDeftMember bool, ownerID string) ([]models.Message, error) {
 	ticket, err := s.repo.FindTicketBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
@@ -54,7 +55,7 @@ func (s *Service) ListEntries(ctx context.Context, slug string, isDeftMember boo
 	if ticket == nil {
 		return nil, nil
 	}
-	return s.repo.ListEntries(ctx, ticket.ID, isDeftMember)
+	return s.repo.ListEntries(ctx, ticket.ID, isDeftMember, ownerID)
 }
 
 // CreateEntry adds a new entry to the ticket identified by slug.

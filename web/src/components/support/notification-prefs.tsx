@@ -19,10 +19,7 @@ export interface NotificationPrefsProps {
  * notification emails include the agent reply body ("full") or are privacy-mode
  * link-only emails ("privacy").
  */
-export function NotificationPrefs({
-  ticketSlug,
-  currentLevel,
-}: NotificationPrefsProps): ReactNode {
+export function NotificationPrefs({ ticketSlug, currentLevel }: NotificationPrefsProps): ReactNode {
   const { getToken } = useAuth();
   const [level, setLevel] = useState<"full" | "privacy">(currentLevel);
   const [saving, setSaving] = useState(false);
@@ -57,9 +54,7 @@ export function NotificationPrefs({
           onClick={() => void handleChange("full")}
           disabled={saving}
           className={`flex items-start gap-3 rounded-md border p-3 text-left transition-colors ${
-            level === "full"
-              ? "border-primary bg-primary/5"
-              : "border-border hover:bg-accent"
+            level === "full" ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
           }`}
         >
           <Bell
@@ -79,9 +74,7 @@ export function NotificationPrefs({
           onClick={() => void handleChange("privacy")}
           disabled={saving}
           className={`flex items-start gap-3 rounded-md border p-3 text-left transition-colors ${
-            level === "privacy"
-              ? "border-primary bg-primary/5"
-              : "border-border hover:bg-accent"
+            level === "privacy" ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
           }`}
         >
           <BellOff

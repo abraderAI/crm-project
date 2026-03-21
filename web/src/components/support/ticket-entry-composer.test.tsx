@@ -1,98 +1,136 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+
 import { TicketEntryComposer } from "./ticket-entry-composer";
 import { NotificationPrefs } from "./notification-prefs";
+const mockGetToken = vi.fn().mockResolvedValue("tok");
 
-// Mock Clerk auth.
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: vi.fn().mockResolvedValue("tok") }),
+  useAuth: () => ({ getToken: mockGetToken }),
 }));
 
-// Mock API.
+const mockCreateTicketEntry = vi.fn().mockResolvedValue({});
+const mockSetTicketNotificationPref = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/support-api", () => ({
-  createTicketEntry: vi.fn().mockResolvedValue({}),
-  setTicketNotificationPref: vi.fn().mockResolvedValue(undefined),
+  createTicketEntry: (...args: unknown[]) => mockCreateTicketEntry(...args),
+  setTicketNotificationPref: (...args: unknown[]) => mockSetTicketNotificationPref(...args),
 }));
 
-// Mock MessageEditor to avoid Tiptap JSDOM issues.
+vi.mock("@/lib/global-api", () => ({
+  uploadThreadAttachment: vi.fn().mockResolvedValue({}),
+  downloadUpload: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/components/editor/message-editor", () => ({
-  MessageEditor: ({ placeholder }: { placeholder?: string }) => (
-    <div data-testid="message-editor">{placeholder}</div>
+  MessageEditor: ({
+    placeholder,
+    onChange,
+  }: {
+    placeholder?: string;
+    onChange?: (content: string) => void;
+  }) => (
+    <div data-testid="message-editor">
+      {placeholder}
+      <button data-testid="editor-fill-btn" onClick={() => onChange?.("<p>hello</p>")}>
+        fill
+      </button>
+    </div>
   ),
 }));
 
-// ── TicketEntryComposer ──────────────────────────────────────────────────────
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockGetToken.mockResolvedValue("tok");
+});
 
 describe("TicketEntryComposer", () => {
-  it("renders submit button", () => {
+  it("shows customer message and draft options for non-DEFT users", () => {
     render(<TicketEntryComposer ticketSlug="t1" isDeftMember={false} />);
+    expect(screen.getByTestId("entry-type-btn-customer")).toBeInTheDocument();
+    expect(screen.getByTestId("entry-type-btn-draft")).toBeInTheDocument();
+    expect(screen.queryByTestId("entry-type-btn-agent_reply")).not.toBeInTheDocument();
+  });
+
+  it("shows DEFT-only checkbox only for DEFT agent reply type", async () => {
+    const user = userEvent.setup();
+    render(<TicketEntryComposer ticketSlug="t1" isDeftMember={true} />);
+    expect(screen.getByTestId("deft-only-checkbox")).toBeInTheDocument();
+    await user.click(screen.getByTestId("entry-type-btn-context"));
+    expect(screen.queryByTestId("deft-only-checkbox")).not.toBeInTheDocument();
+  });
+
+  it("renders editor and submit button", () => {
+    render(<TicketEntryComposer ticketSlug="t1" isDeftMember={true} />);
+    expect(screen.getByTestId("message-editor")).toBeInTheDocument();
     expect(screen.getByTestId("composer-submit-btn")).toBeInTheDocument();
   });
 
-  it("hides entry type selector for non-DEFT members", () => {
-    render(<TicketEntryComposer ticketSlug="t1" isDeftMember={false} />);
-    expect(screen.queryByTestId("entry-type-btn-agent_reply")).toBeNull();
-  });
-
-  it("shows all 5 entry type buttons for DEFT members", () => {
+  it("submits composer payload for DEFT agent reply", async () => {
+    const user = userEvent.setup();
     render(<TicketEntryComposer ticketSlug="t1" isDeftMember={true} />);
-    expect(screen.getByTestId("entry-type-btn-agent_reply")).toBeInTheDocument();
-    expect(screen.getByTestId("entry-type-btn-draft")).toBeInTheDocument();
-    expect(screen.getByTestId("entry-type-btn-context")).toBeInTheDocument();
-    expect(screen.getByTestId("entry-type-btn-customer")).toBeInTheDocument();
-    expect(screen.getByTestId("entry-type-btn-system_event")).toBeInTheDocument();
+    await user.click(screen.getByTestId("editor-fill-btn"));
+    await user.click(screen.getByTestId("composer-submit-btn"));
+    expect(mockCreateTicketEntry).toHaveBeenCalledWith(
+      "tok",
+      "t1",
+      expect.objectContaining({ type: "agent_reply", is_deft_only: false }),
+    );
   });
 
-  it("shows DEFT-only checkbox for DEFT members on non-context types", () => {
+  it("forces context entries to DEFT-only", async () => {
+    const user = userEvent.setup();
     render(<TicketEntryComposer ticketSlug="t1" isDeftMember={true} />);
-    expect(screen.getByTestId("deft-only-checkbox")).toBeInTheDocument();
-  });
-
-  it("hides DEFT-only checkbox for non-DEFT members", () => {
-    render(<TicketEntryComposer ticketSlug="t1" isDeftMember={false} />);
-    expect(screen.queryByTestId("deft-only-checkbox")).toBeNull();
-  });
-
-  it("renders the message editor", () => {
-    render(<TicketEntryComposer ticketSlug="t1" isDeftMember={false} />);
-    expect(screen.getByTestId("message-editor")).toBeInTheDocument();
+    await user.click(screen.getByTestId("entry-type-btn-context"));
+    await user.click(screen.getByTestId("editor-fill-btn"));
+    await user.click(screen.getByTestId("composer-submit-btn"));
+    expect(mockCreateTicketEntry).toHaveBeenCalledWith(
+      "tok",
+      "t1",
+      expect.objectContaining({ type: "context", is_deft_only: true }),
+    );
   });
 });
 
-// ── NotificationPrefs ────────────────────────────────────────────────────────
-
 describe("NotificationPrefs", () => {
-  it("renders both preference options", () => {
+  it("does not save when selecting current preference", async () => {
+    const user = userEvent.setup();
+    render(<NotificationPrefs ticketSlug="t1" currentLevel="full" />);
+    await user.click(screen.getByTestId("notif-pref-full"));
+    expect(mockSetTicketNotificationPref).not.toHaveBeenCalled();
+  });
+  it("renders both full and privacy options", () => {
     render(<NotificationPrefs ticketSlug="t1" currentLevel="full" />);
     expect(screen.getByTestId("notif-pref-full")).toBeInTheDocument();
     expect(screen.getByTestId("notif-pref-privacy")).toBeInTheDocument();
   });
 
-  it("renders with full level initially selected", () => {
+  it("saves preference change and toggles active state", async () => {
+    const user = userEvent.setup();
     render(<NotificationPrefs ticketSlug="t1" currentLevel="full" />);
-    // The full button should have the selected styles (border-primary class present).
-    const fullBtn = screen.getByTestId("notif-pref-full");
-    expect(fullBtn.className).toContain("border-primary");
+    await user.click(screen.getByTestId("notif-pref-privacy"));
+    expect(mockSetTicketNotificationPref).toHaveBeenCalledWith("tok", "t1", "privacy");
   });
 
-  it("renders with privacy level initially selected", () => {
-    render(<NotificationPrefs ticketSlug="t1" currentLevel="privacy" />);
-    const privacyBtn = screen.getByTestId("notif-pref-privacy");
-    expect(privacyBtn.className).toContain("border-primary");
-  });
-
-  it("shows heading text", () => {
+  it("shows fallback error when preference save fails with non-Error", async () => {
+    const user = userEvent.setup();
+    mockSetTicketNotificationPref.mockRejectedValueOnce("oops");
     render(<NotificationPrefs ticketSlug="t1" currentLevel="full" />);
-    expect(screen.getByTestId("notification-prefs")).toHaveTextContent("Email notifications");
+    await user.click(screen.getByTestId("notif-pref-privacy"));
+    expect(await screen.findByTestId("notif-prefs-error")).toHaveTextContent(
+      "Failed to save preference",
+    );
   });
 
-  it("displays full detail description", () => {
+  it("does not save when auth token is unavailable", async () => {
+    const user = userEvent.setup();
+    mockGetToken.mockResolvedValueOnce(null);
     render(<NotificationPrefs ticketSlug="t1" currentLevel="full" />);
-    expect(screen.getByTestId("notif-pref-full")).toHaveTextContent("Full detail");
-  });
-
-  it("displays privacy mode description", () => {
-    render(<NotificationPrefs ticketSlug="t1" currentLevel="privacy" />);
-    expect(screen.getByTestId("notif-pref-privacy")).toHaveTextContent("Privacy mode");
+    await user.click(screen.getByTestId("notif-pref-privacy"));
+    expect(mockSetTicketNotificationPref).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "t1",
+      "privacy",
+    );
   });
 });

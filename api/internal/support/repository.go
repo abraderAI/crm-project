@@ -47,22 +47,25 @@ func (r *Repository) FindTicketBySlug(ctx context.Context, slug string) (*models
 }
 
 // ListEntries returns all messages belonging to the given thread that pass the
-// caller's visibility filter. When isDeftMember is false, only customer-visible
-// entries with IsDeftOnly=false are returned.
-func (r *Repository) ListEntries(ctx context.Context, threadID string, isDeftMember bool) ([]models.Message, error) {
+// caller's visibility filter.
+//   - DEFT members see every entry.
+//   - Non-DEFT callers see: published customer messages, published agent replies,
+//     system events (all with IsDeftOnly=false), plus their own draft entries
+//     (authorID match) so they can review and send later.
+func (r *Repository) ListEntries(ctx context.Context, threadID string, isDeftMember bool, ownerID string) ([]models.Message, error) {
 	q := r.db.WithContext(ctx).Where("thread_id = ?", threadID)
 
 	if !isDeftMember {
-		// Non-DEFT callers see: customer, agent_reply (published only), system_event
-		// — and only when IsDeftOnly is false.
+		// Visible public entries (published, not DEFT-only).
 		q = q.Where(
-			"type IN ? AND is_published = ? AND is_deft_only = ?",
+			"(type IN ? AND is_published = ? AND is_deft_only = ?) OR (type = ? AND author_id = ?)",
 			[]models.MessageType{
 				models.MessageTypeCustomer,
 				models.MessageTypeAgentReply,
 				models.MessageTypeSystemEvent,
 			},
 			true, false,
+			models.MessageTypeDraft, ownerID,
 		)
 	}
 

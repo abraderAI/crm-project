@@ -41,15 +41,24 @@ func (h *Handler) resolveCallerVisibility(w http.ResponseWriter, r *http.Request
 
 // ListEntries handles GET /v1/support/tickets/{slug}/entries.
 // Returns entries filtered to what the caller is permitted to see.
+// Non-DEFT callers also receive their own draft entries so they can edit
+// and publish them later.
 func (h *Handler) ListEntries(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
-	isDeft, abort := h.resolveCallerVisibility(w, r)
-	if abort {
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
 		return
 	}
 
-	entries, err := h.service.ListEntries(r.Context(), slug, isDeft)
+	isDeft, err := h.service.IsDeftMember(r.Context(), uc.UserID)
+	if err != nil {
+		apierrors.InternalError(w, "failed to check permissions")
+		return
+	}
+
+	entries, err := h.service.ListEntries(r.Context(), slug, isDeft, uc.UserID)
 	if err != nil {
 		apierrors.InternalError(w, "failed to list entries")
 		return

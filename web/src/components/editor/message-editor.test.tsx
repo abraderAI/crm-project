@@ -154,24 +154,42 @@ describe("MessageEditor", () => {
     expect(screen.getByTestId("toolbar-image")).toBeInTheDocument();
   });
 
-  it("prompts for image URL on insert image", async () => {
+  it("opens image insertion panel from toolbar", async () => {
     const user = userEvent.setup();
-    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("https://example.com/img.png");
     render(<MessageEditor onSubmit={vi.fn()} />);
 
     await user.click(screen.getByTestId("toolbar-image"));
-    expect(promptSpy).toHaveBeenCalledWith("Image URL:");
-    expect(mockSetImage).toHaveBeenCalledWith({ src: "https://example.com/img.png" });
-    promptSpy.mockRestore();
+    expect(screen.getByTestId("image-insert-panel")).toBeInTheDocument();
   });
 
-  it("does not insert image when prompt cancelled", async () => {
+  it("inserts image from URL via panel", async () => {
     const user = userEvent.setup();
-    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
     render(<MessageEditor onSubmit={vi.fn()} />);
 
     await user.click(screen.getByTestId("toolbar-image"));
-    expect(mockSetImage).not.toHaveBeenCalled();
-    promptSpy.mockRestore();
+    await user.type(screen.getByTestId("image-url-input"), "https://example.com/img.png");
+    await user.click(screen.getByTestId("insert-image-url-btn"));
+    expect(mockSetImage).toHaveBeenCalledWith({ src: "https://example.com/img.png" });
+  });
+
+  it("shows image URL validation error when submit is empty", async () => {
+    const user = userEvent.setup();
+    render(<MessageEditor onSubmit={vi.fn()} />);
+    await user.click(screen.getByTestId("toolbar-image"));
+    await user.click(screen.getByTestId("insert-image-url-btn"));
+    expect(screen.getByTestId("image-insert-error")).toBeInTheDocument();
+  });
+
+  it("renders and uses image options when provided", async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageEditor
+        onSubmit={vi.fn()}
+        imageOptions={[{ label: "attached.png", url: "https://example.com/attached.png" }]}
+      />,
+    );
+    await user.click(screen.getByTestId("toolbar-image"));
+    await user.click(screen.getByTestId("image-option-attached.png"));
+    expect(mockSetImage).toHaveBeenCalledWith({ src: "https://example.com/attached.png" });
   });
 });
