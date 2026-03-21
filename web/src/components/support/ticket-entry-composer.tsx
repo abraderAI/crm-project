@@ -241,7 +241,7 @@ export function TicketEntryComposer({
       {error && (
         <div
           data-testid="composer-error"
-          className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/50 dark:text-red-300"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {error}

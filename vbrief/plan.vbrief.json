@@ -2,51 +2,38 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Display org name alongside user activity across the site",
-    "created": "2026-03-21T20:15:00Z"
+    "description": "Fix support ticket dark mode card readability",
+    "created": "2026-03-21T22:04:43Z"
   },
   "plan": {
-    "id": "org-name-across-site",
-    "title": "Display Org Name Alongside User Activity",
-    "status": "running",
-    "tags": ["backend", "frontend", "admin", "user-management"],
+    "id": "fix-support-ticket-dark-mode-cards",
+    "title": "Fix support ticket card text unreadable in dark/night mode",
+    "status": "completed",
+    "tags": ["frontend", "dark-mode", "support"],
     "items": [
       {
-        "id": "be-enrich-get-user",
-        "title": "Phase 1a: Add OrgMembershipWithOrg response type; enrich GetUser",
-        "status": "completed",
-        "narrative": { "Problem": "GetUser returns memberships with raw org_id only; need org_name + org_slug via JOIN" }
-      },
-      {
-        "id": "be-enrich-list-users",
-        "title": "Phase 1b: Add primary_org_name/slug to ListUsers response",
-        "status": "completed",
-        "narrative": { "Problem": "ListUsers returns bare UserShadow with no org context; need LEFT JOIN for primary org" }
-      },
-      {
-        "id": "fe-types",
-        "title": "Phase 2: Update frontend types (UserShadow, OrgMembershipEnriched)",
+        "id": "entry-type-config",
+        "title": "Add dark: variants to ENTRY_TYPE_CONFIG in ticket-timeline.tsx",
         "status": "completed"
       },
       {
-        "id": "fe-users-list",
-        "title": "Phase 3: Show org badge on admin users list rows",
+        "id": "status-badges",
+        "title": "Add dark: variants to STATUS_STYLES and STATUS_BADGE maps",
         "status": "completed"
       },
       {
-        "id": "fe-user-detail",
-        "title": "Phase 4: Show org name + link in memberships table",
+        "id": "stats-strip",
+        "title": "Add dark: variants to stats strip in support-management-view.tsx",
         "status": "completed"
       },
       {
-        "id": "fe-other-surfaces",
-        "title": "Phase 5 (stretch): Org context on messages, audit, reports, CRM",
-        "status": "pending",
-        "narrative": { "Problem": "Lower priority — depends on backend enrichment or client-side lookup cache" }
+        "id": "misc-elements",
+        "title": "Add dark: variants to org badge, error banners, DEFT Only badge",
+        "status": "completed"
       },
       {
-        "id": "tests-verify",
-        "title": "Tests + task check",
+        "id": "verify-tests",
+        "title": "Run task test to verify no regressions",
         "status": "completed"
       }
     ]

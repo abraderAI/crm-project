@@ -21,28 +21,28 @@ const ENTRY_TYPE_CONFIG: Record<
 > = {
   customer: {
     label: "Customer",
-    badgeClass: "bg-green-100 text-green-800",
-    bgClass: "bg-green-50 border-green-200",
+    badgeClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    bgClass: "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800",
   },
   agent_reply: {
     label: "Agent Reply",
-    badgeClass: "bg-green-100 text-green-800",
-    bgClass: "bg-green-50 border-green-200",
+    badgeClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    bgClass: "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800",
   },
   draft: {
     label: "Draft",
-    badgeClass: "bg-gray-200 text-gray-700",
-    bgClass: "bg-gray-100 border-gray-300",
+    badgeClass: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
+    bgClass: "bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600",
   },
   context: {
     label: "Internal",
-    badgeClass: "bg-red-100 text-red-800",
-    bgClass: "bg-red-50 border-red-200",
+    badgeClass: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+    bgClass: "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800",
   },
   system_event: {
     label: "System",
-    badgeClass: "bg-orange-100 text-orange-700",
-    bgClass: "bg-orange-50 border-orange-200",
+    badgeClass: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200",
+    bgClass: "bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800",
   },
 };
 
@@ -186,7 +186,7 @@ export function TicketTimeline({
               {entry.is_deft_only && (
                 <span
                   data-testid={`entry-deft-only-badge-${entry.id}`}
-                  className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700"
+                  className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-200"
                 >
                   DEFT Only
                 </span>

@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fuzz test suites across 14 packages
 - vBRIEF specification files for all major features
 
+### Fixed
+- Support ticket cards, status badges, stats strip, and error banners now use dark-shifted color palettes in night/dark mode for readable text contrast
+
 ### Changed
 - Updated deft submodule URL to `deftai/directive` (previously `visionik/deft`) and pinned to latest master
 - Updated vBRIEF repo reference to `deftai/vBRIEF` (previously `visionik/vBRIEF`); spec version remains 0.5
