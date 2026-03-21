@@ -23,7 +23,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Org membership management** — Add users to orgs via searchable org picker with inline org creation; remove users from orgs; delete orgs (soft-delete) from list and detail views
 - **GDPR** — Hard-purge admin endpoints; soft delete everywhere else
 - **Observability** — Structured `slog` logging + OpenTelemetry traces and metrics
-- **App shell** — Sidebar navigation, topbar with search + user menu, breadcrumbs, dark/light theme toggle
+- **App shell** — Sidebar navigation, topbar with search + user menu, breadcrumbs, dark/light theme toggle with full dark-mode color palettes across all support ticket views (entry cards, status badges, stats strip, error banners)
 - **File preview** — Rich staged file previews (image thumbnails, icons, size) with upload progress indicators
 - **IO Channel Gateway** — Pluggable inbound channel processing with per-channel config, dead-letter queue (DLQ), and exponential-backoff retry engine
 - **Inbound Email** — Multiple IMAP inboxes per org (e.g. support@, sales@), each with a configurable **routing action**: `support_ticket` → Support space, `sales_lead` → CRM space, `general` → General space. Live IMAP IDLE watcher starts on server boot, reconnects with exponential backoff, and delivers unread mail on reconnect. MIME parsing, thread deduplication by Message-ID / In-Reply-To, attachment storage, and dead-letter queue.
