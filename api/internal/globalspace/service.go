@@ -380,7 +380,21 @@ func (s *Service) CreateThread(ctx context.Context, spaceSlug, authorID string, 
 		Visibility: models.ThreadVisibilityOrgOnly,
 		OrgID:      input.OrgID,
 	}
-	if err := s.repo.CreateThread(ctx, t); err != nil {
+	var initialEntry *models.Message
+	if spaceSlug == "global-support" && input.Body != "" {
+		now := time.Now()
+		initialEntry = &models.Message{
+			Body:        input.Body,
+			AuthorID:    authorID,
+			Metadata:    "{}",
+			Type:        models.MessageTypeCustomer,
+			IsDeftOnly:  false,
+			IsPublished: true,
+			IsImmutable: true,
+			PublishedAt: &now,
+		}
+	}
+	if err := s.repo.CreateThreadWithInitialEntry(ctx, t, initialEntry); err != nil {
 		return nil, err
 	}
 

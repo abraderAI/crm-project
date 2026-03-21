@@ -92,6 +92,26 @@ func (r *Repository) CreateThread(ctx context.Context, thread *models.Thread) er
 	return nil
 }
 
+// CreateThreadWithInitialEntry creates a thread and optionally creates an
+// initial message entry in the same transaction.
+func (r *Repository) CreateThreadWithInitialEntry(ctx context.Context, thread *models.Thread, initialEntry *models.Message) error {
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(thread).Error; err != nil {
+			return fmt.Errorf("creating global space thread: %w", err)
+		}
+		if initialEntry != nil {
+			initialEntry.ThreadID = thread.ID
+			if err := tx.Create(initialEntry).Error; err != nil {
+				return fmt.Errorf("creating initial thread entry: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 // SlugExistsInBoard reports whether a thread slug already exists in boardID.
 func (r *Repository) SlugExistsInBoard(ctx context.Context, boardID, threadSlug string) (bool, error) {
 	var count int64

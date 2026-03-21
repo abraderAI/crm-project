@@ -342,6 +342,22 @@ func TestService_CreateThread(t *testing.T) {
 		assert.NotEqual(t, t1.Slug, t2.Slug)
 		assert.Equal(t, "dup-ticket-2", t2.Slug)
 	})
+
+	t.Run("support ticket with body creates initial customer message entry", func(t *testing.T) {
+		th, err := svc.CreateThread(ctx, "global-support", "user1", CreateInput{
+			Title: "Initial Body Ticket",
+			Body:  "<p>First customer message</p>",
+		})
+		require.NoError(t, err)
+
+		var msgs []models.Message
+		require.NoError(t, db.Where("thread_id = ?", th.ID).Order("created_at ASC").Find(&msgs).Error)
+		require.Len(t, msgs, 1)
+		assert.Equal(t, models.MessageTypeCustomer, msgs[0].Type)
+		assert.Equal(t, "<p>First customer message</p>", msgs[0].Body)
+		assert.True(t, msgs[0].IsPublished)
+		assert.True(t, msgs[0].IsImmutable)
+	})
 }
 
 // TestHandler_GetThread covers the GET /{slug} endpoint.

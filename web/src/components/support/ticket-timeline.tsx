@@ -231,7 +231,7 @@ export function TicketTimeline({
             ) : (
               <div
                 data-testid={`entry-body-${entry.id}`}
-                className="prose prose-sm dark:prose-invert max-w-none text-foreground"
+                className="support-entry-body prose prose-sm dark:prose-invert max-w-none text-foreground"
                 dangerouslySetInnerHTML={{ __html: entry.body }}
               />
             )}
