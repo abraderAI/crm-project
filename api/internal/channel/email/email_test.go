@@ -1223,14 +1223,20 @@ func TestIDLEManagerRegistry_HealthReportsAndIsHealthy(t *testing.T) {
 	registry := NewIDLEManagerRegistry()
 
 	mock := NewMockIMAPProvider()
-	mock.StartIDLEFunc = func(_ string, _ func(uint32)) error { return nil }
+	// Always fail to connect so the manager can never reach a healthy (IDLE/Connected)
+	// state. Without this the goroutine started by Register races through Connect →
+	// StartIDLE and may be in ConnectionStateIDLE by the time we assert.
+	mock.ConnectFunc = func(_ channel.EmailConfig) error {
+		return fmt.Errorf("simulated connection failure")
+	}
 	cfg := IDLEManagerConfig{
 		OrgID:       "org-hr",
 		EmailConfig: channel.EmailConfig{IMAPHost: "mail.test", IMAPPort: 993, Username: "u"},
 		Provider:    mock,
 		OnMessage:   func(_ uint32) {},
 	}
-	mgr := NewIDLEManager(cfg)
+	// No-op sleep avoids real backoff delays in CI.
+	mgr := newIDLEManagerForTest(cfg, func(_ time.Duration) {})
 	registry.Register("org-hr", mgr)
 
 	// HealthReports returns one report per manager.
@@ -1238,7 +1244,7 @@ func TestIDLEManagerRegistry_HealthReportsAndIsHealthy(t *testing.T) {
 	assert.Len(t, reports, 1)
 	assert.Equal(t, "org-hr", reports[0]["org_id"])
 
-	// IsHealthy returns false for disconnected org and for unknown org.
+	// IsHealthy returns false for a manager that cannot connect and for unknown org.
 	assert.False(t, registry.IsHealthy("org-hr"))
 	assert.False(t, registry.IsHealthy("unknown-org"))
 

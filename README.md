@@ -31,7 +31,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Reporting** — Org-scoped support-ticket and sales-pipeline analytics (15 query types): volume-over-time, status/priority breakdowns, assignee distribution, win/loss rates, funnel conversion, deal-value score distribution, avg time-in-stage, and CSV export with date + assignee filtering. Platform admins get cross-org aggregate dashboards with per-org sortable breakdown tables.
 - **RBAC User Tiers** — Six-tier user classification (anonymous → authenticated → customer → customer admin → DEFT internal → platform admin) with tier-specific home screens, customisable widget layouts, global content spaces (docs, forum, support, leads), AI chatbot with live-agent escalation, and automated conversion flows (self-service upgrade, sales-led conversion, admin promotion).
 - **Leads Management** — Dedicated `/crm/leads` page for DEFT sales staff: tier 5–6 see all leads with assignee filter; tier 4 sales reps see only their own and assigned leads. Status/search filters, load-more pagination, and detail view per lead.
-- **Support Ticket Management** — Tier-aware `/support` page: tier 1 sees a sign-in prompt; tiers 2–3 see own tickets (org-scoped for org members); tier 4 DEFT staff and tier 5 DEFT support admins see all tickets; tier 5 customer org admins see org-scoped tickets; all elevated views include an open/pending/resolved stats strip. Inline create-ticket form with `org_id` passthrough. Each ticket row shows the **subject** and **creator** (email + org name). Clicking **Open** launches an inline work-view modal where the ticket body can be edited and DEFT internal/platform-admin users (tiers 5–6) can update the ticket status (`open` → `pending` → `resolved`). Changes are saved via a `PATCH` call and the list refreshes automatically.
+- **Support Ticket Management** — Tier-aware `/support` page: tier 1 sees a sign-in prompt; tiers 2–3 see own tickets (org-scoped for org members); tier 4 DEFT staff and tier 5 DEFT support admins see all tickets; tier 5 customer org admins see org-scoped tickets; all elevated views include an open/pending/resolved stats strip. Inline create-ticket form with `org_id` passthrough. Each ticket row shows the **subject** and **creator** (email + org name). Clicking **Open** opens the full **multi-entry ticket editor**: a chronological timeline of entries (customer messages, agent replies, internal context notes, drafts, system events) with per-entry badges and timestamps. The ticket creator's initial body is automatically saved as the first customer entry on creation. Entries may be published, edited (drafts only), and toggled between public and DEFT-only visibility. DEFT members (tiers 4–6) can compose new entries, set DEFT-only visibility, and update ticket status (`open` → `pending` → `resolved`). Immutable entries (initial customer message, published entries) are locked. Full dark-mode support throughout.
 
 ---
 
@@ -152,7 +152,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/crm/leads` | Leads management — tier-aware list: tier 5–6 see all leads with assignee filter; tier 4 `deft_sales` reps see own/assigned leads only; status, search, and load-more pagination |
 | `/crm/leads/global/[thread_slug]` | Global lead detail — enrichment data, scoring breakdown, and metadata sidebar for leads in the `global-leads` space |
 | `/crm/leads/[org]/[space]/[board]/[thread]` | Lead detail — enrichment, scoring breakdown, metadata sidebar |
-| `/support` | Support tickets — tier-aware: own tickets (tier 2–3), org-scoped tickets (tier 3 with org, tier 5 owner), all tickets (tier 4+) with open/pending/resolved stats strip; inline create-ticket form; ticket rows show subject, creator email, and org; **Open** button opens a work-view modal for body editing and status transitions (tiers 5–6 only) |
+| `/support` | Support tickets — tier-aware list with open/pending/resolved stats strip and inline create-ticket form; **Open** launches the multi-entry ticket editor: chronological timeline of customer messages, agent replies, drafts, internal notes, and system events; initial ticket body auto-saved as first entry; per-entry publish / edit / DEFT-visibility controls; status transitions (tiers 4–6) |
 | `/search` | Full-text search with filters |
 | `/notifications` | Notification feed |
 | `/notifications/preferences` | Notification channel preferences |
@@ -347,9 +347,24 @@ The `global-support` and `global-leads` spaces are served under `/v1/global-spac
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/v1/global-spaces/{space}/threads` | List threads — enriched with `author_email`, `author_name`, `org_name`; cursor-paginated |
-| `POST` | `/v1/global-spaces/{space}/threads` | Create a thread in a global space |
+| `POST` | `/v1/global-spaces/{space}/threads` | Create a thread in a global space; a non-empty body is atomically saved as the first customer timeline entry |
 | `GET` | `/v1/global-spaces/{space}/threads/{slug}` | Fetch a single thread with author enrichment |
 | `PATCH` | `/v1/global-spaces/{space}/threads/{slug}` | Update thread body and/or status; status change is written as a metadata deep-merge and a revision is recorded |
+| `GET` | `/v1/global-spaces/{space}/threads/{slug}/attachments` | List file attachments for a thread |
+| `POST` | `/v1/global-spaces/{space}/threads/{slug}/attachments` | Upload a file attachment to a thread |
+
+### Support Ticket Entry Endpoints
+
+The multi-entry ticket editor exposes a sub-resource API under `/v1/support/tickets/{slug}`. Entry visibility is filtered by DEFT membership: non-DEFT callers only receive published entries and their own drafts.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/support/tickets/{slug}/entries` | List entries — published entries visible to all; DEFT callers also see DEFT-only entries |
+| `POST` | `/v1/support/tickets/{slug}/entries` | Create a new entry (`customer`, `agent_reply`, `draft`, `context`, `system_event`) |
+| `PATCH` | `/v1/support/tickets/{slug}/entries/{id}` | Update body of a mutable (draft, not yet published) entry |
+| `POST` | `/v1/support/tickets/{slug}/entries/{id}/publish` | Publish a draft entry (DEFT members or the draft's own author) |
+| `PATCH` | `/v1/support/tickets/{slug}/entries/{id}/deft-visibility` | Toggle DEFT-only visibility on an entry (DEFT members only) |
+| `PATCH` | `/v1/support/tickets/{slug}/notifications` | Update the caller's notification preference for this ticket |
 
 ---
 
@@ -576,7 +591,7 @@ Config is read from `~/.deft-cli.yaml` with env var overrides (`DEFT_API_URL`, `
 
 ## Quality
 
-- **2,029 frontend tests** across 153 test files (Vitest) — 91% statement, 85% branch coverage
+- **2,050 frontend tests** across 159 test files (Vitest) — 91% statement, 85% branch coverage
 - **1,878 Go tests** across 37 packages with race detector enabled — 85.8% coverage
 - **15 fuzz functions** across 8 Go packages (`board`, `thread`, `message`, `membership`, `conversion`, `gdpr`, `tier`, `notification`), each with ≥ 40 diverse seeds
 - ≥ 85% test coverage enforced on every PR (statements + branches)
