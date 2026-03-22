@@ -49,6 +49,12 @@ type ListParams struct {
 	AuthorID string
 	// OrgID, when non-empty, restricts results to threads belonging to this org.
 	OrgID string
+	// VisibleOrgIDs enforces org-tier visibility: only threads with org_id IN this
+	// set are returned. Applied when the caller is an org member (ScopeOrg).
+	VisibleOrgIDs []string
+	// VisibleUserID enforces owner-tier visibility: only threads authored by or
+	// assigned to this user are returned. Applied when the caller has no org (ScopeOwner).
+	VisibleUserID string
 }
 
 // ListThreads returns a paginated list of threads in boardID, filtered by ListParams.
@@ -68,6 +74,14 @@ func (r *Repository) ListThreads(ctx context.Context, boardID string, params Lis
 	}
 	if params.OrgID != "" {
 		query = query.Where("org_id = ?", params.OrgID)
+	}
+
+	// Visibility enforcement filters.
+	if len(params.VisibleOrgIDs) > 0 {
+		query = query.Where("org_id IN ?", params.VisibleOrgIDs)
+	}
+	if params.VisibleUserID != "" {
+		query = query.Where("(author_id = ? OR assigned_to = ?)", params.VisibleUserID, params.VisibleUserID)
 	}
 
 	if err := query.Limit(params.Limit + 1).Find(&threads).Error; err != nil {
@@ -192,6 +206,51 @@ func (r *Repository) FindSystemOrgID(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("finding system org: %w", err)
 	}
 	return org.ID, nil
+}
+
+// FindUserOrgIDs returns the IDs of all orgs the user is an active member of.
+// An empty slice is returned when the user has no org memberships.
+func (r *Repository) FindUserOrgIDs(ctx context.Context, userID string) ([]string, error) {
+	var orgIDs []string
+	err := r.db.WithContext(ctx).
+		Model(&models.OrgMembership{}).
+		Select("org_id").
+		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Pluck("org_id", &orgIDs).Error
+	if err != nil {
+		return nil, fmt.Errorf("finding user org IDs: %w", err)
+	}
+	return orgIDs, nil
+}
+
+// IsDeftOrAdmin returns true when the user is a platform admin or has active
+// membership in the DEFT org (slug = "deft"). This determines top-tier
+// visibility for support ticket scoping.
+func (r *Repository) IsDeftOrAdmin(ctx context.Context, userID string) (bool, error) {
+	// Check platform admin first.
+	var adminCount int64
+	if err := r.db.WithContext(ctx).
+		Model(&models.PlatformAdmin{}).
+		Where("user_id = ? AND is_active = ?", userID, true).
+		Count(&adminCount).Error; err != nil {
+		return false, fmt.Errorf("checking platform admin: %w", err)
+	}
+	if adminCount > 0 {
+		return true, nil
+	}
+
+	// Check org membership in the DEFT org.
+	var memberCount int64
+	err := r.db.WithContext(ctx).
+		Model(&models.OrgMembership{}).
+		Joins("JOIN orgs ON orgs.id = org_memberships.org_id").
+		Where("org_memberships.user_id = ? AND orgs.slug = ? AND org_memberships.deleted_at IS NULL",
+			userID, "deft").
+		Count(&memberCount).Error
+	if err != nil {
+		return false, fmt.Errorf("checking deft membership: %w", err)
+	}
+	return memberCount > 0, nil
 }
 
 // GetOrgNamesByIDs returns a map of org ID → org name for the given IDs.
