@@ -342,7 +342,7 @@ func (r *Repository) GetUserPrimaryOrgNames(ctx context.Context, userIDs []strin
 	return result, nil
 }
 
-// FindUserShadowByEmail looks up a UserShadow by email address.
+// FindUserShadowByEmail
 // Returns nil, nil when no user with that email exists.
 func (r *Repository) FindUserShadowByEmail(ctx context.Context, email string) (*models.UserShadow, error) {
 	var shadow models.UserShadow

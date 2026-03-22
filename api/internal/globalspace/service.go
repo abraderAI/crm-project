@@ -256,7 +256,7 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 			rich.OrgName = authorOrgNames[t.AuthorID]
 		}
 
-		// Derive registration status for the ticket creator.
+		// Derive registration status
 		if t.ContactEmail != "" {
 			// Orphaned ticket — check whether the contact has since registered.
 			if _, found := shadows[t.AuthorID]; !found {
