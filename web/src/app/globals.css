@@ -56,6 +56,32 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+/* ── Sidebar visual polish ─────────────────────────────────── */
+
+.sidebar-root {
+  background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--background) 100%);
+}
+
+/* Smooth expand/collapse for sub-menus. */
+.sidebar-submenu {
+  transition: max-height 200ms ease, opacity 200ms ease;
+}
+
+/* Active item left accent border. */
+.sidebar-active-item {
+  position: relative;
+}
+.sidebar-active-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--primary);
+}
+
 /* Support timeline and editor readability in dark theme. */
 .dark .support-entry-body,
 .dark .support-entry-body * {
