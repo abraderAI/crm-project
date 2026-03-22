@@ -2,38 +2,48 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Fix support ticket dark mode card readability",
-    "created": "2026-03-21T22:04:43Z"
+    "description": "Enforce server-side visibility scoping for support tickets",
+    "created": "2026-03-21T23:30:00Z"
   },
   "plan": {
-    "id": "fix-support-ticket-dark-mode-cards",
-    "title": "Fix support ticket card text unreadable in dark/night mode",
+    "id": "support-ticket-visibility-scope",
+    "title": "Support Ticket Visibility Scope Enforcement",
     "status": "completed",
-    "tags": ["frontend", "dark-mode", "support"],
+    "tags": ["backend", "security", "support", "authorization"],
     "items": [
       {
-        "id": "entry-type-config",
-        "title": "Add dark: variants to ENTRY_TYPE_CONFIG in ticket-timeline.tsx",
+        "id": "repo-methods",
+        "title": "Add FindUserOrgIDs and IsDeftOrAdmin repository methods",
         "status": "completed"
       },
       {
-        "id": "status-badges",
-        "title": "Add dark: variants to STATUS_STYLES and STATUS_BADGE maps",
+        "id": "visibility-type",
+        "title": "Define VisibilityScope type and resolver in service layer",
         "status": "completed"
       },
       {
-        "id": "stats-strip",
-        "title": "Add dark: variants to stats strip in support-management-view.tsx",
+        "id": "list-enforcement",
+        "title": "Enforce visibility scoping in ListThreads (repo + service + handler)",
         "status": "completed"
       },
       {
-        "id": "misc-elements",
-        "title": "Add dark: variants to org badge, error banners, DEFT Only badge",
+        "id": "get-enforcement",
+        "title": "Enforce visibility on GetThread",
         "status": "completed"
       },
       {
-        "id": "verify-tests",
-        "title": "Run task test to verify no regressions",
+        "id": "mutation-enforcement",
+        "title": "Gate UpdateThread and attachment endpoints with visibility check",
+        "status": "completed"
+      },
+      {
+        "id": "tests",
+        "title": "Write tests for all three visibility tiers",
+        "status": "completed"
+      },
+      {
+        "id": "verify",
+        "title": "Run task check and ensure full pass",
         "status": "completed"
       }
     ]

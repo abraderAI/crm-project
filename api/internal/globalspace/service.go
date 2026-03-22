@@ -15,6 +15,26 @@ import (
 	"github.com/abraderAI/crm-project/api/pkg/slug"
 )
 
+// VisibilityScope controls which support tickets a caller may see.
+type VisibilityScope int
+
+const (
+	// ScopeAll allows access to all tickets (DEFT employees / platform admins).
+	ScopeAll VisibilityScope = iota
+	// ScopeOrg allows access to tickets belonging to the caller's org(s).
+	ScopeOrg
+	// ScopeOwner allows access only to tickets authored by or assigned to the caller.
+	ScopeOwner
+)
+
+// CallerVisibility holds the resolved visibility tier and associated data for
+// the authenticated caller.
+type CallerVisibility struct {
+	Scope  VisibilityScope
+	UserID string
+	OrgIDs []string // populated when Scope == ScopeOrg
+}
+
 // Service provides business logic for global space thread operations.
 type Service struct {
 	repo      *Repository
@@ -27,6 +47,51 @@ type Service struct {
 // attachments are supported respectively.
 func NewService(repo *Repository, bus *eventbus.Bus, uploadSvc *upload.Service) *Service {
 	return &Service{repo: repo, bus: bus, uploadSvc: uploadSvc}
+}
+
+// ResolveVisibility determines the caller's visibility tier for support tickets.
+// Must be called with a valid userID.
+func (s *Service) ResolveVisibility(ctx context.Context, userID string) (*CallerVisibility, error) {
+	isDeft, err := s.repo.IsDeftOrAdmin(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if isDeft {
+		return &CallerVisibility{Scope: ScopeAll, UserID: userID}, nil
+	}
+
+	orgIDs, err := s.repo.FindUserOrgIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(orgIDs) > 0 {
+		return &CallerVisibility{Scope: ScopeOrg, UserID: userID, OrgIDs: orgIDs}, nil
+	}
+
+	return &CallerVisibility{Scope: ScopeOwner, UserID: userID}, nil
+}
+
+// canSeeThread checks whether the caller's visibility tier permits access to
+// the given thread. Returns true when the caller may view the ticket.
+func canSeeThread(cv *CallerVisibility, t *models.Thread) bool {
+	switch cv.Scope {
+	case ScopeAll:
+		return true
+	case ScopeOrg:
+		if t.OrgID == nil {
+			return false
+		}
+		for _, oid := range cv.OrgIDs {
+			if oid == *t.OrgID {
+				return true
+			}
+		}
+		return false
+	case ScopeOwner:
+		return t.AuthorID == cv.UserID || t.AssignedTo == cv.UserID
+	default:
+		return false
+	}
 }
 
 // ThreadWithAuthor wraps a Thread with resolved author and org display names.
@@ -49,6 +114,9 @@ type ListInput struct {
 	Mine bool
 	// OrgID, when non-empty, restricts results to threads belonging to this org.
 	OrgID string
+	// Visibility is the resolved visibility tier for the caller. When non-nil
+	// and the space is global-support, the service enforces scoping.
+	Visibility *CallerVisibility
 }
 
 // ListThreads returns paginated, author-enriched threads from the specified global space.
@@ -68,6 +136,18 @@ func (s *Service) ListThreads(ctx context.Context, input ListInput) ([]ThreadWit
 	}
 	if input.OrgID != "" {
 		params.OrgID = input.OrgID
+	}
+
+	// Enforce visibility scoping for support tickets.
+	if input.SpaceSlug == "global-support" && input.Visibility != nil {
+		switch input.Visibility.Scope {
+		case ScopeOrg:
+			params.VisibleOrgIDs = input.Visibility.OrgIDs
+		case ScopeOwner:
+			params.VisibleUserID = input.Visibility.UserID
+		case ScopeAll:
+			// No additional filter.
+		}
 	}
 
 	threads, pageInfo, err := s.repo.ListThreads(ctx, board.ID, params)
@@ -146,8 +226,9 @@ func threadTypeForSpace(spaceSlug string) models.ThreadType {
 }
 
 // GetThread returns a single author-enriched thread by slug from the given global space.
-// Returns nil, nil when the thread does not exist.
-func (s *Service) GetThread(ctx context.Context, spaceSlug, threadSlug string) (*ThreadWithAuthor, error) {
+// When cv is non-nil and the space is global-support, visibility scoping is enforced.
+// Returns nil, nil when the thread does not exist or the caller lacks access.
+func (s *Service) GetThread(ctx context.Context, spaceSlug, threadSlug string, cv *CallerVisibility) (*ThreadWithAuthor, error) {
 	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
 	if err != nil {
 		return nil, fmt.Errorf("getting thread: %w", err)
@@ -161,6 +242,11 @@ func (s *Service) GetThread(ctx context.Context, spaceSlug, threadSlug string) (
 		return nil, fmt.Errorf("getting thread: %w", err)
 	}
 	if t == nil {
+		return nil, nil
+	}
+
+	// Enforce visibility for support tickets.
+	if spaceSlug == "global-support" && cv != nil && !canSeeThread(cv, t) {
 		return nil, nil
 	}
 
@@ -181,8 +267,8 @@ type UpdateInput struct {
 
 // UpdateThread applies a partial update to a thread in the given global space.
 // Status is stored via metadata deep-merge. A revision record is saved.
-// Returns nil, nil when the thread does not exist.
-func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, editorID string, input UpdateInput) (*ThreadWithAuthor, error) {
+// Returns nil, nil when the thread does not exist or the caller lacks access.
+func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, editorID string, input UpdateInput, cv *CallerVisibility) (*ThreadWithAuthor, error) {
 	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
 	if err != nil {
 		return nil, fmt.Errorf("updating thread: %w", err)
@@ -196,6 +282,11 @@ func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, edito
 		return nil, fmt.Errorf("updating thread: %w", err)
 	}
 	if t == nil {
+		return nil, nil
+	}
+
+	// Enforce visibility for support tickets.
+	if spaceSlug == "global-support" && cv != nil && !canSeeThread(cv, t) {
 		return nil, nil
 	}
 
@@ -259,8 +350,8 @@ func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, edito
 }
 
 // ListAttachments returns all uploads attached to the specified thread.
-// Returns nil, nil when the space or thread does not exist.
-func (s *Service) ListAttachments(ctx context.Context, spaceSlug, threadSlug string) ([]models.Upload, error) {
+// Returns nil, nil when the space or thread does not exist or the caller lacks access.
+func (s *Service) ListAttachments(ctx context.Context, spaceSlug, threadSlug string, cv *CallerVisibility) ([]models.Upload, error) {
 	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
 	if err != nil {
 		return nil, fmt.Errorf("listing attachments: %w", err)
@@ -277,6 +368,11 @@ func (s *Service) ListAttachments(ctx context.Context, spaceSlug, threadSlug str
 		return nil, nil
 	}
 
+	// Enforce visibility for support tickets.
+	if spaceSlug == "global-support" && cv != nil && !canSeeThread(cv, t) {
+		return nil, nil
+	}
+
 	uploads, err := s.repo.ListUploadsByThread(ctx, t.ID)
 	if err != nil {
 		return nil, err
@@ -287,8 +383,8 @@ func (s *Service) ListAttachments(ctx context.Context, spaceSlug, threadSlug str
 // UploadAttachment stores a file and associates it with the given thread.
 // The org_id for the upload is taken from the thread when available, falling
 // back to the _system org so that tickets from users without an org are accepted.
-// Returns nil, nil when the space or thread does not exist.
-func (s *Service) UploadAttachment(ctx context.Context, spaceSlug, threadSlug, uploaderID, filename string, size int64, file multipart.File) (*models.Upload, error) {
+// Returns nil, nil when the space or thread does not exist or the caller lacks access.
+func (s *Service) UploadAttachment(ctx context.Context, spaceSlug, threadSlug, uploaderID, filename string, size int64, file multipart.File, cv *CallerVisibility) (*models.Upload, error) {
 	if s.uploadSvc == nil {
 		return nil, fmt.Errorf("upload service not available")
 	}
@@ -306,6 +402,11 @@ func (s *Service) UploadAttachment(ctx context.Context, spaceSlug, threadSlug, u
 		return nil, fmt.Errorf("uploading attachment: %w", err)
 	}
 	if t == nil {
+		return nil, nil
+	}
+
+	// Enforce visibility for support tickets.
+	if spaceSlug == "global-support" && cv != nil && !canSeeThread(cv, t) {
 		return nil, nil
 	}
 
