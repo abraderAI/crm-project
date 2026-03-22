@@ -324,6 +324,19 @@ func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, edito
 			return nil, fmt.Errorf("updating assigned_to: %w", mergeErr)
 		}
 		t.Metadata = merged
+
+		// Auto-transition status: open → assigned on assign, assigned → open on unassign.
+		// Only applies when the caller did not explicitly set a status in the same request.
+		if input.Status == nil {
+			curStatus := t.Status // generated column from metadata
+			if *input.AssignedTo != "" && (curStatus == "" || curStatus == "open") {
+				statusPatch := `{"status":"assigned"}`
+				t.Metadata, _ = metadata.DeepMerge(t.Metadata, statusPatch)
+			} else if *input.AssignedTo == "" && curStatus == "assigned" {
+				statusPatch := `{"status":"open"}`
+				t.Metadata, _ = metadata.DeepMerge(t.Metadata, statusPatch)
+			}
+		}
 	}
 
 	if err := s.repo.UpdateThread(ctx, t); err != nil {

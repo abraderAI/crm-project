@@ -1247,6 +1247,80 @@ func TestHandler_UpdateThread_AssignedTo(t *testing.T) {
 	})
 }
 
+// TestService_UpdateThread_AssignAutoTransitionsStatus verifies open→assigned and assigned→open.
+func TestService_UpdateThread_AssignAutoTransitionsStatus(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	seedDeftMember(t, db, "agent-status")
+
+	th, err := svc.CreateThread(ctx, "global-support", "customer", CreateInput{Title: "Status Transition"})
+	require.NoError(t, err)
+
+	t.Run("assign transitions open to assigned", func(t *testing.T) {
+		assignee := "agent-status"
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{AssignedTo: &assignee}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rich)
+		assert.Equal(t, "assigned", rich.Status)
+		assert.Equal(t, "agent-status", rich.AssignedTo)
+	})
+
+	t.Run("unassign transitions assigned back to open", func(t *testing.T) {
+		empty := ""
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{AssignedTo: &empty}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rich)
+		assert.Equal(t, "open", rich.Status)
+		assert.Equal(t, "", rich.AssignedTo)
+	})
+
+	t.Run("assign does not override pending status", func(t *testing.T) {
+		// First set status to pending.
+		pending := "pending"
+		_, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{Status: &pending}, nil)
+		require.NoError(t, err)
+
+		// Now assign — should NOT override pending to assigned.
+		assignee := "agent-status"
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{AssignedTo: &assignee}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rich)
+		assert.Equal(t, "pending", rich.Status, "assigning should not override non-open status")
+		assert.Equal(t, "agent-status", rich.AssignedTo)
+	})
+
+	t.Run("unassign does not revert resolved status", func(t *testing.T) {
+		// Set status to resolved.
+		resolved := "resolved"
+		_, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{Status: &resolved}, nil)
+		require.NoError(t, err)
+
+		// Now unassign — should NOT revert resolved to open.
+		empty := ""
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{AssignedTo: &empty}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rich)
+		assert.Equal(t, "resolved", rich.Status, "unassigning should not revert non-assigned status")
+	})
+
+	t.Run("explicit status in same request takes precedence", func(t *testing.T) {
+		// Reset to open first.
+		open := "open"
+		_, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{Status: &open}, nil)
+		require.NoError(t, err)
+
+		// Assign AND set status to pending in the same request.
+		assignee := "agent-status"
+		pending := "pending"
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{AssignedTo: &assignee, Status: &pending}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rich)
+		assert.Equal(t, "pending", rich.Status, "explicit status should override auto-transition")
+	})
+}
+
 // TestService_UpdateThread_AssignPublishesEvent verifies assigned_to is in the event payload.
 func TestService_UpdateThread_AssignPublishesEvent(t *testing.T) {
 	db, _ := setupDB(t)

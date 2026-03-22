@@ -2,49 +2,44 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Ticket assignment — assignee picker and notification",
-    "created": "2026-03-22T01:03:00Z"
+    "description": "Assigned ticket status — auto-transition on assignment",
+    "created": "2026-03-22T01:38:00Z"
   },
   "plan": {
-    "id": "ticket-assignment",
-    "title": "Ticket Assignment — Assignee Picker + Notification",
-    "status": "completed",
-    "tags": ["backend", "frontend", "support", "notifications"],
+    "id": "assigned-ticket-status",
+    "title": "Assigned Ticket Status",
+    "status": "running",
+    "tags": ["backend", "frontend", "support"],
     "items": [
       {
-        "id": "backend-update-flow",
-        "title": "Add assigned_to to globalspace update flow",
-        "status": "completed"
+        "id": "backend-auto-transition",
+        "title": "Auto-transition status on assign/unassign in UpdateThread",
+        "status": "pending"
       },
       {
-        "id": "backend-deft-members-endpoint",
-        "title": "New endpoint: GET /v1/support/deft-members",
-        "status": "completed"
+        "id": "frontend-detail-page",
+        "title": "Add assigned status to ticket detail page",
+        "status": "pending"
       },
       {
-        "id": "frontend-api-client",
-        "title": "API client updates (types + fetchDeftMembers)",
-        "status": "completed"
+        "id": "frontend-management-view",
+        "title": "Add assigned status to support management view + stats",
+        "status": "pending"
       },
       {
-        "id": "frontend-assignee-picker",
-        "title": "Assignee picker in ticket detail sidebar",
-        "status": "completed"
+        "id": "frontend-support-view",
+        "title": "Add assigned status to support view",
+        "status": "pending"
       },
       {
-        "id": "backend-tests",
-        "title": "Backend tests for assignment + deft-members",
-        "status": "completed"
-      },
-      {
-        "id": "frontend-tests",
-        "title": "Frontend tests for assignee picker",
-        "status": "completed"
+        "id": "tests",
+        "title": "Backend + frontend tests",
+        "status": "pending"
       },
       {
         "id": "verify",
         "title": "Run task check and ensure full pass",
-        "status": "completed"
+        "status": "pending"
       }
     ]
   }

@@ -162,6 +162,25 @@ describe("SupportManagementView", () => {
     expect(screen.getByTestId("ticket-row-t-closed")).toBeInTheDocument();
   });
 
+  it("filters ticket rows by assigned status", async () => {
+    const user = userEvent.setup();
+    mockFetchGlobalSupportTickets.mockResolvedValue(
+      paged([
+        makeTicket({ id: "t-open", status: "open" }),
+        makeTicket({ id: "t-assigned", status: "assigned" }),
+        makeTicket({ id: "t-pending", status: "pending" }),
+      ]),
+    );
+    render(<SupportManagementView />);
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-row-t-assigned")).toBeInTheDocument();
+    });
+    await user.selectOptions(screen.getByTestId("tickets-status-filter"), "assigned");
+    expect(screen.queryByTestId("ticket-row-t-open")).not.toBeInTheDocument();
+    expect(screen.getByTestId("ticket-row-t-assigned")).toBeInTheDocument();
+    expect(screen.queryByTestId("ticket-row-t-pending")).not.toBeInTheDocument();
+  });
+
   it("filters ticket rows by search text", async () => {
     const user = userEvent.setup();
     mockFetchGlobalSupportTickets.mockResolvedValue(

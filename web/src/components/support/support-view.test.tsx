@@ -111,6 +111,13 @@ describe("SupportView", () => {
     expect(badge).toHaveClass("bg-gray-100");
   });
 
+  it("renders assigned status badge with purple styling", () => {
+    render(<SupportView initialTickets={[makeTicket({ id: "t1", status: "assigned" })]} />);
+    const badge = screen.getByTestId("ticket-status-t1");
+    expect(badge).toHaveTextContent("assigned");
+    expect(badge).toHaveClass("bg-purple-100");
+  });
+
   it("falls back to open styling for unknown status", () => {
     render(<SupportView initialTickets={[makeTicket({ id: "t1", status: "unknown-status" })]} />);
     const badge = screen.getByTestId("ticket-status-t1");
