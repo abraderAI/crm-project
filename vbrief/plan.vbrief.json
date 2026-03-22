@@ -2,58 +2,37 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Admin dashboard cleanup \u2014 hybrid A+C: real data on /admin, strip stubs from tier-6 home",
-    "created": "2026-03-22T03:45:00Z",
-    "updated": "2026-03-22T04:48:00Z"
+    "description": "Audit log filtering — date range + search filters",
+    "created": "2026-03-22T19:22:00Z"
   },
   "plan": {
-    "id": "admin-dashboard-cleanup",
-    "title": "Admin Dashboard Cleanup \u2014 Hybrid A+C",
-    "status": "completed",
+    "id": "audit-log-filtering",
+    "title": "Audit Log Filtering — Date Range + Search",
+    "status": "running",
     "tags": [
       "frontend",
       "admin"
     ],
     "items": [
       {
-        "id": "remove-platform-stats",
-        "title": "Remove PlatformStats KPI row from /admin",
-        "status": "completed"
+        "id": "rewrite-audit-page",
+        "title": "Convert audit-log page to client component with filter bar",
+        "status": "pending"
       },
       {
-        "id": "rewrite-admin-home",
-        "title": "Rewrite /admin home with real support+sales snapshots and quick links",
-        "status": "completed"
-      },
-      {
-        "id": "simplify-tier6-home",
-        "title": "Strip stub widgets from tier-6 user home, replace with admin links",
-        "status": "completed"
-      },
-      {
-        "id": "cleanup-widget-api",
-        "title": "Remove dead stub functions from widget-api.ts",
-        "status": "completed"
-      },
-      {
-        "id": "update-tests",
-        "title": "Update all affected tests",
-        "status": "completed"
-      },
-      {
-        "id": "history",
-        "title": "Add history plan file",
-        "status": "completed"
+        "id": "tests",
+        "title": "Add/update tests for audit-log page filters",
+        "status": "pending"
       },
       {
         "id": "verify",
         "title": "Run task check and ensure full pass",
-        "status": "completed"
+        "status": "pending"
       },
       {
         "id": "deploy",
         "title": "Deploy frontend to Fly.io for review",
-        "status": "completed"
+        "status": "pending"
       }
     ]
   }
