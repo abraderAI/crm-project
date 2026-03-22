@@ -36,6 +36,20 @@ vi.mock("@/components/chatbot-widget", () => ({
   ChatbotWidget: () => <div data-testid="chatbot-widget">ChatbotWidget</div>,
 }));
 
+// Mock useTier to control tier in tests.
+let mockTier = 6;
+vi.mock("@/hooks/use-tier", () => ({
+  TierProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useTier: () => ({
+    tier: mockTier,
+    subType: null,
+    deftDepartment: null,
+    orgId: null,
+    isLoading: false,
+    refresh: vi.fn(),
+  }),
+}));
+
 import { AppLayoutWrapper } from "./app-layout-wrapper";
 
 /** Render helper wrapping component in ThemeProvider. */
@@ -47,6 +61,7 @@ describe("AppLayoutWrapper", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetToken.mockResolvedValue("test-token");
+    mockTier = 6; // Default to platform admin so all items visible.
   });
 
   it("renders AppLayout shell", () => {
@@ -54,7 +69,7 @@ describe("AppLayoutWrapper", () => {
     expect(screen.getByTestId("app-layout")).toBeInTheDocument();
   });
 
-  it("renders sidebar with nav items", () => {
+  it("renders sidebar with nav items for tier 6 (all visible)", () => {
     renderWithTheme(<AppLayoutWrapper>Content</AppLayoutWrapper>);
     expect(screen.getByTestId("sidebar")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-home")).toBeInTheDocument();
@@ -65,6 +80,26 @@ describe("AppLayoutWrapper", () => {
     expect(screen.getByTestId("nav-link-crm")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-search")).toBeInTheDocument();
     expect(screen.getByTestId("nav-link-admin")).toBeInTheDocument();
+  });
+
+  it("hides tier-restricted items for anonymous users (tier 1)", () => {
+    mockTier = 1;
+    renderWithTheme(<AppLayoutWrapper>Content</AppLayoutWrapper>);
+    expect(screen.getByTestId("nav-link-home")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-forum")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-link-docs")).toBeInTheDocument();
+    // These should NOT be visible for tier 1.
+    expect(screen.queryByTestId("nav-link-support")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-link-admin")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-link-crm")).not.toBeInTheDocument();
+  });
+
+  it("shows support but not admin for tier 2", () => {
+    mockTier = 2;
+    renderWithTheme(<AppLayoutWrapper>Content</AppLayoutWrapper>);
+    expect(screen.getByTestId("nav-link-support")).toBeInTheDocument();
+    expect(screen.queryByTestId("nav-link-admin")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-link-crm")).not.toBeInTheDocument();
   });
 
   it("renders topbar", () => {

@@ -2,48 +2,58 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Enforce server-side visibility scoping for support tickets",
-    "created": "2026-03-21T23:30:00Z"
+    "description": "Sidebar navigation overhaul: tier-based visibility, sub-menus, visual polish",
+    "created": "2026-03-22T00:19:31Z"
   },
   "plan": {
-    "id": "support-ticket-visibility-scope",
-    "title": "Support Ticket Visibility Scope Enforcement",
+    "id": "sidebar-nav-overhaul",
+    "title": "Sidebar Navigation Overhaul — Role-Based Visibility, Sub-Menus, Visual Polish",
     "status": "completed",
-    "tags": ["backend", "security", "support", "authorization"],
+    "tags": ["frontend", "navigation", "rbac", "ux"],
     "items": [
       {
-        "id": "repo-methods",
-        "title": "Add FindUserOrgIDs and IsDeftOrAdmin repository methods",
+        "id": "nav-config",
+        "title": "Create nav-config.ts with tier-gated nav items and sub-menus",
         "status": "completed"
       },
       {
-        "id": "visibility-type",
-        "title": "Define VisibilityScope type and resolver in service layer",
+        "id": "nav-config-tests",
+        "title": "Create nav-config.test.ts with tier filtering tests",
         "status": "completed"
       },
       {
-        "id": "list-enforcement",
-        "title": "Enforce visibility scoping in ListThreads (repo + service + handler)",
+        "id": "sidebar-component",
+        "title": "Overhaul sidebar.tsx: icons, sub-menu accordion, animations, visual polish",
         "status": "completed"
       },
       {
-        "id": "get-enforcement",
-        "title": "Enforce visibility on GetThread",
+        "id": "sidebar-tests",
+        "title": "Update sidebar.test.tsx for new features",
         "status": "completed"
       },
       {
-        "id": "mutation-enforcement",
-        "title": "Gate UpdateThread and attachment endpoints with visibility check",
+        "id": "app-layout-wrapper",
+        "title": "Wire tier-based filtering in app-layout-wrapper.tsx",
         "status": "completed"
       },
       {
-        "id": "tests",
-        "title": "Write tests for all three visibility tiers",
+        "id": "app-layout-wrapper-tests",
+        "title": "Update app-layout-wrapper.test.tsx for filtered nav",
+        "status": "completed"
+      },
+      {
+        "id": "admin-layout",
+        "title": "Remove 18-tab horizontal bar from admin layout.tsx",
+        "status": "completed"
+      },
+      {
+        "id": "globals-css",
+        "title": "Add sidebar animation and polish styles to globals.css",
         "status": "completed"
       },
       {
         "id": "verify",
-        "title": "Run task check and ensure full pass",
+        "title": "Run task web:typecheck, web:lint, web:test:coverage to verify",
         "status": "completed"
       }
     ]

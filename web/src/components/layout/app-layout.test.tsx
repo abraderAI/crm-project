@@ -1,16 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Home } from "lucide-react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppLayout } from "./app-layout";
-import type { NavItem } from "./sidebar";
+import type { SidebarNavItem } from "@/lib/nav-config";
 
-const navItems: NavItem[] = [
+const navItems: SidebarNavItem[] = [
   {
     id: "org-1",
     label: "Test Org",
     href: "/orgs/test",
-    type: "org",
+    icon: Home,
+    minTier: 1,
   },
 ];
 
