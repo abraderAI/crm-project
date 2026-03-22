@@ -75,11 +75,9 @@ describe("default-layouts", () => {
       expect(layout[0]?.widget_id).toBe(WIDGET_IDS.ORG_ACCESS_CONTROL);
     });
 
-    it("returns Tier 6 default layout with all admin widgets", () => {
+    it("returns empty Tier 6 default layout (admin console has real data)", () => {
       const layout = getDefaultLayout(6);
-      expect(layout.length).toBeGreaterThan(5);
-      expect(layout[0]?.widget_id).toBe(WIDGET_IDS.SYSTEM_HEALTH);
-      expect(layout[1]?.widget_id).toBe(WIDGET_IDS.RECENT_AUDIT_LOG);
+      expect(layout).toHaveLength(0);
     });
 
     it("returns a copy, not a reference to the internal array", () => {

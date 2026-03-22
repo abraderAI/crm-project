@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { fetchConversionMetrics, type ConversionMetrics } from "@/lib/widget-api";
+import { type ConversionMetrics } from "@/lib/widget-api";
 
 export interface ConversionMetricsWidgetProps {
   /** Auth token for API calls. */
@@ -19,10 +19,7 @@ export function ConversionMetricsWidget({ token }: ConversionMetricsWidgetProps)
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchConversionMetrics(token);
-      if (mountedRef.current) {
-        setData(result);
-      }
+      throw new Error("Widget not yet wired to real API");
     } catch {
       if (mountedRef.current) {
         setError("Failed to load conversion metrics");

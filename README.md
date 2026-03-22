@@ -137,7 +137,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 
 | Route | Description |
 |---|---|
-| `/` | Home / dashboard — tier-aware: renders the correct home screen for the current user's tier with customisable widget layout |
+| `/` | Home / dashboard — tier-aware: renders the correct home screen for the current user's tier with customisable widget layout. Platform admins (tier 6) see a navigation hub linking to the admin console |
 | `/docs/[...slug]` | Public documentation (global-docs space) — no auth required |
 | `/forum/[...slug]` | Public community forum (global-forum space) — no auth required |
 | `/sign-in`, `/sign-up` | Clerk authentication |
@@ -160,7 +160,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/search` | Full-text search with filters |
 | `/notifications` | Notification feed |
 | `/notifications/preferences` | Notification channel preferences |
-| `/admin` | Admin dashboard |
+| `/admin` | Admin dashboard — support snapshot (open tickets, assigned tickets, avg resolution), sales snapshot (total leads, win rate, avg deal value), and quick links to admin sub-pages. All metrics sourced from the reporting endpoints |
 | `/admin/users` | User management list — displays primary org badge per user |
 | `/admin/users/[user_id]` | User detail — profile, cross-org memberships (with org names + links), add-to-org picker with inline create, remove from org, ban/unban, GDPR purge, impersonation |
 | `/admin/billing` | Billing dashboard (FlexPoint) |

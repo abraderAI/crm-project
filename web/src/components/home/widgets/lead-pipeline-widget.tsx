@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { fetchLeadsByStatus, type LeadsByStatus } from "@/lib/widget-api";
+import { type LeadsByStatus } from "@/lib/widget-api";
 
 const STAGE_LABELS: Record<keyof LeadsByStatus, string> = {
   new_lead: "New Lead",
@@ -41,10 +41,7 @@ export function LeadPipelineWidget({ token }: LeadPipelineWidgetProps): ReactNod
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchLeadsByStatus(token);
-      if (mountedRef.current) {
-        setData(result);
-      }
+      throw new Error("Widget not yet wired to real API");
     } catch {
       if (mountedRef.current) {
         setError("Failed to load lead pipeline data");

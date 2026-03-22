@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { fetchRecentAuditEvents, type AuditEvent } from "@/lib/widget-api";
+import { type AuditEvent } from "@/lib/widget-api";
 
 const ACTION_COLORS: Record<string, string> = {
   create: "bg-green-100 text-green-800",
@@ -26,10 +26,7 @@ export function RecentAuditLogWidget({ token }: RecentAuditLogWidgetProps): Reac
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchRecentAuditEvents(token, 10);
-      if (mountedRef.current) {
-        setEvents(result);
-      }
+      throw new Error("Widget not yet wired to real API");
     } catch {
       if (mountedRef.current) {
         setError("Failed to load audit events");
