@@ -202,10 +202,11 @@ export async function fetchSupportTicket(token: string, slug: string): Promise<T
   return parseResponse<ThreadWithAuthor>(response);
 }
 
-/** Values for updating a support ticket (body and/or status). */
+/** Values for updating a support ticket (body, status, and/or assignee). */
 export interface UpdateSupportTicketValues {
   body?: string;
   status?: string;
+  assigned_to?: string;
 }
 
 /**

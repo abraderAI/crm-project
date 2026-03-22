@@ -354,6 +354,9 @@ func NewRouter(cfg Config) http.Handler {
 			// Pipeline stages route.
 			authed.Get("/orgs/{org}/pipeline/stages", h.pipelineHandler.GetStages)
 
+			// DEFT members list route.
+			authed.Get("/support/deft-members", h.supportHandler.ListDeftMembers)
+
 			// Support ticket entry routes.
 			authed.Route("/support/tickets/{slug}", func(st chi.Router) {
 				st.Get("/entries", h.supportHandler.ListEntries)

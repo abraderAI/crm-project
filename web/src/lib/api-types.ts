@@ -302,6 +302,13 @@ export interface ApiKeyCreateResponse {
   created_at: string;
 }
 
+/** DEFT org member info for assignee picker. */
+export interface DeftMember {
+  user_id: string;
+  display_name: string;
+  email: string;
+}
+
 /** Sort option for community thread lists. */
 export type ThreadSortOption = "votes" | "newest" | "oldest";
 

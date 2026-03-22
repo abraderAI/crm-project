@@ -1,4 +1,4 @@
-import type { SupportEntry, SupportEntryType } from "./api-types";
+import type { DeftMember, SupportEntry, SupportEntryType } from "./api-types";
 import { buildHeaders, buildUrl, parseResponse, clientMutate } from "./api-client";
 
 /**
@@ -95,6 +95,22 @@ export async function setEntryDeftVisibility(
     `/support/tickets/${encodeURIComponent(ticketSlug)}/entries/${encodeURIComponent(entryId)}/deft-visibility`,
     { token, body: { is_deft_only: isDeftOnly } },
   );
+}
+
+/**
+ * Fetch all active DEFT org members for the assignee picker.
+ * Only callable by DEFT members (tier 4+).
+ * Requires authentication.
+ */
+export async function fetchDeftMembers(token: string): Promise<DeftMember[]> {
+  const url = buildUrl("/support/deft-members");
+  const res = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  const data = await parseResponse<{ data: DeftMember[] }>(res);
+  return data.data;
 }
 
 /**

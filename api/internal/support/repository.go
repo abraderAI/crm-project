@@ -170,6 +170,31 @@ func (r *Repository) UpdateThreadMetadata(ctx context.Context, threadID, metadat
 	return nil
 }
 
+// DeftMemberInfo holds display info for a DEFT org member.
+type DeftMemberInfo struct {
+	UserID      string `json:"user_id"`
+	DisplayName string `json:"display_name"`
+	Email       string `json:"email"`
+}
+
+// ListDeftMembers returns all active members of the DEFT org (slug = "deft")
+// enriched with display name and email from user_shadows.
+func (r *Repository) ListDeftMembers(ctx context.Context) ([]DeftMemberInfo, error) {
+	var results []DeftMemberInfo
+	err := r.db.WithContext(ctx).
+		Table("org_memberships").
+		Select("org_memberships.user_id, COALESCE(user_shadows.display_name, '') AS display_name, COALESCE(user_shadows.email, '') AS email").
+		Joins("JOIN orgs ON orgs.id = org_memberships.org_id").
+		Joins("LEFT JOIN user_shadows ON user_shadows.clerk_user_id = org_memberships.user_id").
+		Where("orgs.slug = ? AND org_memberships.deleted_at IS NULL", "deft").
+		Order("display_name ASC").
+		Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("listing deft members: %w", err)
+	}
+	return results, nil
+}
+
 // IsDeftMember returns true when the user has active membership in any space
 // whose org has the slug "deft", or is a platform admin.
 func (r *Repository) IsDeftMember(ctx context.Context, userID string) (bool, error) {

@@ -1171,3 +1171,115 @@ func TestVisibility_MutationEndpointsGated(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }
+
+// --- Ticket assignment tests ---
+
+// TestService_UpdateThread_AssignDeftMember verifies assigning a DEFT member.
+func TestService_UpdateThread_AssignDeftMember(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	seedDeftMember(t, db, "agent-1")
+
+	th, err := svc.CreateThread(ctx, "global-support", "customer", CreateInput{Title: "Assign Me"})
+	require.NoError(t, err)
+
+	t.Run("assign valid DEFT member", func(t *testing.T) {
+		assignee := "agent-1"
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{AssignedTo: &assignee}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rich)
+		assert.Equal(t, "agent-1", rich.AssignedTo)
+	})
+
+	t.Run("assign non-DEFT member fails", func(t *testing.T) {
+		assignee := "random-outsider"
+		_, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{AssignedTo: &assignee}, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "assignee must be a DEFT org member")
+	})
+
+	t.Run("unassign with empty string", func(t *testing.T) {
+		empty := ""
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{AssignedTo: &empty}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rich)
+		assert.Equal(t, "", rich.AssignedTo)
+	})
+}
+
+// TestHandler_UpdateThread_AssignedTo covers the handler-level assignment validation.
+func TestHandler_UpdateThread_AssignedTo(t *testing.T) {
+	db, _ := setupDB(t)
+	h := NewHandler(newSvc(db))
+	r := globalSpaceRouter(h)
+	ctx := context.Background()
+	svc := newSvc(db)
+
+	seedDeftMember(t, db, "deft-assignee")
+
+	th, err := svc.CreateThread(ctx, "global-support", "user-assign", CreateInput{Title: "Handler Assign"})
+	require.NoError(t, err)
+
+	t.Run("assign valid member via handler", func(t *testing.T) {
+		body := `{"assigned_to":"deft-assignee"}`
+		req := httptest.NewRequest(http.MethodPatch, "/global-spaces/global-support/threads/"+th.Slug, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withUser(req, "user-assign")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "deft-assignee", resp["assigned_to"])
+	})
+
+	t.Run("assign non-DEFT member returns 400", func(t *testing.T) {
+		body := `{"assigned_to":"not-deft"}`
+		req := httptest.NewRequest(http.MethodPatch, "/global-spaces/global-support/threads/"+th.Slug, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withUser(req, "user-assign")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+}
+
+// TestService_UpdateThread_AssignPublishesEvent verifies assigned_to is in the event payload.
+func TestService_UpdateThread_AssignPublishesEvent(t *testing.T) {
+	db, _ := setupDB(t)
+	bus := eventbus.New()
+	done := make(chan eventbus.Event, 1)
+	events, _ := bus.Subscribe("thread.updated", 4)
+	go func() {
+		for e := range events {
+			done <- e
+		}
+	}()
+
+	svc := NewService(NewRepository(db), bus, nil)
+	ctx := context.Background()
+
+	seedDeftMember(t, db, "assign-target")
+
+	th, err := svc.CreateThread(ctx, "global-support", "opener", CreateInput{Title: "Event Assign Ticket"})
+	require.NoError(t, err)
+
+	assignee := "assign-target"
+	_, err = svc.UpdateThread(ctx, "global-support", th.Slug, "assigner", UpdateInput{AssignedTo: &assignee}, nil)
+	require.NoError(t, err)
+
+	select {
+	case evt := <-done:
+		assert.Equal(t, "thread.updated", evt.Type)
+		payload, ok := evt.Payload.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "assign-target", payload["assigned_to"])
+		assert.Equal(t, "global-support", payload["source"])
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected assignment event was not published")
+	}
+	bus.Close()
+}

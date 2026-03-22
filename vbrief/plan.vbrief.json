@@ -2,43 +2,43 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Enforce server-side visibility scoping for support tickets",
-    "created": "2026-03-21T23:30:00Z"
+    "description": "Ticket assignment — assignee picker and notification",
+    "created": "2026-03-22T01:03:00Z"
   },
   "plan": {
-    "id": "support-ticket-visibility-scope",
-    "title": "Support Ticket Visibility Scope Enforcement",
+    "id": "ticket-assignment",
+    "title": "Ticket Assignment — Assignee Picker + Notification",
     "status": "completed",
-    "tags": ["backend", "security", "support", "authorization"],
+    "tags": ["backend", "frontend", "support", "notifications"],
     "items": [
       {
-        "id": "repo-methods",
-        "title": "Add FindUserOrgIDs and IsDeftOrAdmin repository methods",
+        "id": "backend-update-flow",
+        "title": "Add assigned_to to globalspace update flow",
         "status": "completed"
       },
       {
-        "id": "visibility-type",
-        "title": "Define VisibilityScope type and resolver in service layer",
+        "id": "backend-deft-members-endpoint",
+        "title": "New endpoint: GET /v1/support/deft-members",
         "status": "completed"
       },
       {
-        "id": "list-enforcement",
-        "title": "Enforce visibility scoping in ListThreads (repo + service + handler)",
+        "id": "frontend-api-client",
+        "title": "API client updates (types + fetchDeftMembers)",
         "status": "completed"
       },
       {
-        "id": "get-enforcement",
-        "title": "Enforce visibility on GetThread",
+        "id": "frontend-assignee-picker",
+        "title": "Assignee picker in ticket detail sidebar",
         "status": "completed"
       },
       {
-        "id": "mutation-enforcement",
-        "title": "Gate UpdateThread and attachment endpoints with visibility check",
+        "id": "backend-tests",
+        "title": "Backend tests for assignment + deft-members",
         "status": "completed"
       },
       {
-        "id": "tests",
-        "title": "Write tests for all three visibility tiers",
+        "id": "frontend-tests",
+        "title": "Frontend tests for assignee picker",
         "status": "completed"
       },
       {

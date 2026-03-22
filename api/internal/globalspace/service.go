@@ -263,6 +263,8 @@ type UpdateInput struct {
 	Body *string `json:"body"`
 	// Status sets the status field in metadata when non-empty.
 	Status *string `json:"status"`
+	// AssignedTo sets the assigned_to field in metadata. Must be a DEFT org member.
+	AssignedTo *string `json:"assigned_to"`
 }
 
 // UpdateThread applies a partial update to a thread in the given global space.
@@ -305,6 +307,24 @@ func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, edito
 		}
 		t.Metadata = merged
 	}
+	if input.AssignedTo != nil {
+		// Validate the target user is a DEFT org member (empty string = unassign).
+		if *input.AssignedTo != "" {
+			isDeft, deftErr := s.repo.IsDeftOrAdmin(ctx, *input.AssignedTo)
+			if deftErr != nil {
+				return nil, fmt.Errorf("checking assignee: %w", deftErr)
+			}
+			if !isDeft {
+				return nil, fmt.Errorf("assignee must be a DEFT org member")
+			}
+		}
+		patch := fmt.Sprintf(`{"assigned_to":%q}`, *input.AssignedTo)
+		merged, mergeErr := metadata.DeepMerge(t.Metadata, patch)
+		if mergeErr != nil {
+			return nil, fmt.Errorf("updating assigned_to: %w", mergeErr)
+		}
+		t.Metadata = merged
+	}
 
 	if err := s.repo.UpdateThread(ctx, t); err != nil {
 		return nil, err
@@ -328,17 +348,21 @@ func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, edito
 
 	// Publish thread.updated event for notification routing — best-effort.
 	if s.bus != nil && spaceSlug == "global-support" {
+		payload := map[string]any{
+			"title":        reloaded.Title,
+			"source":       "global-support",
+			"participants": []string{reloaded.AuthorID},
+		}
+		if input.AssignedTo != nil && *input.AssignedTo != "" {
+			payload["assigned_to"] = *input.AssignedTo
+		}
 		s.bus.Publish(eventbus.Event{
 			Type:       "thread.updated",
 			EntityType: "thread",
 			EntityID:   reloaded.ID,
 			UserID:     editorID,
 			Timestamp:  time.Now(),
-			Payload: map[string]any{
-				"title":        reloaded.Title,
-				"source":       "global-support",
-				"participants": []string{reloaded.AuthorID},
-			},
+			Payload:    payload,
 		})
 	}
 

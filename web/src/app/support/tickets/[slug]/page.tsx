@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { ArrowLeft, LifeBuoy, Paperclip } from "lucide-react";
 
-import type { SupportEntry, ThreadWithAuthor, Upload } from "@/lib/api-types";
+import type { DeftMember, SupportEntry, ThreadWithAuthor, Upload } from "@/lib/api-types";
 import {
   fetchSupportTicket,
   updateSupportTicket,
@@ -14,7 +14,7 @@ import {
   uploadThreadAttachment,
   downloadUpload,
 } from "@/lib/global-api";
-import { fetchTicketEntries, createTicketEntry } from "@/lib/support-api";
+import { fetchTicketEntries, createTicketEntry, fetchDeftMembers } from "@/lib/support-api";
 import { useTier } from "@/hooks/use-tier";
 import { useUser } from "@clerk/nextjs";
 import { useUserDirectory } from "@/lib/use-user-directory";
@@ -43,6 +43,17 @@ function parseStatus(metadata: string): string {
     /* ignore */
   }
   return "open";
+}
+
+/** Parse assigned_to from thread metadata JSON. */
+function parseAssignedTo(metadata: string): string {
+  try {
+    const parsed = JSON.parse(metadata) as Record<string, unknown>;
+    if (typeof parsed["assigned_to"] === "string") return parsed["assigned_to"];
+  } catch {
+    /* ignore */
+  }
+  return "";
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -78,6 +89,11 @@ export default function TicketDetailPage(): ReactNode {
   // Status picker state (DEFT-only).
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState("");
+
+  // Assignee picker state (DEFT-only).
+  const [deftMembers, setDeftMembers] = useState<DeftMember[]>([]);
+  const [assigneeSaving, setAssigneeSaving] = useState(false);
+  const [assigneeError, setAssigneeError] = useState("");
 
   // Attachment upload state.
   const [uploading, setUploading] = useState(false);
@@ -123,6 +139,21 @@ export default function TicketDetailPage(): ReactNode {
     };
   }, [loadData]);
 
+  // Fetch DEFT members for the assignee picker (DEFT-only).
+  useEffect(() => {
+    if (!isDeftMember) return;
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const members = await fetchDeftMembers(token);
+        if (mountedRef.current) setDeftMembers(members);
+      } catch {
+        // Silently fall back to empty list.
+      }
+    })();
+  }, [isDeftMember, getToken]);
+
   /** DEFT-only: change status and auto-insert a system_event entry. */
   const handleStatusChange = async (newStatus: string): Promise<void> => {
     if (!ticket || newStatus === parseStatus(ticket.metadata)) return;
@@ -144,6 +175,32 @@ export default function TicketDetailPage(): ReactNode {
       setStatusError(err instanceof Error ? err.message : "Failed to update status");
     } finally {
       setStatusSaving(false);
+    }
+  };
+
+  /** DEFT-only: change assignee and auto-insert a system_event entry. */
+  const handleAssigneeChange = async (newAssignee: string): Promise<void> => {
+    if (!ticket || newAssignee === parseAssignedTo(ticket.metadata)) return;
+    setAssigneeError("");
+    setAssigneeSaving(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await updateSupportTicket(token, slug, { assigned_to: newAssignee });
+      const assigneeName = newAssignee
+        ? (deftMembers.find((m) => m.user_id === newAssignee)?.display_name ?? newAssignee)
+        : "Unassigned";
+      const now = new Date().toLocaleString();
+      await createTicketEntry(token, slug, {
+        type: "system_event",
+        body: `<p>Assigned to <strong>${assigneeName}</strong> — ${now}</p>`,
+        is_deft_only: false,
+      });
+      await loadData();
+    } catch (err) {
+      setAssigneeError(err instanceof Error ? err.message : "Failed to update assignee");
+    } finally {
+      setAssigneeSaving(false);
     }
   };
 
@@ -194,6 +251,7 @@ export default function TicketDetailPage(): ReactNode {
   const status = parseStatus(ticket.metadata);
   const badgeClass = STATUS_BADGE[status] ?? STATUS_BADGE["open"];
   const notifLevel = parseNotifLevel(ticket.metadata);
+  const assignedTo = parseAssignedTo(ticket.metadata);
 
   return (
     <div data-testid="ticket-detail-page" className="mx-auto max-w-5xl px-4 py-6">
@@ -265,6 +323,28 @@ export default function TicketDetailPage(): ReactNode {
             {/* Notification preferences — for ticket owner/customer */}
             {!isDeftMember && <NotificationPrefs ticketSlug={slug} currentLevel={notifLevel} />}
 
+            {/* Assignee picker — DEFT-only */}
+            {isDeftMember && (
+              <div className="rounded-lg border border-border bg-background p-4">
+                <h4 className="mb-2 text-sm font-semibold text-foreground">Assignee</h4>
+                <select
+                  data-testid="assignee-picker"
+                  value={assignedTo}
+                  onChange={(e) => void handleAssigneeChange(e.target.value)}
+                  disabled={assigneeSaving}
+                  className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Unassigned</option>
+                  {deftMembers.map((m) => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.display_name || m.email}
+                    </option>
+                  ))}
+                </select>
+                {assigneeError && <p className="mt-1 text-xs text-red-600">{assigneeError}</p>}
+              </div>
+            )}
+
             {/* Ticket metadata */}
             <div className="rounded-lg border border-border bg-background p-4">
               <h4 className="mb-2 text-sm font-semibold text-foreground">Ticket info</h4>
@@ -278,6 +358,10 @@ export default function TicketDetailPage(): ReactNode {
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Status</dt>
                   <dd className="capitalize">{status}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Assignee</dt>
+                  <dd>{assignedTo ? userDir.format(assignedTo) : "Unassigned"}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Created</dt>
