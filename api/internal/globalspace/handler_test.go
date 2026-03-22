@@ -112,6 +112,30 @@ func withUser(r *http.Request, userID string) *http.Request {
 	return r.WithContext(ctx)
 }
 
+// seedDeftMember creates the DEFT org (if needed) and adds the user as a member.
+func seedDeftMember(t *testing.T, db *gorm.DB, userID string) {
+	t.Helper()
+	var org models.Org
+	if err := db.Where("slug = ?", "deft").First(&org).Error; err != nil {
+		org = models.Org{Name: "DEFT", Slug: "deft", Metadata: "{}"}
+		require.NoError(t, db.Create(&org).Error)
+	}
+	require.NoError(t, db.Create(&models.OrgMembership{
+		OrgID: org.ID, UserID: userID, Role: models.RoleContributor,
+	}).Error)
+}
+
+// seedOrgMember creates an org and adds the user as a member, returning the org ID.
+func seedOrgMember(t *testing.T, db *gorm.DB, orgName, orgSlug, userID string) string {
+	t.Helper()
+	org := &models.Org{Name: orgName, Slug: orgSlug, Metadata: "{}"}
+	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, db.Create(&models.OrgMembership{
+		OrgID: org.ID, UserID: userID, Role: models.RoleContributor,
+	}).Error)
+	return org.ID
+}
+
 // TestHandler_ListThreads covers the GET endpoint.
 func TestHandler_ListThreads(t *testing.T) {
 	db, _ := setupDB(t)
@@ -120,6 +144,9 @@ func TestHandler_ListThreads(t *testing.T) {
 	ctx := context.Background()
 	svc := newSvc(db)
 
+	// Make user1 a DEFT member so they can see all tickets.
+	seedDeftMember(t, db, "user1")
+
 	// Seed a couple of threads.
 	orgID := "org-abc"
 	_, err := svc.CreateThread(ctx, "global-support", "user1", CreateInput{Title: "Ticket One", OrgID: &orgID})
@@ -127,7 +154,7 @@ func TestHandler_ListThreads(t *testing.T) {
 	_, err = svc.CreateThread(ctx, "global-support", "user2", CreateInput{Title: "Ticket Two"})
 	require.NoError(t, err)
 
-	t.Run("list all", func(t *testing.T) {
+	t.Run("list all as deft member", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads", nil)
 		req = withUser(req, "user1")
 		w := httptest.NewRecorder()
@@ -381,7 +408,7 @@ func TestHandler_GetThread(t *testing.T) {
 
 	t.Run("found — returns enriched thread", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/"+th.Slug, nil)
-		req = withUser(req, "any-user")
+		req = withUser(req, "user-creator")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -439,7 +466,7 @@ func TestHandler_UpdateThread(t *testing.T) {
 		body := `{"status":"resolved"}`
 		req := httptest.NewRequest(http.MethodPatch, "/global-spaces/global-support/threads/"+th.Slug, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		req = withUser(req, "agent-user")
+		req = withUser(req, "user-editor")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -516,7 +543,7 @@ func TestService_Enrichment(t *testing.T) {
 	})
 
 	t.Run("get returns author and org info", func(t *testing.T) {
-		rich, err := svc.GetThread(ctx, "global-support", th.Slug)
+		rich, err := svc.GetThread(ctx, "global-support", th.Slug, nil)
 		require.NoError(t, err)
 		require.NotNil(t, rich)
 		assert.Equal(t, "enrich@deft.co", rich.AuthorEmail)
@@ -524,7 +551,7 @@ func TestService_Enrichment(t *testing.T) {
 	})
 
 	t.Run("get returns nil for unknown slug", func(t *testing.T) {
-		rich, err := svc.GetThread(ctx, "global-support", "does-not-exist")
+		rich, err := svc.GetThread(ctx, "global-support", "does-not-exist", nil)
 		require.NoError(t, err)
 		assert.Nil(t, rich)
 	})
@@ -541,7 +568,7 @@ func TestService_UpdateThread(t *testing.T) {
 
 	t.Run("update body", func(t *testing.T) {
 		newBody := "new body"
-		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "user-u", UpdateInput{Body: &newBody})
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "user-u", UpdateInput{Body: &newBody}, nil)
 		require.NoError(t, err)
 		require.NotNil(t, rich)
 		assert.Equal(t, "new body", rich.Body)
@@ -549,7 +576,7 @@ func TestService_UpdateThread(t *testing.T) {
 
 	t.Run("update status via metadata merge", func(t *testing.T) {
 		status := "pending"
-		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "agent", UpdateInput{Status: &status})
+		rich, err := svc.UpdateThread(ctx, "global-support", th.Slug, "agent", UpdateInput{Status: &status}, nil)
 		require.NoError(t, err)
 		require.NotNil(t, rich)
 		assert.Equal(t, "pending", rich.Status)
@@ -557,14 +584,14 @@ func TestService_UpdateThread(t *testing.T) {
 
 	t.Run("not found returns nil", func(t *testing.T) {
 		body := "x"
-		rich, err := svc.UpdateThread(ctx, "global-support", "no-such-slug", "user-u", UpdateInput{Body: &body})
+		rich, err := svc.UpdateThread(ctx, "global-support", "no-such-slug", "user-u", UpdateInput{Body: &body}, nil)
 		require.NoError(t, err)
 		assert.Nil(t, rich)
 	})
 
 	t.Run("unknown space returns nil", func(t *testing.T) {
 		body := "x"
-		rich, err := svc.UpdateThread(ctx, "no-such-space", th.Slug, "user-u", UpdateInput{Body: &body})
+		rich, err := svc.UpdateThread(ctx, "no-such-space", th.Slug, "user-u", UpdateInput{Body: &body}, nil)
 		require.NoError(t, err)
 		assert.Nil(t, rich)
 	})
@@ -583,7 +610,7 @@ func TestHandler_ListAttachments(t *testing.T) {
 
 	t.Run("empty attachments returns 200 with empty array", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/"+th.Slug+"/attachments", nil)
-		req = withUser(req, "any-user")
+		req = withUser(req, "user-attach")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -701,7 +728,7 @@ func TestService_UpdateThread_PublishesEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	newBody := "updated content"
-	_, err = svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{Body: &newBody})
+	_, err = svc.UpdateThread(ctx, "global-support", th.Slug, "editor", UpdateInput{Body: &newBody}, nil)
 	require.NoError(t, err)
 
 	select {
@@ -775,7 +802,7 @@ func TestService_UploadAttachment_NoUploadService(t *testing.T) {
 	db, _ := setupDB(t)
 	svc := newSvc(db)
 	f := createTempMultipartFile(t, "missing-upload-service.txt", "x")
-	_, err := svc.UploadAttachment(context.Background(), "global-support", "any", "u1", "a.txt", 1, f)
+	_, err := svc.UploadAttachment(context.Background(), "global-support", "any", "u1", "a.txt", 1, f, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "upload service not available")
 }
@@ -792,7 +819,7 @@ func TestService_UploadAttachment_FailsWhenSystemOrgMissing(t *testing.T) {
 	require.NoError(t, db.Where("slug = ?", "_system").Delete(&models.Org{}).Error)
 
 	f := createTempMultipartFile(t, "system-org-missing.txt", "test")
-	_, err = svc.UploadAttachment(ctx, "global-support", th.Slug, "user-up", "notes.txt", int64(len("test")), f)
+	_, err = svc.UploadAttachment(ctx, "global-support", th.Slug, "user-up", "notes.txt", int64(len("test")), f, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolving org for upload")
 }
@@ -804,12 +831,12 @@ func TestService_UploadAttachment_NotFoundPaths(t *testing.T) {
 	ctx := context.Background()
 	file := createTempMultipartFile(t, "not-found-upload.txt", "content")
 
-	uploaded, err := svc.UploadAttachment(ctx, "no-such-space", "x", "u1", "a.txt", 7, file)
+	uploaded, err := svc.UploadAttachment(ctx, "no-such-space", "x", "u1", "a.txt", 7, file, nil)
 	require.NoError(t, err)
 	assert.Nil(t, uploaded)
 
 	file2 := createTempMultipartFile(t, "not-found-thread-upload.txt", "content")
-	uploaded, err = svc.UploadAttachment(ctx, "global-support", "no-such-thread", "u1", "a.txt", 7, file2)
+	uploaded, err = svc.UploadAttachment(ctx, "global-support", "no-such-thread", "u1", "a.txt", 7, file2, nil)
 	require.NoError(t, err)
 	assert.Nil(t, uploaded)
 }
@@ -885,4 +912,262 @@ func TestRepository_EmptyLookupFastPaths(t *testing.T) {
 	orgNames, err := repo.GetOrgNamesByIDs(ctx, []string{})
 	require.NoError(t, err)
 	assert.Empty(t, orgNames)
+}
+
+// --- Visibility scope enforcement tests ---
+
+// TestVisibility_ScopeOwner verifies that a user without DEFT/org membership
+// can only see tickets they authored or that are assigned to them.
+func TestVisibility_ScopeOwner(t *testing.T) {
+	db, _ := setupDB(t)
+	h := NewHandler(newSvc(db))
+	r := globalSpaceRouter(h)
+	ctx := context.Background()
+	svc := newSvc(db)
+
+	// Create tickets by different authors.
+	_, err := svc.CreateThread(ctx, "global-support", "solo-user", CreateInput{Title: "My Ticket"})
+	require.NoError(t, err)
+	_, err = svc.CreateThread(ctx, "global-support", "other-user", CreateInput{Title: "Other Ticket"})
+	require.NoError(t, err)
+
+	// Create a ticket assigned to solo-user (via metadata for assigned_to generated column).
+	assigned, err := svc.CreateThread(ctx, "global-support", "agent-user", CreateInput{Title: "Assigned Ticket"})
+	require.NoError(t, err)
+	// Set assigned_to via metadata update.
+	require.NoError(t, db.Model(&models.Thread{}).Where("id = ?", assigned.ID).
+		Update("metadata", `{"assigned_to":"solo-user"}`).Error)
+
+	t.Run("list shows only own and assigned tickets", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads", nil)
+		req = withUser(req, "solo-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		data := resp["data"].([]any)
+		// solo-user authored "My Ticket" and is assigned "Assigned Ticket".
+		assert.Len(t, data, 2)
+	})
+
+	t.Run("get own ticket succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/my-ticket", nil)
+		req = withUser(req, "solo-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("get other's ticket returns 404", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/other-ticket", nil)
+		req = withUser(req, "solo-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("update other's ticket returns 404", func(t *testing.T) {
+		body := `{"body":"tamper"}`
+		req := httptest.NewRequest(http.MethodPatch, "/global-spaces/global-support/threads/other-ticket", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withUser(req, "solo-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("unauthenticated list returns 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}
+
+// TestVisibility_ScopeOrg verifies that an org member can see all tickets
+// from fellow org members, but not tickets from other orgs.
+func TestVisibility_ScopeOrg(t *testing.T) {
+	db, _ := setupDB(t)
+	h := NewHandler(newSvc(db))
+	r := globalSpaceRouter(h)
+	ctx := context.Background()
+	svc := newSvc(db)
+
+	// Create customer org and add two members.
+	orgID := seedOrgMember(t, db, "Acme Corp", "acme", "org-user-a")
+	require.NoError(t, db.Create(&models.OrgMembership{
+		OrgID: orgID, UserID: "org-user-b", Role: models.RoleContributor,
+	}).Error)
+
+	// Create a different org.
+	orgID2 := seedOrgMember(t, db, "Rival Inc", "rival", "rival-user")
+
+	// Create tickets scoped to each org.
+	_, err := svc.CreateThread(ctx, "global-support", "org-user-a", CreateInput{Title: "Acme Ticket A", OrgID: &orgID})
+	require.NoError(t, err)
+	_, err = svc.CreateThread(ctx, "global-support", "org-user-b", CreateInput{Title: "Acme Ticket B", OrgID: &orgID})
+	require.NoError(t, err)
+	_, err = svc.CreateThread(ctx, "global-support", "rival-user", CreateInput{Title: "Rival Ticket", OrgID: &orgID2})
+	require.NoError(t, err)
+	// Ticket without org — should NOT be visible to org member.
+	_, err = svc.CreateThread(ctx, "global-support", "no-org-user", CreateInput{Title: "No Org Ticket"})
+	require.NoError(t, err)
+
+	t.Run("org member sees own org tickets only", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads", nil)
+		req = withUser(req, "org-user-a")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		data := resp["data"].([]any)
+		assert.Len(t, data, 2, "org member should see both acme tickets")
+	})
+
+	t.Run("org member can get fellow member's ticket", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/acme-ticket-b", nil)
+		req = withUser(req, "org-user-a")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("org member cannot get rival's ticket", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/rival-ticket", nil)
+		req = withUser(req, "org-user-a")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("org member cannot get unscoped ticket", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/no-org-ticket", nil)
+		req = withUser(req, "org-user-a")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+// TestVisibility_ScopeAll verifies that DEFT members and platform admins see all tickets.
+func TestVisibility_ScopeAll(t *testing.T) {
+	db, _ := setupDB(t)
+	h := NewHandler(newSvc(db))
+	r := globalSpaceRouter(h)
+	ctx := context.Background()
+	svc := newSvc(db)
+
+	// Seed DEFT member and platform admin.
+	seedDeftMember(t, db, "deft-agent")
+	require.NoError(t, db.Create(&models.PlatformAdmin{UserID: "plat-admin", IsActive: true}).Error)
+
+	// Create tickets from various sources.
+	orgA := seedOrgMember(t, db, "OrgA", "org-a", "org-a-user")
+	_, err := svc.CreateThread(ctx, "global-support", "org-a-user", CreateInput{Title: "OrgA Ticket", OrgID: &orgA})
+	require.NoError(t, err)
+	_, err = svc.CreateThread(ctx, "global-support", "random-user", CreateInput{Title: "Random Ticket"})
+	require.NoError(t, err)
+
+	for _, userID := range []string{"deft-agent", "plat-admin"} {
+		t.Run("user "+userID+" sees all tickets", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads", nil)
+			req = withUser(req, userID)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusOK, w.Code)
+
+			var resp map[string]any
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+			data := resp["data"].([]any)
+			assert.Len(t, data, 2, "DEFT/admin should see all tickets")
+		})
+
+		t.Run("user "+userID+" can get any ticket", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/random-ticket", nil)
+			req = withUser(req, userID)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusOK, w.Code)
+		})
+	}
+}
+
+// TestVisibility_ResolveVisibility verifies the service-level tier resolution.
+func TestVisibility_ResolveVisibility(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	// Platform admin.
+	require.NoError(t, db.Create(&models.PlatformAdmin{UserID: "admin-vis", IsActive: true}).Error)
+	cv, err := svc.ResolveVisibility(ctx, "admin-vis")
+	require.NoError(t, err)
+	assert.Equal(t, ScopeAll, cv.Scope)
+
+	// DEFT org member.
+	seedDeftMember(t, db, "deft-vis")
+	cv, err = svc.ResolveVisibility(ctx, "deft-vis")
+	require.NoError(t, err)
+	assert.Equal(t, ScopeAll, cv.Scope)
+
+	// Customer org member.
+	orgID := seedOrgMember(t, db, "CustOrg", "cust-org", "cust-vis")
+	cv, err = svc.ResolveVisibility(ctx, "cust-vis")
+	require.NoError(t, err)
+	assert.Equal(t, ScopeOrg, cv.Scope)
+	assert.Contains(t, cv.OrgIDs, orgID)
+
+	// Solo user — no memberships.
+	cv, err = svc.ResolveVisibility(ctx, "solo-vis")
+	require.NoError(t, err)
+	assert.Equal(t, ScopeOwner, cv.Scope)
+	assert.Equal(t, "solo-vis", cv.UserID)
+}
+
+// TestVisibility_MutationEndpointsGated verifies that UpdateThread and attachment
+// endpoints respect visibility scoping.
+func TestVisibility_MutationEndpointsGated(t *testing.T) {
+	db, _ := setupDB(t)
+	h := NewHandler(newSvc(db))
+	r := globalSpaceRouter(h)
+	ctx := context.Background()
+	svc := newSvc(db)
+
+	orgID := seedOrgMember(t, db, "GatedOrg", "gated-org", "gated-user")
+	_, err := svc.CreateThread(ctx, "global-support", "gated-user", CreateInput{Title: "Gated Ticket", OrgID: &orgID})
+	require.NoError(t, err)
+
+	// outsider-user has no org membership — ScopeOwner, not the author.
+	t.Run("outsider cannot update", func(t *testing.T) {
+		body := `{"body":"hacked"}`
+		req := httptest.NewRequest(http.MethodPatch, "/global-spaces/global-support/threads/gated-ticket", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withUser(req, "outsider-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("outsider cannot list attachments", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/global-spaces/global-support/threads/gated-ticket/attachments", nil)
+		req = withUser(req, "outsider-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	// Same-org member CAN access.
+	t.Run("same org member can update", func(t *testing.T) {
+		body := `{"body":"updated by colleague"}`
+		req := httptest.NewRequest(http.MethodPatch, "/global-spaces/global-support/threads/gated-ticket", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withUser(req, "gated-user")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
 }

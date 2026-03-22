@@ -22,9 +22,30 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// resolveVisibility resolves the caller's visibility tier for support spaces.
+// Returns nil when the space is not global-support or the user is unauthenticated.
+// On error it writes a 500 and returns nil, true.
+func (h *Handler) resolveVisibility(w http.ResponseWriter, r *http.Request, spaceSlug string) (cv *CallerVisibility, abort bool) {
+	if spaceSlug != "global-support" {
+		return nil, false
+	}
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return nil, true
+	}
+	resolved, err := h.service.ResolveVisibility(r.Context(), uc.UserID)
+	if err != nil {
+		apierrors.InternalError(w, "failed to check permissions")
+		return nil, true
+	}
+	return resolved, false
+}
+
 // ListThreads handles GET /v1/global-spaces/{space}/threads.
 // Accepts optional query params: mine=true, org_id, limit, cursor.
-// Authentication is required; tier enforcement is handled client-side.
+// Authentication is required for support spaces; visibility scoping is enforced
+// server-side for global-support.
 func (h *Handler) ListThreads(w http.ResponseWriter, r *http.Request) {
 	spaceSlug := chi.URLParam(r, "space")
 	params := pagination.Parse(r)
@@ -36,12 +57,19 @@ func (h *Handler) ListThreads(w http.ResponseWriter, r *http.Request) {
 		userID = uc.UserID
 	}
 
+	// Resolve visibility tier for support spaces.
+	cv, abort := h.resolveVisibility(w, r, spaceSlug)
+	if abort {
+		return
+	}
+
 	input := ListInput{
-		SpaceSlug: spaceSlug,
-		Params:    params,
-		UserID:    userID,
-		Mine:      q.Get("mine") == "true",
-		OrgID:     q.Get("org_id"),
+		SpaceSlug:  spaceSlug,
+		Params:     params,
+		UserID:     userID,
+		Mine:       q.Get("mine") == "true",
+		OrgID:      q.Get("org_id"),
+		Visibility: cv,
 	}
 
 	threads, pageInfo, err := h.service.ListThreads(r.Context(), input)
@@ -65,11 +93,17 @@ type createThreadRequest struct {
 
 // GetThread handles GET /v1/global-spaces/{space}/threads/{slug}.
 // Returns the enriched thread including author email/name and org name.
+// Visibility scoping is enforced for global-support.
 func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
 	spaceSlug := chi.URLParam(r, "space")
 	threadSlug := chi.URLParam(r, "slug")
 
-	t, err := h.service.GetThread(r.Context(), spaceSlug, threadSlug)
+	cv, abort := h.resolveVisibility(w, r, spaceSlug)
+	if abort {
+		return
+	}
+
+	t, err := h.service.GetThread(r.Context(), spaceSlug, threadSlug, cv)
 	if err != nil {
 		apierrors.InternalError(w, "failed to get thread")
 		return
@@ -90,6 +124,7 @@ type updateThreadRequest struct {
 
 // UpdateThread handles PATCH /v1/global-spaces/{space}/threads/{slug}.
 // Requires authentication. Allows updating body and/or status.
+// Visibility scoping is enforced for global-support.
 func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 	spaceSlug := chi.URLParam(r, "space")
 	threadSlug := chi.URLParam(r, "slug")
@@ -97,6 +132,11 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 	uc := auth.GetUserContext(r.Context())
 	if uc == nil {
 		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	cv, abort := h.resolveVisibility(w, r, spaceSlug)
+	if abort {
 		return
 	}
 
@@ -108,7 +148,7 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 
 	input := UpdateInput(req)
 
-	t, err := h.service.UpdateThread(r.Context(), spaceSlug, threadSlug, uc.UserID, input)
+	t, err := h.service.UpdateThread(r.Context(), spaceSlug, threadSlug, uc.UserID, input, cv)
 	if err != nil {
 		apierrors.InternalError(w, "failed to update thread")
 		return
@@ -123,11 +163,17 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 
 // ListAttachments handles GET /v1/global-spaces/{space}/threads/{slug}/attachments.
 // Returns uploads attached to the specified thread.
+// Visibility scoping is enforced for global-support.
 func (h *Handler) ListAttachments(w http.ResponseWriter, r *http.Request) {
 	spaceSlug := chi.URLParam(r, "space")
 	threadSlug := chi.URLParam(r, "slug")
 
-	uploads, err := h.service.ListAttachments(r.Context(), spaceSlug, threadSlug)
+	cv, abort := h.resolveVisibility(w, r, spaceSlug)
+	if abort {
+		return
+	}
+
+	uploads, err := h.service.ListAttachments(r.Context(), spaceSlug, threadSlug, cv)
 	if err != nil {
 		apierrors.InternalError(w, "failed to list attachments")
 		return
@@ -168,7 +214,12 @@ func (h *Handler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = file.Close() }()
 
-	uploaded, err := h.service.UploadAttachment(r.Context(), spaceSlug, threadSlug, uc.UserID, header.Filename, header.Size, file)
+	cv, abort := h.resolveVisibility(w, r, spaceSlug)
+	if abort {
+		return
+	}
+
+	uploaded, err := h.service.UploadAttachment(r.Context(), spaceSlug, threadSlug, uc.UserID, header.Filename, header.Size, file, cv)
 	if err != nil {
 		apierrors.InternalError(w, "failed to upload attachment")
 		return
