@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { SystemHealthWidget } from "./system-health-widget";
 
 describe("SystemHealthWidget", () => {
-  it("renders and shows not-wired error", async () => {
+  it("renders without crashing", () => {
+    const { container } = render(<SystemHealthWidget token="tok" />);
+    expect(container).toBeTruthy();
+  });
+
+  it("shows not-wired error after load", async () => {
     render(<SystemHealthWidget token="tok" />);
 
     await waitFor(() => {

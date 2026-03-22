@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { LeadPipelineWidget } from "./lead-pipeline-widget";
 
 describe("LeadPipelineWidget", () => {
-  it("renders and shows not-wired error", async () => {
+  it("renders without crashing", () => {
+    const { container } = render(<LeadPipelineWidget token="tok" />);
+    expect(container).toBeTruthy();
+  });
+
+  it("shows not-wired error after load", async () => {
     render(<LeadPipelineWidget token="tok" />);
 
     await waitFor(() => {

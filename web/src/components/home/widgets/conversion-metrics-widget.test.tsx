@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { ConversionMetricsWidget } from "./conversion-metrics-widget";
 
 describe("ConversionMetricsWidget", () => {
-  it("renders and shows not-wired error", async () => {
+  it("renders without crashing", () => {
+    const { container } = render(<ConversionMetricsWidget token="tok" />);
+    expect(container).toBeTruthy();
+  });
+
+  it("shows not-wired error after load", async () => {
     render(<ConversionMetricsWidget token="tok" />);
 
     await waitFor(() => {

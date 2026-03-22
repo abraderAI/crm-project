@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { RecentAuditLogWidget } from "./recent-audit-log-widget";
 
 describe("RecentAuditLogWidget", () => {
-  it("renders and shows not-wired error", async () => {
+  it("renders without crashing", () => {
+    const { container } = render(<RecentAuditLogWidget token="tok" />);
+    expect(container).toBeTruthy();
+  });
+
+  it("shows not-wired error after load", async () => {
     render(<RecentAuditLogWidget token="tok" />);
 
     await waitFor(() => {

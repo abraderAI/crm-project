@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { TicketQueueWidget } from "./ticket-queue-widget";
 
 describe("TicketQueueWidget", () => {
-  it("renders and shows not-wired error", async () => {
+  it("renders without crashing", () => {
+    const { container } = render(<TicketQueueWidget token="tok" />);
+    expect(container).toBeTruthy();
+  });
+
+  it("shows not-wired error after load", async () => {
     render(<TicketQueueWidget token="tok" />);
 
     await waitFor(() => {
