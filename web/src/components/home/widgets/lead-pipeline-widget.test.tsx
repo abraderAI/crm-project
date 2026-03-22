@@ -9,6 +9,8 @@ describe("LeadPipelineWidget", () => {
     await waitFor(() => {
       expect(screen.getByTestId("lead-pipeline-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("lead-pipeline-error")).toHaveTextContent("Failed to load lead pipeline data");
+    expect(screen.getByTestId("lead-pipeline-error")).toHaveTextContent(
+      "Failed to load lead pipeline data",
+    );
   });
 });

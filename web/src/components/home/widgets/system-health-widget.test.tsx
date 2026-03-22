@@ -9,6 +9,8 @@ describe("SystemHealthWidget", () => {
     await waitFor(() => {
       expect(screen.getByTestId("system-health-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("system-health-error")).toHaveTextContent("Failed to load system health");
+    expect(screen.getByTestId("system-health-error")).toHaveTextContent(
+      "Failed to load system health",
+    );
   });
 });

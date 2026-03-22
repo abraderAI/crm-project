@@ -9,6 +9,8 @@ describe("TicketStatsWidget", () => {
     await waitFor(() => {
       expect(screen.getByTestId("ticket-stats-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("ticket-stats-error")).toHaveTextContent("Failed to load ticket stats");
+    expect(screen.getByTestId("ticket-stats-error")).toHaveTextContent(
+      "Failed to load ticket stats",
+    );
   });
 });

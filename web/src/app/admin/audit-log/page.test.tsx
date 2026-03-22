@@ -33,7 +33,9 @@ vi.mock("@/components/reports/date-range-picker", () => ({
 }));
 
 // Stub global fetch.
-const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: () => ({ data: [], page_info: { has_more: false } }) });
+const mockFetch = vi
+  .fn()
+  .mockResolvedValue({ ok: true, json: () => ({ data: [], page_info: { has_more: false } }) });
 vi.stubGlobal("fetch", mockFetch);
 
 import AdminAuditLogPage from "./page";

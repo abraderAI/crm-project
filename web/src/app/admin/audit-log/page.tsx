@@ -148,10 +148,7 @@ function AdminAuditLogInner(): React.ReactNode {
   return (
     <div data-testid="admin-audit-log" className="flex flex-col gap-4">
       {/* Filter bar */}
-      <div
-        className="flex flex-wrap items-center gap-3"
-        data-testid="audit-filter-bar"
-      >
+      <div className="flex flex-wrap items-center gap-3" data-testid="audit-filter-bar">
         <DateRangePicker from={from} to={to} onChange={handleDateChange} />
 
         <select

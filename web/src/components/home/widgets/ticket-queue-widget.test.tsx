@@ -9,6 +9,8 @@ describe("TicketQueueWidget", () => {
     await waitFor(() => {
       expect(screen.getByTestId("ticket-queue-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("ticket-queue-error")).toHaveTextContent("Failed to load ticket queue");
+    expect(screen.getByTestId("ticket-queue-error")).toHaveTextContent(
+      "Failed to load ticket queue",
+    );
   });
 });

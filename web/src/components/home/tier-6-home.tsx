@@ -31,7 +31,10 @@ const ADMIN_LINKS: AdminLink[] = [
  * Tier 6 (Platform Admin) home screen.
  * Lightweight navigation hub pointing to the admin console where real data lives.
  */
-export function Tier6HomeScreen({ token: _token, layout: _layout }: Tier6HomeScreenProps): ReactNode {
+export function Tier6HomeScreen({
+  token: _token,
+  layout: _layout,
+}: Tier6HomeScreenProps): ReactNode {
   return (
     <div data-testid="tier6-home-screen" className="space-y-4">
       <div className="flex items-center gap-2">

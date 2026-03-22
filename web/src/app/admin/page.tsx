@@ -60,7 +60,11 @@ export default async function AdminOverviewPage(): Promise<React.ReactNode> {
         </div>
         <div className="grid gap-4 sm:grid-cols-3" data-testid="support-snapshot">
           <MetricCard label="Open Tickets" value={openTickets} href="/admin/reports/support" />
-          <MetricCard label="Assigned Tickets" value={assignedTickets} href="/admin/reports/support" />
+          <MetricCard
+            label="Assigned Tickets"
+            value={assignedTickets}
+            href="/admin/reports/support"
+          />
           <MetricCard
             label="Avg Resolution"
             value={avgResolution != null ? `${avgResolution.toFixed(1)} hrs` : "–"}

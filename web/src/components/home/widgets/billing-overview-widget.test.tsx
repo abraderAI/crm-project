@@ -9,6 +9,8 @@ describe("BillingOverviewWidget", () => {
     await waitFor(() => {
       expect(screen.getByTestId("billing-overview-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("billing-overview-error")).toHaveTextContent("Failed to load billing overview");
+    expect(screen.getByTestId("billing-overview-error")).toHaveTextContent(
+      "Failed to load billing overview",
+    );
   });
 });

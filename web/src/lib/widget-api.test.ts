@@ -14,8 +14,14 @@ import type {
 describe("widget-api types", () => {
   it("exports LeadsByStatus interface", () => {
     const val: LeadsByStatus = {
-      new_lead: 0, contacted: 0, qualified: 0, proposal: 0,
-      negotiation: 0, closed_won: 0, closed_lost: 0, nurturing: 0,
+      new_lead: 0,
+      contacted: 0,
+      qualified: 0,
+      proposal: 0,
+      negotiation: 0,
+      closed_won: 0,
+      closed_lost: 0,
+      nurturing: 0,
     };
     expect(val.new_lead).toBe(0);
   });
@@ -31,7 +37,13 @@ describe("widget-api types", () => {
   });
 
   it("exports TicketSummary interface", () => {
-    const val: TicketSummary = { id: "1", title: "t", status: "open", org_name: "o", created_at: "" };
+    const val: TicketSummary = {
+      id: "1",
+      title: "t",
+      status: "open",
+      org_name: "o",
+      created_at: "",
+    };
     expect(val.status).toBe("open");
   });
 
@@ -51,7 +63,14 @@ describe("widget-api types", () => {
   });
 
   it("exports AuditEvent interface", () => {
-    const val: AuditEvent = { id: "1", actor: "a", action: "create", entity_type: "org", entity_id: "e", created_at: "" };
+    const val: AuditEvent = {
+      id: "1",
+      actor: "a",
+      action: "create",
+      entity_type: "org",
+      entity_id: "e",
+      created_at: "",
+    };
     expect(val.action).toBe("create");
   });
 });

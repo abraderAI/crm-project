@@ -24,10 +24,16 @@ describe("Tier6HomeScreen", () => {
 
     expect(screen.getByTestId("tier6-quick-links")).toBeInTheDocument();
     expect(screen.getByTestId("link-admin-dashboard")).toHaveAttribute("href", "/admin");
-    expect(screen.getByTestId("link-support-report")).toHaveAttribute("href", "/admin/reports/support");
+    expect(screen.getByTestId("link-support-report")).toHaveAttribute(
+      "href",
+      "/admin/reports/support",
+    );
     expect(screen.getByTestId("link-sales-report")).toHaveAttribute("href", "/admin/reports/sales");
     expect(screen.getByTestId("link-user-management")).toHaveAttribute("href", "/admin/users");
-    expect(screen.getByTestId("link-feature-flags")).toHaveAttribute("href", "/admin/feature-flags");
+    expect(screen.getByTestId("link-feature-flags")).toHaveAttribute(
+      "href",
+      "/admin/feature-flags",
+    );
     expect(screen.getByTestId("link-audit-log")).toHaveAttribute("href", "/admin/audit-log");
   });
 

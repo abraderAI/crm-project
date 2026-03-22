@@ -9,6 +9,8 @@ describe("RecentLeadsWidget", () => {
     await waitFor(() => {
       expect(screen.getByTestId("recent-leads-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("recent-leads-error")).toHaveTextContent("Failed to load recent leads");
+    expect(screen.getByTestId("recent-leads-error")).toHaveTextContent(
+      "Failed to load recent leads",
+    );
   });
 });

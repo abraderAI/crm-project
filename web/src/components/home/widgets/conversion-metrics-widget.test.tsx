@@ -9,6 +9,8 @@ describe("ConversionMetricsWidget", () => {
     await waitFor(() => {
       expect(screen.getByTestId("conversion-metrics-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("conversion-metrics-error")).toHaveTextContent("Failed to load conversion metrics");
+    expect(screen.getByTestId("conversion-metrics-error")).toHaveTextContent(
+      "Failed to load conversion metrics",
+    );
   });
 });
