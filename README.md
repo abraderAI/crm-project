@@ -23,7 +23,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Org membership management** — Add users to orgs via searchable org picker with inline org creation; remove users from orgs; delete orgs (soft-delete) from list and detail views
 - **GDPR** — Hard-purge admin endpoints; soft delete everywhere else
 - **Observability** — Structured `slog` logging + OpenTelemetry traces and metrics
-- **App shell** — Sidebar navigation, topbar with search + user menu, breadcrumbs, dark/light theme toggle with full dark-mode color palettes across all support ticket views (entry cards, status badges, stats strip, error banners)
+- **App shell** — Tier-filtered sidebar navigation (users only see items matching their access level), accordion sub-menus under Support (New Ticket), CRM (Pipeline, Leads), Reports, and Admin (18 sub-pages grouped by category), Lucide icons on every item, gradient sidebar background, smooth CSS expand/collapse transitions, active accent borders, icon-only collapsed mode with tooltips, topbar with search + user menu, breadcrumbs, dark/light theme toggle with full dark-mode color palettes across all support ticket views (entry cards, status badges, stats strip, error banners)
 - **File preview** — Rich staged file previews (image thumbnails, icons, size) with upload progress indicators
 - **IO Channel Gateway** — Pluggable inbound channel processing with per-channel config, dead-letter queue (DLQ), and exponential-backoff retry engine
 - **Inbound Email** — Multiple IMAP inboxes per org (e.g. support@, sales@), each with a configurable **routing action**: `support_ticket` → Support space, `sales_lead` → CRM space, `general` → General space. Live IMAP IDLE watcher starts on server boot, reconnects with exponential backoff, and delivers unread mail on reconnect. MIME parsing, thread deduplication by Message-ID / In-Reply-To, attachment storage, and dead-letter queue.
@@ -186,7 +186,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/admin/reports/support` | Platform-wide support overview + per-org sortable breakdown table |
 | `/admin/reports/sales` | Platform-wide sales overview + per-org sortable breakdown table |
 
-All routes use server components for data fetching with client wrappers for interactivity. The app shell (`AppLayoutWrapper`) provides sidebar navigation, topbar with search and Clerk `UserButton`, and route-aware active states.
+All routes use server components for data fetching with client wrappers for interactivity. The app shell (`AppLayoutWrapper`) provides tier-filtered sidebar navigation (via `nav-config.ts` + `useTier()`), accordion sub-menus, topbar with search and Clerk `UserButton`, and route-aware active states. Anonymous visitors (tier 1) see only Home, Forum, and Docs; higher tiers progressively unlock Support, Notifications, Settings, CRM, Reports, and Admin.
 
 ---
 
@@ -594,7 +594,7 @@ Config is read from `~/.deft-cli.yaml` with env var overrides (`DEFT_API_URL`, `
 
 ## Quality
 
-- **2,050 frontend tests** across 159 test files (Vitest) — 91% statement, 85% branch coverage
+- **2,127 frontend tests** across 163 test files (Vitest) — 91% statement, 85% branch coverage
 - **1,878 Go tests** across 37 packages with race detector enabled — 85.8% coverage
 - **15 fuzz functions** across 8 Go packages (`board`, `thread`, `message`, `membership`, `conversion`, `gdpr`, `tier`, `notification`), each with ≥ 40 diverse seeds
 - ≥ 85% test coverage enforced on every PR (statements + branches)
