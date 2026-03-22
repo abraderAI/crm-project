@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/go-chi/chi/v5"
@@ -197,6 +199,231 @@ func TestService_IsDeftMember_NotMember(t *testing.T) {
 	isDeft, err := svc.IsDeftMember(context.Background(), "random-user")
 	require.NoError(t, err)
 	assert.False(t, isDeft)
+}
+
+// --- Unclaimed ticket + claim tests ---
+
+func TestService_ListUnclaimedTickets(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	repo := NewRepository(db)
+	svc := NewService(repo, nil)
+	ctx := context.Background()
+
+	// Create user shadow for the claimant.
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "claimer",
+		Email:       "claimer@example.com",
+		DisplayName: "Claimer",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	// Create an orphaned ticket (contact_email set, author is deft member).
+	orphan := &models.Thread{
+		BoardID:      board.ID,
+		Title:        "Orphaned Ticket",
+		Slug:         "orphaned-ticket",
+		Metadata:     "{}",
+		AuthorID:     "deft-member",
+		ContactEmail: "claimer@example.com",
+		ThreadType:   models.ThreadTypeSupport,
+		Visibility:   models.ThreadVisibilityOrgOnly,
+	}
+	require.NoError(t, db.Create(orphan).Error)
+
+	// Non-orphaned ticket (same email, but author IS the claimer).
+	ownerTicket := &models.Thread{
+		BoardID:      board.ID,
+		Title:        "Own Ticket",
+		Slug:         "own-ticket",
+		Metadata:     "{}",
+		AuthorID:     "claimer",
+		ContactEmail: "claimer@example.com",
+		ThreadType:   models.ThreadTypeSupport,
+		Visibility:   models.ThreadVisibilityOrgOnly,
+	}
+	require.NoError(t, db.Create(ownerTicket).Error)
+
+	t.Run("returns only orphaned tickets", func(t *testing.T) {
+		tickets, err := svc.ListUnclaimedTickets(ctx, "claimer")
+		require.NoError(t, err)
+		require.Len(t, tickets, 1)
+		assert.Equal(t, "Orphaned Ticket", tickets[0].Title)
+	})
+
+	t.Run("user without shadow returns nil", func(t *testing.T) {
+		tickets, err := svc.ListUnclaimedTickets(ctx, "no-shadow")
+		require.NoError(t, err)
+		assert.Nil(t, tickets)
+	})
+}
+
+func TestService_ClaimTickets(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	repo := NewRepository(db)
+	svc := NewService(repo, nil)
+	ctx := context.Background()
+
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "claimer2",
+		Email:       "claimer2@example.com",
+		DisplayName: "Claimer Two",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	orphan := &models.Thread{
+		BoardID:      board.ID,
+		Title:        "Claimable",
+		Slug:         "claimable",
+		Metadata:     "{}",
+		AuthorID:     "someone-else",
+		ContactEmail: "claimer2@example.com",
+		ThreadType:   models.ThreadTypeSupport,
+		Visibility:   models.ThreadVisibilityOrgOnly,
+	}
+	require.NoError(t, db.Create(orphan).Error)
+
+	mismatch := &models.Thread{
+		BoardID:      board.ID,
+		Title:        "Wrong Email",
+		Slug:         "wrong-email",
+		Metadata:     "{}",
+		AuthorID:     "someone-else",
+		ContactEmail: "other@example.com",
+		ThreadType:   models.ThreadTypeSupport,
+		Visibility:   models.ThreadVisibilityOrgOnly,
+	}
+	require.NoError(t, db.Create(mismatch).Error)
+
+	t.Run("claims matching ticket and nullifies contact_email", func(t *testing.T) {
+		claimed, err := svc.ClaimTickets(ctx, "claimer2", []string{orphan.ID})
+		require.NoError(t, err)
+		assert.Equal(t, 1, claimed)
+
+		// Verify author updated and contact_email cleared.
+		var updated models.Thread
+		require.NoError(t, db.First(&updated, "id = ?", orphan.ID).Error)
+		assert.Equal(t, "claimer2", updated.AuthorID)
+		assert.Equal(t, "", updated.ContactEmail, "contact_email should be nullified")
+
+		// Verify system_event message posted.
+		var msgs []models.Message
+		require.NoError(t, db.Where("thread_id = ? AND type = ?", orphan.ID, models.MessageTypeSystemEvent).Find(&msgs).Error)
+		require.Len(t, msgs, 1)
+		assert.Contains(t, msgs[0].Body, "Claimer Two")
+	})
+
+	t.Run("skips mismatched email ticket", func(t *testing.T) {
+		claimed, err := svc.ClaimTickets(ctx, "claimer2", []string{mismatch.ID})
+		require.NoError(t, err)
+		assert.Equal(t, 0, claimed)
+	})
+
+	t.Run("user without shadow returns error", func(t *testing.T) {
+		_, err := svc.ClaimTickets(ctx, "no-shadow", []string{orphan.ID})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrEmailMismatch)
+	})
+}
+
+// TestHandler_UnclaimedTickets covers the GET /v1/support/unclaimed-tickets endpoint.
+func TestHandler_UnclaimedTickets(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	repo := NewRepository(db)
+	svc := NewService(repo, nil)
+	h := NewHandler(svc)
+
+	router := chi.NewRouter()
+	router.Get("/support/unclaimed-tickets", h.ListUnclaimedTickets)
+	router.Post("/support/claim-tickets", h.ClaimTickets)
+
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "api-claimer",
+		Email:       "api-claimer@example.com",
+		DisplayName: "API Claimer",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	orphan := &models.Thread{
+		BoardID:      board.ID,
+		Title:        "API Orphan",
+		Slug:         "api-orphan",
+		Metadata:     "{}",
+		AuthorID:     "deft-agent",
+		ContactEmail: "api-claimer@example.com",
+		ThreadType:   models.ThreadTypeSupport,
+		Visibility:   models.ThreadVisibilityOrgOnly,
+	}
+	require.NoError(t, db.Create(orphan).Error)
+
+	t.Run("GET unclaimed returns orphaned tickets", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/support/unclaimed-tickets", nil)
+		req = withUser(req, "api-claimer")
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		data := resp["data"].([]any)
+		assert.Len(t, data, 1)
+	})
+
+	t.Run("POST claim transfers ownership", func(t *testing.T) {
+		body := `{"ticket_ids":["` + orphan.ID + `"]}`
+		req := httptest.NewRequest(http.MethodPost, "/support/claim-tickets", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withUser(req, "api-claimer")
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, float64(1), resp["claimed"])
+	})
+
+	t.Run("unauthenticated returns 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/support/unclaimed-tickets", nil)
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("POST claim with empty body returns 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/support/claim-tickets", strings.NewReader("{bad"))
+		req.Header.Set("Content-Type", "application/json")
+		req = withUser(req, "api-claimer")
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("POST claim with empty ticket_ids returns 400", func(t *testing.T) {
+		body := `{"ticket_ids":[]}`
+		req := httptest.NewRequest(http.MethodPost, "/support/claim-tickets", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withUser(req, "api-claimer")
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("POST claim unauthenticated returns 401", func(t *testing.T) {
+		body := `{"ticket_ids":["abc"]}`
+		req := httptest.NewRequest(http.MethodPost, "/support/claim-tickets", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}
+
+func TestRepository_FindUnclaimedTickets_EmptyEmail(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	tickets, err := repo.FindUnclaimedTickets(context.Background(), "", "user")
+	require.NoError(t, err)
+	assert.Nil(t, tickets)
 }
 
 // --- DEFT members list ---

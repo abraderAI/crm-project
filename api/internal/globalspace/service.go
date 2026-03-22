@@ -33,6 +33,7 @@ type CallerVisibility struct {
 	Scope  VisibilityScope
 	UserID string
 	OrgIDs []string // populated when Scope == ScopeOrg
+	Email  string   // populated from user_shadows for ContactEmail matching
 }
 
 // Service provides business logic for global space thread operations.
@@ -60,15 +61,24 @@ func (s *Service) ResolveVisibility(ctx context.Context, userID string) (*Caller
 		return &CallerVisibility{Scope: ScopeAll, UserID: userID}, nil
 	}
 
+	// Resolve email for ContactEmail matching on owner-scoped tickets.
+	var email string
+	shadows, shadowErr := s.repo.GetUserShadowsByIDs(ctx, []string{userID})
+	if shadowErr == nil {
+		if s, ok := shadows[userID]; ok {
+			email = s.Email
+		}
+	}
+
 	orgIDs, err := s.repo.FindUserOrgIDs(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	if len(orgIDs) > 0 {
-		return &CallerVisibility{Scope: ScopeOrg, UserID: userID, OrgIDs: orgIDs}, nil
+		return &CallerVisibility{Scope: ScopeOrg, UserID: userID, OrgIDs: orgIDs, Email: email}, nil
 	}
 
-	return &CallerVisibility{Scope: ScopeOwner, UserID: userID}, nil
+	return &CallerVisibility{Scope: ScopeOwner, UserID: userID, Email: email}, nil
 }
 
 // canSeeThread checks whether the caller's visibility tier permits access to
@@ -88,7 +98,14 @@ func canSeeThread(cv *CallerVisibility, t *models.Thread) bool {
 		}
 		return false
 	case ScopeOwner:
-		return t.AuthorID == cv.UserID || t.AssignedTo == cv.UserID
+		if t.AuthorID == cv.UserID || t.AssignedTo == cv.UserID {
+			return true
+		}
+		// Allow access when the ticket's ContactEmail matches the caller's email.
+		if t.ContactEmail != "" && cv.Email != "" && t.ContactEmail == cv.Email {
+			return true
+		}
+		return false
 	default:
 		return false
 	}
@@ -99,9 +116,10 @@ func canSeeThread(cv *CallerVisibility, t *models.Thread) bool {
 // and orgs tables. They are omitted when the author or org cannot be resolved.
 type ThreadWithAuthor struct {
 	models.Thread
-	AuthorEmail string `json:"author_email,omitempty"`
-	AuthorName  string `json:"author_name,omitempty"`
-	OrgName     string `json:"org_name,omitempty"`
+	AuthorEmail        string `json:"author_email,omitempty"`
+	AuthorName         string `json:"author_name,omitempty"`
+	OrgName            string `json:"org_name,omitempty"`
+	RegistrationStatus string `json:"registration_status,omitempty"`
 }
 
 // ListInput holds parameters for listing threads in a global space.
@@ -145,6 +163,7 @@ func (s *Service) ListThreads(ctx context.Context, input ListInput) ([]ThreadWit
 			params.VisibleOrgIDs = input.Visibility.OrgIDs
 		case ScopeOwner:
 			params.VisibleUserID = input.Visibility.UserID
+			params.VisibleUserEmail = input.Visibility.Email
 		case ScopeAll:
 			// No additional filter.
 		}
@@ -158,6 +177,12 @@ func (s *Service) ListThreads(ctx context.Context, input ListInput) ([]ThreadWit
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Privacy: strip ContactEmail for non-DEFT callers.
+	if input.Visibility != nil && input.Visibility.Scope != ScopeAll {
+		stripContactEmail(enriched)
+	}
+
 	return enriched, pageInfo, nil
 }
 
@@ -198,9 +223,34 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 		if t.OrgID != nil {
 			rich.OrgName = orgNames[*t.OrgID]
 		}
+
+		// Derive registration status for the ticket creator.
+		if t.ContactEmail != "" {
+			// Orphaned ticket — check whether the contact has since registered.
+			if _, found := shadows[t.AuthorID]; !found {
+				rich.RegistrationStatus = "unregistered"
+			}
+		} else if t.OrgID == nil || (t.OrgID != nil && *t.OrgID == "") {
+			if _, found := shadows[t.AuthorID]; found {
+				// Registered user with no org.
+				if rich.OrgName == "" {
+					rich.RegistrationStatus = "registered"
+				}
+			}
+		}
+		// When OrgName is set, registration_status stays empty (org badge shown instead).
+
 		result[i] = rich
 	}
 	return result, nil
+}
+
+// stripContactEmail removes ContactEmail from enriched results.
+// Used to prevent non-DEFT callers from seeing PII.
+func stripContactEmail(threads []ThreadWithAuthor) {
+	for i := range threads {
+		threads[i].ContactEmail = ""
+	}
 }
 
 // CreateInput holds data needed to create a thread in a global space.
@@ -211,6 +261,9 @@ type CreateInput struct {
 	Body string
 	// OrgID associates the thread with an org for scoping (optional).
 	OrgID *string
+	// ContactEmail, when set, assigns the ticket to this email address.
+	// Only DEFT members may use this field.
+	ContactEmail *string
 }
 
 // threadTypeForSpace maps a global space slug to the appropriate ThreadType.
@@ -254,6 +307,12 @@ func (s *Service) GetThread(ctx context.Context, spaceSlug, threadSlug string, c
 	if err != nil {
 		return nil, err
 	}
+
+	// Privacy: strip ContactEmail for non-DEFT callers.
+	if cv != nil && cv.Scope != ScopeAll {
+		stripContactEmail(enriched)
+	}
+
 	return &enriched[0], nil
 }
 
@@ -507,16 +566,44 @@ func (s *Service) CreateThread(ctx context.Context, spaceSlug, authorID string, 
 		threadSlug = fmt.Sprintf("%s-%d", baseSlug, i)
 	}
 
+	// When contact_email is provided, resolve the target user or leave orphaned.
+	effectiveAuthorID := authorID
+	contactEmail := ""
+	if input.ContactEmail != nil && *input.ContactEmail != "" {
+		// Only DEFT members may assign tickets by email.
+		isDeft, deftErr := s.repo.IsDeftOrAdmin(ctx, authorID)
+		if deftErr != nil {
+			return nil, fmt.Errorf("checking DEFT membership: %w", deftErr)
+		}
+		if !isDeft {
+			return nil, fmt.Errorf("only DEFT members may use contact_email")
+		}
+		contactEmail = *input.ContactEmail
+
+		// Look up registered user by email.
+		shadow, lookupErr := s.repo.FindUserShadowByEmail(ctx, contactEmail)
+		if lookupErr != nil {
+			return nil, fmt.Errorf("looking up contact email: %w", lookupErr)
+		}
+		if shadow != nil {
+			// Known user — set them as the ticket author.
+			effectiveAuthorID = shadow.ClerkUserID
+		}
+		// If shadow == nil the ticket is orphaned: authorID stays as the DEFT
+		// member and contactEmail bridges the gap until the user registers.
+	}
+
 	t := &models.Thread{
-		BoardID:    board.ID,
-		Title:      input.Title,
-		Body:       input.Body,
-		Slug:       threadSlug,
-		Metadata:   "{}",
-		AuthorID:   authorID,
-		ThreadType: threadTypeForSpace(spaceSlug),
-		Visibility: models.ThreadVisibilityOrgOnly,
-		OrgID:      input.OrgID,
+		BoardID:      board.ID,
+		Title:        input.Title,
+		Body:         input.Body,
+		Slug:         threadSlug,
+		Metadata:     "{}",
+		AuthorID:     effectiveAuthorID,
+		ContactEmail: contactEmail,
+		ThreadType:   threadTypeForSpace(spaceSlug),
+		Visibility:   models.ThreadVisibilityOrgOnly,
+		OrgID:        input.OrgID,
 	}
 	var initialEntry *models.Message
 	if spaceSlug == "global-support" && input.Body != "" {

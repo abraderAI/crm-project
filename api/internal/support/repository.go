@@ -195,6 +195,70 @@ func (r *Repository) ListDeftMembers(ctx context.Context) ([]DeftMemberInfo, err
 	return results, nil
 }
 
+// FindUnclaimedTickets returns support tickets where contact_email matches the
+// given email but author_id does NOT match the given userID (orphaned tickets).
+func (r *Repository) FindUnclaimedTickets(ctx context.Context, email, userID string) ([]models.Thread, error) {
+	if email == "" {
+		return nil, nil
+	}
+	var threads []models.Thread
+	err := r.db.WithContext(ctx).
+		Where("contact_email = ? AND author_id != ? AND thread_type = ?",
+			email, userID, models.ThreadTypeSupport).
+		Order("created_at ASC").
+		Find(&threads).Error
+	if err != nil {
+		return nil, fmt.Errorf("finding unclaimed tickets: %w", err)
+	}
+	return threads, nil
+}
+
+// ClaimTicket updates the ticket's author_id and clears contact_email.
+// Returns the updated thread or nil if not found.
+func (r *Repository) ClaimTicket(ctx context.Context, ticketID, newAuthorID string) (*models.Thread, error) {
+	var t models.Thread
+	err := r.db.WithContext(ctx).First(&t, "id = ?", ticketID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("finding ticket to claim: %w", err)
+	}
+	t.AuthorID = newAuthorID
+	t.ContactEmail = "" // nullify PII
+	if err := r.db.WithContext(ctx).Save(&t).Error; err != nil {
+		return nil, fmt.Errorf("claiming ticket: %w", err)
+	}
+	return &t, nil
+}
+
+// FindUserShadowByID returns the UserShadow for the given Clerk user ID.
+// Returns nil, nil when not found.
+func (r *Repository) FindUserShadowByID(ctx context.Context, userID string) (*models.UserShadow, error) {
+	var shadow models.UserShadow
+	err := r.db.WithContext(ctx).Where("clerk_user_id = ?", userID).First(&shadow).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("finding user shadow: %w", err)
+	}
+	return &shadow, nil
+}
+
+// FindTicketByID returns a thread by ID. Returns nil, nil when not found.
+func (r *Repository) FindTicketByID(ctx context.Context, id string) (*models.Thread, error) {
+	var t models.Thread
+	err := r.db.WithContext(ctx).First(&t, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("finding ticket: %w", err)
+	}
+	return &t, nil
+}
+
 // IsDeftMember returns true when the user has active membership in any space
 // whose org has the slug "deft", or is a platform admin.
 func (r *Repository) IsDeftMember(ctx context.Context, userID string) (bool, error) {
