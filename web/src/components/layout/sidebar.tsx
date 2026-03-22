@@ -28,7 +28,11 @@ export interface SidebarProps {
 function findActiveParentId(items: SidebarNavItem[], currentPath?: string): string | null {
   if (!currentPath) return null;
   for (const item of items) {
-    if (item.children?.some((child) => currentPath === child.href || currentPath.startsWith(child.href + "/"))) {
+    if (
+      item.children?.some(
+        (child) => currentPath === child.href || currentPath.startsWith(child.href + "/"),
+      )
+    ) {
       return item.id;
     }
     if (currentPath === item.href || currentPath.startsWith(item.href + "/")) {
@@ -107,7 +111,10 @@ function TopLevelItem({
   const hasChildren = item.children && item.children.length > 0;
   const isActive =
     currentPath === item.href ||
-    (hasChildren && item.children!.some((c) => currentPath === c.href || (currentPath?.startsWith(c.href + "/") ?? false)));
+    (hasChildren &&
+      item.children!.some(
+        (c) => currentPath === c.href || (currentPath?.startsWith(c.href + "/") ?? false),
+      ));
   const Icon = item.icon;
 
   return (
@@ -129,7 +136,12 @@ function TopLevelItem({
             if (hasChildren && !isExpanded) onToggleExpand();
           }}
         >
-          <Icon className={cn("h-[18px] w-[18px] shrink-0", isActive ? "text-primary" : "text-foreground/50 group-hover:text-foreground/70")} />
+          <Icon
+            className={cn(
+              "h-[18px] w-[18px] shrink-0",
+              isActive ? "text-primary" : "text-foreground/50 group-hover:text-foreground/70",
+            )}
+          />
           <span className="truncate">{item.label}</span>
         </a>
         {hasChildren && (
@@ -162,10 +174,19 @@ function TopLevelItem({
 }
 
 /** Collapsed sidebar item — icon only with tooltip. */
-function CollapsedItem({ item, currentPath }: { item: SidebarNavItem; currentPath?: string }): React.ReactNode {
+function CollapsedItem({
+  item,
+  currentPath,
+}: {
+  item: SidebarNavItem;
+  currentPath?: string;
+}): React.ReactNode {
   const isActive =
     currentPath === item.href ||
-    (item.children?.some((c) => currentPath === c.href || (currentPath?.startsWith(c.href + "/") ?? false)) ?? false);
+    (item.children?.some(
+      (c) => currentPath === c.href || (currentPath?.startsWith(c.href + "/") ?? false),
+    ) ??
+      false);
   const Icon = item.icon;
 
   return (
@@ -201,7 +222,8 @@ export function Sidebar({
   // Derive whether the expanded section should be overridden by route.
   // If the current route falls under a parent that isn't expanded, auto-expand it.
   const routeParentId = findActiveParentId(items, currentPath);
-  const effectiveExpandedId = routeParentId && routeParentId !== expandedId ? routeParentId : expandedId;
+  const effectiveExpandedId =
+    routeParentId && routeParentId !== expandedId ? routeParentId : expandedId;
 
   const handleToggle = (id: string): void => {
     setExpandedId((prev) => (prev === id ? null : id));

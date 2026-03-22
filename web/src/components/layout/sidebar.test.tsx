@@ -105,7 +105,9 @@ describe("Sidebar", () => {
     await user.click(toggle);
 
     // After clicking, the sub-menu panel should have expanded maxHeight.
-    const supportPanel = screen.getByTestId("nav-item-support").querySelector("[data-testid='submenu-panel']");
+    const supportPanel = screen
+      .getByTestId("nav-item-support")
+      .querySelector("[data-testid='submenu-panel']");
     expect(supportPanel).toBeTruthy();
     expect(supportPanel?.getAttribute("data-expanded")).toBe("true");
     expect(supportPanel?.style.maxHeight).toBe("2000px");
@@ -121,7 +123,9 @@ describe("Sidebar", () => {
 
     // After animation frame, maxHeight should go to 0.
     // In test env rAF is sync, so we check immediately.
-    const supportPanel = screen.getByTestId("nav-item-support").querySelector("[data-testid='submenu-panel']");
+    const supportPanel = screen
+      .getByTestId("nav-item-support")
+      .querySelector("[data-testid='submenu-panel']");
     expect(supportPanel).toBeTruthy();
   });
 
@@ -134,8 +138,12 @@ describe("Sidebar", () => {
     // Now expand admin — support should collapse.
     await user.click(screen.getByTestId("nav-toggle-admin"));
 
-    const supportPanel = screen.getByTestId("nav-item-support").querySelector("[data-testid='submenu-panel']");
-    const adminPanel = screen.getByTestId("nav-item-admin").querySelector("[data-testid='submenu-panel']");
+    const supportPanel = screen
+      .getByTestId("nav-item-support")
+      .querySelector("[data-testid='submenu-panel']");
+    const adminPanel = screen
+      .getByTestId("nav-item-admin")
+      .querySelector("[data-testid='submenu-panel']");
     // Admin expanded, support collapsed.
     expect(adminPanel?.getAttribute("data-expanded")).toBe("true");
     expect(supportPanel?.getAttribute("data-expanded")).toBe("false");
@@ -145,7 +153,9 @@ describe("Sidebar", () => {
   it("auto-expands the section matching the current route", () => {
     render(<Sidebar items={mockItems} currentPath="/support/tickets/new" />);
     // Support section should be expanded since the route matches a child.
-    const supportPanel = screen.getByTestId("nav-item-support").querySelector("[data-testid='submenu-panel']");
+    const supportPanel = screen
+      .getByTestId("nav-item-support")
+      .querySelector("[data-testid='submenu-panel']");
     expect(supportPanel?.getAttribute("data-expanded")).toBe("true");
     expect(supportPanel?.style.maxHeight).toBe("2000px");
   });
@@ -202,7 +212,9 @@ describe("Sidebar", () => {
 
   it("auto-expands when currentPath matches parent href directly", () => {
     render(<Sidebar items={mockItems} currentPath="/support" />);
-    const supportPanel = screen.getByTestId("nav-item-support").querySelector("[data-testid='submenu-panel']");
+    const supportPanel = screen
+      .getByTestId("nav-item-support")
+      .querySelector("[data-testid='submenu-panel']");
     expect(supportPanel?.getAttribute("data-expanded")).toBe("true");
   });
 
@@ -214,7 +226,9 @@ describe("Sidebar", () => {
     const supportLink = screen.getByTestId("nav-link-support");
     await user.click(supportLink);
 
-    const supportPanel = screen.getByTestId("nav-item-support").querySelector("[data-testid='submenu-panel']");
+    const supportPanel = screen
+      .getByTestId("nav-item-support")
+      .querySelector("[data-testid='submenu-panel']");
     expect(supportPanel?.getAttribute("data-expanded")).toBe("true");
   });
 
