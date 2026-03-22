@@ -167,12 +167,12 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/admin/webhooks` | Webhook management + delivery log |
 | `/admin/members` | Organization membership manager |
 | `/admin/moderation` | Content moderation queue |
-| `/admin/audit-log` | Platform-wide audit log — user names with org badges |
+| `/admin/audit-log` | Platform-wide audit log — date range picker, action/entity-type/user filters, expandable before/after JSON diffs, user names with org badges |
 | `/admin/channels` | IO Channel configuration hub |
 || `/admin/channels/[type]` | Per-channel config, health, and DLQ monitor (`email` \| `voice` \| `chat`) |
 || `/admin/channels/email` | Email channel — includes **Email Inboxes** panel: add/edit/delete IMAP inboxes with routing action selector |
-| `/admin/feature-flags` | Feature flag management |
-| `/admin/settings` | System settings — editable key-value platform configuration |
+| `/admin/feature-flags` | Feature flag management — 3 seeded flags (community_voting, voice_module, maintenance_mode) with toggle controls |
+| `/admin/settings` | System settings — 6 seeded platform settings (pipeline stages, templates, notifications, upload limits, webhook retry, LLM rate limits) with JSON editor |
 | `/admin/security` | Security monitoring — recent logins and failed authentication events, user names with org badges |
 | `/admin/rbac-policy` | RBAC policy editor — resolution strategy, role hierarchy, and dry-run role preview |
 | `/admin/api-usage` | API usage stats by endpoint (24 h / 7 d / 30 d windows) |
