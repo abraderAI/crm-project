@@ -13,6 +13,7 @@ import { useUserDirectory } from "@/lib/use-user-directory";
 /** Badge styles keyed by ticket status. */
 const STATUS_STYLES: Record<string, string> = {
   open: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  assigned: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
   pending: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   resolved: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
   closed: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
@@ -22,6 +23,7 @@ const STATUS_STYLES: Record<string, string> = {
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
   { value: "open", label: "Open" },
+  { value: "assigned", label: "Assigned" },
   { value: "pending", label: "Pending" },
   { value: "resolved", label: "Resolved" },
   { value: "closed", label: "Closed" },
@@ -172,11 +174,13 @@ export function SupportManagementView(): ReactNode {
 
   // Compute stats from all loaded tickets (for the stats strip).
   let statsOpen = 0;
+  let statsAssigned = 0;
   let statsPending = 0;
   let statsResolved = 0;
   for (const thread of threads) {
     const status = thread.status ?? "open";
     if (status === "open") statsOpen++;
+    else if (status === "assigned") statsAssigned++;
     else if (status === "pending") statsPending++;
     else if (status === "resolved" || status === "closed") statsResolved++;
     else statsOpen++;
@@ -253,7 +257,7 @@ export function SupportManagementView(): ReactNode {
 
       {/* Stats strip — org/global scopes only */}
       {showStats && !isLoading && (
-        <div data-testid="support-stats" className="grid grid-cols-3 gap-3">
+        <div data-testid="support-stats" className="grid grid-cols-4 gap-3">
           <div
             data-testid="stats-open"
             className="rounded-lg border border-border bg-yellow-50 p-3 text-center dark:bg-yellow-950 dark:border-yellow-800"
@@ -262,6 +266,15 @@ export function SupportManagementView(): ReactNode {
               {statsOpen}
             </span>
             <span className="text-xs text-yellow-600 dark:text-yellow-300">Open</span>
+          </div>
+          <div
+            data-testid="stats-assigned"
+            className="rounded-lg border border-border bg-purple-50 p-3 text-center dark:bg-purple-950 dark:border-purple-800"
+          >
+            <span className="block text-xl font-bold text-purple-700 dark:text-purple-200">
+              {statsAssigned}
+            </span>
+            <span className="text-xs text-purple-600 dark:text-purple-300">Assigned</span>
           </div>
           <div
             data-testid="stats-pending"

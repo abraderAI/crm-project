@@ -238,3 +238,8 @@ func (s *Service) SetNotificationDetailLevel(ctx context.Context, slug, level st
 func (s *Service) IsDeftMember(ctx context.Context, userID string) (bool, error) {
 	return s.repo.IsDeftMember(ctx, userID)
 }
+
+// ListDeftMembers returns all active DEFT org members.
+func (s *Service) ListDeftMembers(ctx context.Context) ([]DeftMemberInfo, error) {
+	return s.repo.ListDeftMembers(ctx)
+}

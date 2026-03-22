@@ -2,59 +2,44 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Sidebar navigation overhaul: tier-based visibility, sub-menus, visual polish",
-    "created": "2026-03-22T00:19:31Z"
+    "description": "Assigned ticket status — auto-transition on assignment",
+    "created": "2026-03-22T01:38:00Z"
   },
   "plan": {
-    "id": "sidebar-nav-overhaul",
-    "title": "Sidebar Navigation Overhaul — Role-Based Visibility, Sub-Menus, Visual Polish",
-    "status": "completed",
-    "tags": ["frontend", "navigation", "rbac", "ux"],
+    "id": "assigned-ticket-status",
+    "title": "Assigned Ticket Status",
+    "status": "running",
+    "tags": ["backend", "frontend", "support"],
     "items": [
       {
-        "id": "nav-config",
-        "title": "Create nav-config.ts with tier-gated nav items and sub-menus",
-        "status": "completed"
+        "id": "backend-auto-transition",
+        "title": "Auto-transition status on assign/unassign in UpdateThread",
+        "status": "pending"
       },
       {
-        "id": "nav-config-tests",
-        "title": "Create nav-config.test.ts with tier filtering tests",
-        "status": "completed"
+        "id": "frontend-detail-page",
+        "title": "Add assigned status to ticket detail page",
+        "status": "pending"
       },
       {
-        "id": "sidebar-component",
-        "title": "Overhaul sidebar.tsx: icons, sub-menu accordion, animations, visual polish",
-        "status": "completed"
+        "id": "frontend-management-view",
+        "title": "Add assigned status to support management view + stats",
+        "status": "pending"
       },
       {
-        "id": "sidebar-tests",
-        "title": "Update sidebar.test.tsx for new features",
-        "status": "completed"
+        "id": "frontend-support-view",
+        "title": "Add assigned status to support view",
+        "status": "pending"
       },
       {
-        "id": "app-layout-wrapper",
-        "title": "Wire tier-based filtering in app-layout-wrapper.tsx",
-        "status": "completed"
-      },
-      {
-        "id": "app-layout-wrapper-tests",
-        "title": "Update app-layout-wrapper.test.tsx for filtered nav",
-        "status": "completed"
-      },
-      {
-        "id": "admin-layout",
-        "title": "Remove 18-tab horizontal bar from admin layout.tsx",
-        "status": "completed"
-      },
-      {
-        "id": "globals-css",
-        "title": "Add sidebar animation and polish styles to globals.css",
-        "status": "completed"
+        "id": "tests",
+        "title": "Backend + frontend tests",
+        "status": "pending"
       },
       {
         "id": "verify",
-        "title": "Run task web:typecheck, web:lint, web:test:coverage to verify",
-        "status": "completed"
+        "title": "Run task check and ensure full pass",
+        "status": "pending"
       }
     ]
   }

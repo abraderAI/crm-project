@@ -226,6 +226,34 @@ func (h *Handler) SetDeftVisibility(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, msg)
 }
 
+// ListDeftMembers handles GET /v1/support/deft-members.
+// Returns all active DEFT org members with display name and email.
+func (h *Handler) ListDeftMembers(w http.ResponseWriter, r *http.Request) {
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	// Only DEFT members may list the DEFT team.
+	isDeft, abort := h.resolveCallerVisibility(w, r)
+	if abort {
+		return
+	}
+	if !isDeft {
+		apierrors.Forbidden(w, "only DEFT members may list the team")
+		return
+	}
+
+	members, err := h.service.ListDeftMembers(r.Context())
+	if err != nil {
+		apierrors.InternalError(w, "failed to list DEFT members")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]any{"data": members})
+}
+
 // notifPrefRequest is the request body for updating notification detail level.
 type notifPrefRequest struct {
 	NotificationDetailLevel string `json:"notification_detail_level"`

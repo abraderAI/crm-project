@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { setTicketNotificationPref } from "./support-api";
+import { fetchDeftMembers, setTicketNotificationPref } from "./support-api";
 
 const mockBuildUrl = vi.fn();
 const mockBuildHeaders = vi.fn();
@@ -42,5 +42,35 @@ describe("setTicketNotificationPref", () => {
     await setTicketNotificationPref("token", "ticket-1", "full");
 
     expect(mockParseResponse).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("fetchDeftMembers", () => {
+  beforeEach(() => {
+    mockBuildUrl.mockReturnValue("http://localhost/v1/support/deft-members");
+  });
+
+  it("calls fetch with correct URL and headers", async () => {
+    const members = [{ user_id: "u1", display_name: "Alice", email: "a@deft.co" }];
+    mockFetch.mockResolvedValue({ ok: true } as Response);
+    mockParseResponse.mockResolvedValue({ data: members });
+
+    const result = await fetchDeftMembers("my-token");
+
+    expect(mockBuildUrl).toHaveBeenCalledWith("/support/deft-members");
+    expect(mockBuildHeaders).toHaveBeenCalledWith("my-token");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost/v1/support/deft-members",
+      expect.objectContaining({ method: "GET", cache: "no-store" }),
+    );
+    expect(result).toEqual(members);
+  });
+
+  it("returns empty array when no members", async () => {
+    mockFetch.mockResolvedValue({ ok: true } as Response);
+    mockParseResponse.mockResolvedValue({ data: [] });
+
+    const result = await fetchDeftMembers("token");
+    expect(result).toEqual([]);
   });
 });

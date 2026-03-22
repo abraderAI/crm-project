@@ -118,8 +118,9 @@ func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
 
 // updateThreadRequest is the request body for PATCH /v1/global-spaces/{space}/threads/{slug}.
 type updateThreadRequest struct {
-	Body   *string `json:"body"`
-	Status *string `json:"status"`
+	Body       *string `json:"body"`
+	Status     *string `json:"status"`
+	AssignedTo *string `json:"assigned_to"`
 }
 
 // UpdateThread handles PATCH /v1/global-spaces/{space}/threads/{slug}.
@@ -150,6 +151,10 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.service.UpdateThread(r.Context(), spaceSlug, threadSlug, uc.UserID, input, cv)
 	if err != nil {
+		if err.Error() == "assignee must be a DEFT org member" {
+			apierrors.ValidationError(w, err.Error(), nil)
+			return
+		}
 		apierrors.InternalError(w, "failed to update thread")
 		return
 	}

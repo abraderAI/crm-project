@@ -199,6 +199,99 @@ func TestService_IsDeftMember_NotMember(t *testing.T) {
 	assert.False(t, isDeft)
 }
 
+// --- DEFT members list ---
+
+func TestRepository_ListDeftMembers(t *testing.T) {
+	db := setupTestDB(t)
+	org, _ := createHierarchy(t, db)
+	ctx := context.Background()
+
+	// Add two org members.
+	require.NoError(t, db.Create(&models.OrgMembership{
+		OrgID: org.ID, UserID: "deft-user-a", Role: models.RoleContributor,
+	}).Error)
+	require.NoError(t, db.Create(&models.OrgMembership{
+		OrgID: org.ID, UserID: "deft-user-b", Role: models.RoleAdmin,
+	}).Error)
+
+	// Add user shadows for display info.
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "deft-user-a", Email: "a@deft.co", DisplayName: "Alice Agent",
+	}).Error)
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "deft-user-b", Email: "b@deft.co", DisplayName: "Bob Agent",
+	}).Error)
+
+	repo := NewRepository(db)
+	members, err := repo.ListDeftMembers(ctx)
+	require.NoError(t, err)
+	require.Len(t, members, 2)
+
+	// Ordered by display_name ASC.
+	assert.Equal(t, "Alice Agent", members[0].DisplayName)
+	assert.Equal(t, "a@deft.co", members[0].Email)
+	assert.Equal(t, "deft-user-a", members[0].UserID)
+	assert.Equal(t, "Bob Agent", members[1].DisplayName)
+}
+
+func TestRepository_ListDeftMembers_EmptyWithoutDeftOrg(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	members, err := repo.ListDeftMembers(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, members)
+}
+
+func TestHandler_ListDeftMembers(t *testing.T) {
+	db := setupTestDB(t)
+	org, _ := createHierarchy(t, db)
+
+	// Add a DEFT member.
+	require.NoError(t, db.Create(&models.OrgMembership{
+		OrgID: org.ID, UserID: "handler-deft", Role: models.RoleContributor,
+	}).Error)
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "handler-deft", Email: "handler@deft.co", DisplayName: "Handler Agent",
+	}).Error)
+
+	repo := NewRepository(db)
+	svc := NewService(repo, nil)
+	h := NewHandler(svc)
+
+	router := chi.NewRouter()
+	router.Get("/support/deft-members", h.ListDeftMembers)
+
+	t.Run("DEFT member gets list", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/support/deft-members", nil)
+		req = withUser(req, "handler-deft")
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		data := resp["data"].([]any)
+		assert.Len(t, data, 1)
+		first := data[0].(map[string]any)
+		assert.Equal(t, "handler-deft", first["user_id"])
+		assert.Equal(t, "Handler Agent", first["display_name"])
+	})
+
+	t.Run("non-DEFT member gets 403", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/support/deft-members", nil)
+		req = withUser(req, "random-customer")
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("unauthenticated returns 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/support/deft-members", nil)
+		w := routeRequest(router, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}
+
 func TestService_IsDeftMember_DeftOrgMember(t *testing.T) {
 	db := setupTestDB(t)
 	org := &models.Org{Name: "DEFT", Slug: "deft", Metadata: "{}"}
