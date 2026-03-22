@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 describe("TicketEntryComposer", () => {
-  it("shows customer message and draft options for non-DEFT users", () => {
+  it("shows requestor message and draft options for non-DEFT users", () => {
     render(<TicketEntryComposer ticketSlug="t1" isDeftMember={false} />);
     expect(screen.getByTestId("entry-type-btn-customer")).toBeInTheDocument();
     expect(screen.getByTestId("entry-type-btn-draft")).toBeInTheDocument();

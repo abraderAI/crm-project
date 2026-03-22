@@ -5,27 +5,28 @@ import { useAuth } from "@clerk/nextjs";
 import { Eye, EyeOff, Lock, Pencil, Send, X } from "lucide-react";
 
 import type { SupportEntry, SupportEntryType } from "@/lib/api-types";
+import type { ResolvedUser } from "@/lib/use-user-directory";
 import { publishTicketEntry, setEntryDeftVisibility, updateTicketEntry } from "@/lib/support-api";
 
 /**
  * Visual config for each entry type.
  * Colors:
- *   customer + agent_reply (published conversation) — light green
- *   draft                                            — light gray
- *   context (internal / DEFT-only)                  — light red
- *   system_event (status changes etc.)              — light orange
+ *   requestor + agent (published conversation) — light green
+ *   draft                                       — light gray
+ *   context (internal / DEFT-only)              — light red
+ *   system_event (status changes etc.)          — light orange
  */
 const ENTRY_TYPE_CONFIG: Record<
   SupportEntryType,
   { label: string; badgeClass: string; bgClass: string }
 > = {
   customer: {
-    label: "Customer",
+    label: "Requestor",
     badgeClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     bgClass: "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800",
   },
   agent_reply: {
-    label: "Agent Reply",
+    label: "Agent",
     badgeClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     bgClass: "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800",
   },
@@ -60,13 +61,15 @@ export interface TicketTimelineProps {
   onMutated?: () => void;
   /** Resolve a user ID to a display label (e.g. "Alice (DEFT)"). */
   formatUser?: (userId: string) => string;
+  /** Resolve a user ID to structured display info (name + org). */
+  resolveUser?: (userId: string) => ResolvedUser | undefined;
 }
 
 /**
  * TicketTimeline renders the chronological conversation history of a support
  * ticket.
  * — Drafts are editable by their author (not yet immutable).
- * — Drafts can be published by DEFT members OR by the customer who created them.
+ * — Drafts can be published by DEFT members OR by the requestor who created them.
  * — DEFT-only visibility toggle is restricted to DEFT members.
  */
 export function TicketTimeline({
@@ -76,6 +79,7 @@ export function TicketTimeline({
   currentUserId,
   onMutated,
   formatUser,
+  resolveUser,
 }: TicketTimelineProps): ReactNode {
   const { getToken } = useAuth();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -198,14 +202,45 @@ export function TicketTimeline({
                   aria-label="Immutable"
                 />
               )}
-              {formatUser && (
+              {resolveUser ? (
+                (() => {
+                  const resolved = resolveUser(entry.author_id);
+                  if (!resolved)
+                    return formatUser ? (
+                      <span
+                        className="text-xs font-medium text-foreground"
+                        data-testid={`entry-author-${entry.id}`}
+                      >
+                        {formatUser(entry.author_id)}
+                      </span>
+                    ) : null;
+                  return (
+                    <span
+                      className="inline-flex items-center gap-1.5"
+                      data-testid={`entry-author-${entry.id}`}
+                    >
+                      <span className="text-xs font-semibold text-foreground">
+                        {resolved.display_name}
+                      </span>
+                      {resolved.org_name && (
+                        <span
+                          data-testid={`entry-org-badge-${entry.id}`}
+                          className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                        >
+                          {resolved.org_name}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()
+              ) : formatUser ? (
                 <span
                   className="text-xs font-medium text-foreground"
                   data-testid={`entry-author-${entry.id}`}
                 >
                   {formatUser(entry.author_id)}
                 </span>
-              )}
+              ) : null}
               <span className="ml-auto text-xs text-muted-foreground">
                 {new Date(entry.created_at).toLocaleString()}
               </span>
@@ -283,7 +318,7 @@ export function TicketTimeline({
                   onClick={() => void handleToggleDeftOnly(entry.id, entry.is_deft_only)}
                   disabled={isBusy}
                   className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent disabled:opacity-50"
-                  title={entry.is_deft_only ? "Make visible to customer" : "Hide from customer"}
+                  title={entry.is_deft_only ? "Make visible to requestor" : "Hide from requestor"}
                 >
                   {entry.is_deft_only ? (
                     <Eye className="h-3 w-3" />
