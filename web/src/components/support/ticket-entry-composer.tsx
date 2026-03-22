@@ -17,8 +17,8 @@ import { MessageEditor } from "@/components/editor/message-editor";
 const DEFT_ENTRY_TYPES: { value: SupportEntryType; label: string; description: string }[] = [
   {
     value: "agent_reply",
-    label: "Reply (publish now)",
-    description: "Immediately visible to the customer.",
+    label: "Agent reply (publish now)",
+    description: "Immediately visible to the requestor.",
   },
   {
     value: "draft",
@@ -28,12 +28,12 @@ const DEFT_ENTRY_TYPES: { value: SupportEntryType; label: string; description: s
   {
     value: "context",
     label: "Internal note",
-    description: "DEFT-only. Never visible to the customer.",
+    description: "DEFT-only. Never visible to the requestor.",
   },
   {
     value: "customer",
-    label: "Customer message",
-    description: "Add a message on the customer’s behalf.",
+    label: "Requestor message",
+    description: "Add a message on the requestor's behalf.",
   },
 ];
 
@@ -173,7 +173,7 @@ export function TicketEntryComposer({
             onChange={(e) => setIsDeftOnly(e.target.checked)}
             className="h-3 w-3"
           />
-          Hide from customer (DEFT only)
+          Hide from requestor (DEFT only)
         </label>
       )}
 

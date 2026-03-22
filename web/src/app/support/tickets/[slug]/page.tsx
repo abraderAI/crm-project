@@ -292,7 +292,7 @@ export default function TicketDetailPage(): ReactNode {
               </p>
             </div>
 
-            {/* Status — picker for DEFT, read-only badge for customers */}
+            {/* Status — picker for DEFT, read-only badge for requestors */}
             {isDeftMember ? (
               <div className="flex flex-col items-end gap-1">
                 <select
@@ -322,7 +322,7 @@ export default function TicketDetailPage(): ReactNode {
         }
         sidebar={
           <div className="flex flex-col gap-4">
-            {/* Notification preferences — for ticket owner/customer */}
+            {/* Notification preferences — for ticket owner/requestor */}
             {!isDeftMember && <NotificationPrefs ticketSlug={slug} currentLevel={notifLevel} />}
 
             {/* Assignee picker — DEFT-only */}
@@ -437,6 +437,7 @@ export default function TicketDetailPage(): ReactNode {
           currentUserId={currentUserId}
           onMutated={() => void loadData()}
           formatUser={userDir.format}
+          resolveUser={userDir.resolve}
         />
       </ContentEditorLayout>
     </div>

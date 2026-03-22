@@ -71,7 +71,7 @@ describe("TicketTimeline", () => {
     expect(screen.getByTestId("publish-btn-e-draft")).toBeInTheDocument();
   });
 
-  it("shows hide toggle for DEFT members on customer-visible entry", () => {
+  it("shows hide toggle for DEFT members on requestor-visible entry", () => {
     const entry = makeEntry({ id: "e-hide", type: "customer", is_deft_only: false });
     render(<TicketTimeline entries={[entry]} ticketSlug="t1" isDeftMember={true} />);
     expect(screen.getByTestId("deft-only-btn-e-hide")).toHaveTextContent("Hide");
@@ -82,6 +82,39 @@ describe("TicketTimeline", () => {
     render(<TicketTimeline entries={[entry]} ticketSlug="t1" isDeftMember={false} />);
     expect(screen.queryByTestId("deft-only-btn-e-public")).not.toBeInTheDocument();
     expect(screen.queryByTestId("deft-only-locked-e-public")).not.toBeInTheDocument();
+  });
+
+  it("renders structured author name and org badge when resolveUser is provided", () => {
+    const entry = makeEntry({ id: "e-resolved", author_id: "u1" });
+    const resolveUser = (userId: string) =>
+      userId === "u1" ? { display_name: "Alice", org_name: "Acme Corp" } : undefined;
+    render(
+      <TicketTimeline
+        entries={[entry]}
+        ticketSlug="t1"
+        isDeftMember={false}
+        resolveUser={resolveUser}
+      />,
+    );
+    const authorEl = screen.getByTestId("entry-author-e-resolved");
+    expect(authorEl).toHaveTextContent("Alice");
+    expect(screen.getByTestId("entry-org-badge-e-resolved")).toHaveTextContent("Acme Corp");
+  });
+
+  it("falls back to formatUser when resolveUser returns undefined", () => {
+    const entry = makeEntry({ id: "e-fallback", author_id: "u-unknown" });
+    const resolveUser = () => undefined;
+    const formatUser = (userId: string) => `User:${userId}`;
+    render(
+      <TicketTimeline
+        entries={[entry]}
+        ticketSlug="t1"
+        isDeftMember={false}
+        resolveUser={resolveUser}
+        formatUser={formatUser}
+      />,
+    );
+    expect(screen.getByTestId("entry-author-e-fallback")).toHaveTextContent("User:u-unknown");
   });
 
   it("publishes a draft when send is clicked", async () => {
