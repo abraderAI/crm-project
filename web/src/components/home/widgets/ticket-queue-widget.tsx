@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { fetchOpenTickets, type TicketSummary } from "@/lib/widget-api";
+import { type TicketSummary } from "@/lib/widget-api";
 
 const STATUS_COLORS: Record<string, string> = {
   open: "bg-red-100 text-red-800",
@@ -25,10 +25,7 @@ export function TicketQueueWidget({ token }: TicketQueueWidgetProps): ReactNode 
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchOpenTickets(token);
-      if (mountedRef.current) {
-        setTickets(result);
-      }
+      throw new Error("Widget not yet wired to real API");
     } catch {
       if (mountedRef.current) {
         setError("Failed to load ticket queue");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { fetchTicketStats, type TicketStats } from "@/lib/widget-api";
+import { type TicketStats } from "@/lib/widget-api";
 
 export interface TicketStatsWidgetProps {
   /** Auth token for API calls. */
@@ -19,10 +19,7 @@ export function TicketStatsWidget({ token }: TicketStatsWidgetProps): ReactNode 
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchTicketStats(token);
-      if (mountedRef.current) {
-        setData(result);
-      }
+      throw new Error("Widget not yet wired to real API");
     } catch {
       if (mountedRef.current) {
         setError("Failed to load ticket stats");

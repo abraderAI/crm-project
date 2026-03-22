@@ -2,43 +2,36 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Assigned ticket status — auto-transition on assignment",
-    "created": "2026-03-22T01:38:00Z"
+    "description": "Audit log filtering — date range + search filters",
+    "created": "2026-03-22T19:22:00Z"
   },
   "plan": {
-    "id": "assigned-ticket-status",
-    "title": "Assigned Ticket Status",
+    "id": "audit-log-filtering",
+    "title": "Audit Log Filtering — Date Range + Search",
     "status": "running",
-    "tags": ["backend", "frontend", "support"],
+    "tags": [
+      "frontend",
+      "admin"
+    ],
     "items": [
       {
-        "id": "backend-auto-transition",
-        "title": "Auto-transition status on assign/unassign in UpdateThread",
-        "status": "pending"
-      },
-      {
-        "id": "frontend-detail-page",
-        "title": "Add assigned status to ticket detail page",
-        "status": "pending"
-      },
-      {
-        "id": "frontend-management-view",
-        "title": "Add assigned status to support management view + stats",
-        "status": "pending"
-      },
-      {
-        "id": "frontend-support-view",
-        "title": "Add assigned status to support view",
+        "id": "rewrite-audit-page",
+        "title": "Convert audit-log page to client component with filter bar",
         "status": "pending"
       },
       {
         "id": "tests",
-        "title": "Backend + frontend tests",
+        "title": "Add/update tests for audit-log page filters",
         "status": "pending"
       },
       {
         "id": "verify",
         "title": "Run task check and ensure full pass",
+        "status": "pending"
+      },
+      {
+        "id": "deploy",
+        "title": "Deploy frontend to Fly.io for review",
         "status": "pending"
       }
     ]

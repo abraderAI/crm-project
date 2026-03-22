@@ -142,6 +142,58 @@ func TestService_UpdateSettings_AllValidKeys(t *testing.T) {
 	assert.Len(t, settings, len(knownSettingKeys()))
 }
 
+func TestService_SeedSettings(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	ctx := context.Background()
+
+	require.NoError(t, svc.SeedSettings(ctx))
+
+	settings, err := svc.GetAllSettings(ctx)
+	require.NoError(t, err)
+	assert.Len(t, settings, len(knownSettingKeys()))
+
+	// Verify each known key exists and has valid JSON.
+	for key := range knownSettingKeys() {
+		val, ok := settings[key]
+		assert.True(t, ok, "missing key: %s", key)
+		assert.True(t, json.Valid(val), "invalid JSON for key: %s", key)
+	}
+}
+
+func TestService_SeedSettings_Idempotent(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	ctx := context.Background()
+
+	// Seed twice — should not error or create duplicates.
+	require.NoError(t, svc.SeedSettings(ctx))
+	require.NoError(t, svc.SeedSettings(ctx))
+
+	settings, err := svc.GetAllSettings(ctx)
+	require.NoError(t, err)
+	assert.Len(t, settings, len(knownSettingKeys()))
+}
+
+func TestService_SeedSettings_PreservesExisting(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	ctx := context.Background()
+
+	// Manually set a value before seeding.
+	patch := map[string]json.RawMessage{
+		"file_upload_limits": json.RawMessage(`{"max_size":999}`),
+	}
+	require.NoError(t, svc.UpdateSettings(ctx, patch, "admin1"))
+
+	// Seed should NOT overwrite the existing value.
+	require.NoError(t, svc.SeedSettings(ctx))
+
+	settings, err := svc.GetAllSettings(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, string(settings["file_upload_limits"]), "999")
+}
+
 // --- System Settings Handler Tests ---
 
 func TestHandler_GetSettings(t *testing.T) {

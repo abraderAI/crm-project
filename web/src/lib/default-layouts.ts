@@ -90,17 +90,8 @@ const TIER_5_DEFAULT: WidgetConfig[] = [
   w(WIDGET_IDS.BILLING_STATUS),
 ];
 
-/** Default layout for Tier 6: Platform admins (all widgets visible). */
-const TIER_6_DEFAULT: WidgetConfig[] = [
-  w(WIDGET_IDS.SYSTEM_HEALTH),
-  w(WIDGET_IDS.RECENT_AUDIT_LOG),
-  w(WIDGET_IDS.LEAD_PIPELINE),
-  w(WIDGET_IDS.RECENT_LEADS),
-  w(WIDGET_IDS.CONVERSION_METRICS),
-  w(WIDGET_IDS.TICKET_QUEUE),
-  w(WIDGET_IDS.TICKET_STATS),
-  w(WIDGET_IDS.BILLING_OVERVIEW),
-];
+/** Default layout for Tier 6: Platform admins (widgets not used — admin console has real data). */
+const TIER_6_DEFAULT: WidgetConfig[] = [];
 
 /** Map from tier number to base default layout. */
 const TIER_DEFAULTS: Record<Tier, WidgetConfig[]> = {

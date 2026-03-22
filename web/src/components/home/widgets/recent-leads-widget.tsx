@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { fetchRecentLeads, type RecentLead } from "@/lib/widget-api";
+import { type RecentLead } from "@/lib/widget-api";
 
 const STATUS_BADGE: Record<string, string> = {
   new_lead: "bg-blue-100 text-blue-800",
@@ -25,10 +25,7 @@ export function RecentLeadsWidget({ token }: RecentLeadsWidgetProps): ReactNode 
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchRecentLeads(token, 10);
-      if (mountedRef.current) {
-        setLeads(result);
-      }
+      throw new Error("Widget not yet wired to real API");
     } catch {
       if (mountedRef.current) {
         setError("Failed to load recent leads");

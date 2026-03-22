@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { fetchBillingOverview, type BillingOverview } from "@/lib/widget-api";
+import { type BillingOverview } from "@/lib/widget-api";
 
 export interface BillingOverviewWidgetProps {
   /** Auth token for API calls. */
@@ -19,10 +19,7 @@ export function BillingOverviewWidget({ token }: BillingOverviewWidgetProps): Re
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchBillingOverview(token);
-      if (mountedRef.current) {
-        setData(result);
-      }
+      throw new Error("Widget not yet wired to real API");
     } catch {
       if (mountedRef.current) {
         setError("Failed to load billing overview");

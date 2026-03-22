@@ -29,6 +29,40 @@ func knownSettingKeys() map[string]string {
 	}
 }
 
+// initialSettingDefaults returns the default values for all known setting keys.
+// Returns a fresh map on each call to prevent external mutation.
+func initialSettingDefaults() map[string]string {
+	return map[string]string{
+		"default_pipeline_stages": `["new_lead","contacted","qualified","proposal","negotiation","closed_won","closed_lost"]`,
+		"default_templates":       `{"spaces":["general","support"],"boards_per_space":["default"]}`,
+		"notification_defaults":   `{"digest_frequency":"daily","email_from":"noreply@deft.dev"}`,
+		"file_upload_limits":      `{"max_size":10485760,"allowed_types":["image/png","image/jpeg","application/pdf"]}`,
+		"webhook_retry_policy":    `{"max_attempts":5,"backoff_multiplier":2.0}`,
+		"llm_rate_limits":         `{"requests_per_minute":60,"tokens_per_minute":100000}`,
+	}
+}
+
+// SeedSettings creates the initial system settings if they don't already exist.
+func (s *Service) SeedSettings(ctx context.Context) error {
+	for key, value := range initialSettingDefaults() {
+		var existing models.SystemSetting
+		err := s.db.WithContext(ctx).Where("key = ?", key).First(&existing).Error
+		if err == gorm.ErrRecordNotFound {
+			setting := models.SystemSetting{
+				Key:       key,
+				Value:     value,
+				UpdatedBy: "system",
+			}
+			if err := s.db.WithContext(ctx).Create(&setting).Error; err != nil {
+				return fmt.Errorf("seeding setting %s: %w", key, err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("checking setting %s: %w", key, err)
+		}
+	}
+	return nil
+}
+
 // GetAllSettings returns all system settings as a single JSON object.
 func (s *Service) GetAllSettings(ctx context.Context) (map[string]json.RawMessage, error) {
 	var settings []models.SystemSetting

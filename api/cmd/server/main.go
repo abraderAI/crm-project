@@ -60,13 +60,27 @@ func main() {
 	}
 
 	// Bootstrap platform admin from env var.
+	adminSvc := admin.NewService(db)
 	if cfg.PlatformAdminUserID != "" {
-		adminSvc := admin.NewService(db)
 		if err := adminSvc.BootstrapAdmin(context.Background(), cfg.PlatformAdminUserID); err != nil {
 			logger.Error("failed to bootstrap platform admin", slog.String("error", err.Error()))
 		} else {
 			logger.Info("platform admin bootstrapped", slog.String("user_id", cfg.PlatformAdminUserID))
 		}
+	}
+
+	// Seed feature flags (idempotent).
+	if err := adminSvc.SeedFeatureFlags(context.Background()); err != nil {
+		logger.Error("failed to seed feature flags", slog.String("error", err.Error()))
+	} else {
+		logger.Info("feature flags seeded")
+	}
+
+	// Seed system settings (idempotent).
+	if err := adminSvc.SeedSettings(context.Background()); err != nil {
+		logger.Error("failed to seed system settings", slog.String("error", err.Error()))
+	} else {
+		logger.Info("system settings seeded")
 	}
 
 	router := server.NewRouter(server.Config{

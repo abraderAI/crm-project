@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { fetchSystemHealth, type SystemHealth } from "@/lib/widget-api";
+import { type SystemHealth } from "@/lib/widget-api";
 
 const STATUS_ICON: Record<string, string> = {
   healthy: "text-green-500",
@@ -26,10 +26,7 @@ export function SystemHealthWidget({ token }: SystemHealthWidgetProps): ReactNod
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchSystemHealth(token);
-      if (mountedRef.current) {
-        setData(result);
-      }
+      throw new Error("Widget not yet wired to real API");
     } catch {
       if (mountedRef.current) {
         setError("Failed to load system health");

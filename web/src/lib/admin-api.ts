@@ -26,6 +26,7 @@ import type {
   WebhookDelivery,
   WebhookSubscription,
 } from "./api-types";
+import type { AdminSalesMetrics, AdminSupportMetrics } from "./reporting-types";
 import {
   buildHeaders,
   buildUrl,
@@ -66,6 +67,18 @@ export async function fetchAdminOrg(orgId: string): Promise<AdminOrgDetail> {
 export async function fetchAdminStats(): Promise<PlatformStats> {
   const token = await getToken();
   return serverFetch<PlatformStats>("/admin/stats", { token });
+}
+
+/** Fetch admin support metrics for the dashboard snapshot (default: last 30 days). */
+export async function fetchAdminSupportMetrics(): Promise<AdminSupportMetrics> {
+  const token = await getToken();
+  return serverFetch<AdminSupportMetrics>("/admin/reports/support", { token });
+}
+
+/** Fetch admin sales metrics for the dashboard snapshot (default: last 30 days). */
+export async function fetchAdminSalesMetrics(): Promise<AdminSalesMetrics> {
+  const token = await getToken();
+  return serverFetch<AdminSalesMetrics>("/admin/reports/sales", { token });
 }
 
 /** Fetch all system settings as a key-value map. */
