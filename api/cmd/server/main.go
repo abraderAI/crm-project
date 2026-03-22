@@ -76,6 +76,13 @@ func main() {
 		logger.Info("feature flags seeded")
 	}
 
+	// Seed system settings (idempotent).
+	if err := adminSvc.SeedSettings(context.Background()); err != nil {
+		logger.Error("failed to seed system settings", slog.String("error", err.Error()))
+	} else {
+		logger.Info("system settings seeded")
+	}
+
 	router := server.NewRouter(server.Config{
 		DB:                  db,
 		Logger:              logger,
