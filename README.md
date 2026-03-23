@@ -33,6 +33,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 - **Reporting** — Org-scoped support-ticket and sales-pipeline analytics (15 query types): volume-over-time, status/priority breakdowns, assignee distribution, win/loss rates, funnel conversion, deal-value score distribution, avg time-in-stage, and CSV export with date + assignee filtering. Platform admins get cross-org aggregate dashboards with per-org sortable breakdown tables.
 - **RBAC User Tiers** — Six-tier user classification (anonymous → authenticated → customer → customer admin → DEFT internal → platform admin) with tier-specific home screens, customisable widget layouts, global content spaces (docs, forum, support, leads), AI chatbot with live-agent escalation, and automated conversion flows (self-service upgrade, sales-led conversion, admin promotion).
 - **Leads Management** — Dedicated `/crm/leads` page for DEFT sales staff: tier 5–6 see all leads with assignee filter; tier 4 sales reps see only their own and assigned leads. Status/search filters, load-more pagination, and detail view per lead.
+- **Community Forum** — Public `/forum` page ("DEFT General Discussion") with gradient header, pinned threads, card-based thread list with vote counts and author avatars. Thread detail pages with full body rendering and inline reply system. Authenticated users can post new threads (`/forum/new`) and reply to existing ones. Interactive upvote buttons with optimistic UI. Author names resolved from Clerk via `UserShadow`; org badges displayed on posts and replies. 14 seed threads covering the `deftai/directive` and `deftai/vBRIEF` projects. Admin forum management page (`/admin/forums`) with pin/hide/lock controls. Hidden threads filtered from public listing. Forum GET endpoints use `OptionalDualAuth` (public reads, authenticated writes).
 |- **Support Ticket Management** — Tier-aware `/support` page with **server-side visibility enforcement**: individual users (no org) see only tickets they authored or are assigned to; org members see all tickets created by fellow org members; DEFT employees and platform admins see all tickets across all orgs. Visibility scoping is enforced at the API layer on all support ticket endpoints (list, get, update, attachments). Inline create-ticket form with `org_id` passthrough. Each ticket row shows the **subject** and **creator** (email + org name). Clicking **Open** opens the full **multi-entry ticket editor**: a chronological timeline of entries (customer messages, agent replies, internal context notes, drafts, system events) with per-entry badges and timestamps. The ticket creator's initial body is automatically saved as the first customer entry on creation. Entries may be published, edited (drafts only), and toggled between public and DEFT-only visibility. DEFT members (tiers 4–6) can compose new entries, set DEFT-only visibility, and update ticket status (`open` → `assigned` → `pending` → `resolved`). Immutable entries (initial customer message, published entries) are locked. Full dark-mode support throughout.
 |- **Ticket Assignment** — DEFT org members can be assigned to support tickets via a dropdown assignee picker in the ticket detail sidebar. The picker lists all active DEFT org members (`GET /v1/support/deft-members`). Assignment is validated server-side (only DEFT members accepted). Status auto-transitions: `open` → `assigned` on assignment, `assigned` → `open` on unassignment; tickets already in `pending`/`resolved`/`closed` are not overridden. Assigned members receive in-app notifications via the event bus. Assignment changes are recorded as system event entries in the ticket timeline. The stats strip on the management view shows four columns: Open, Assigned, Pending, Resolved.
 |- **Email-Based Ticket Assignment** — DEFT org members (tier 4+) can create support tickets on behalf of any user by entering their email address on the ticket creation screen. If the email matches a registered user, the ticket is linked to their account immediately. If the email is unregistered, the ticket is created in an "orphaned" state with the `contact_email` stored as temporary PII. Orphaned tickets are visible to the target user once they register (via `ContactEmail` matching in visibility scoping). The ticket list shows **Unregistered** (grey) and **Registered** (blue) status badges next to creator names for tickets without an org. `contact_email` is stripped from API responses for non-DEFT callers.
@@ -111,6 +112,7 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 │   │   ├── components/
 │   │   │   ├── admin/          # Billing, webhooks, audit log, membership, org management
 │   │   │   ├── community/      # Voting, moderation, flagging
+│   │   │   ├── forum/          # Forum components: thread cards, header, replies, vote button, avatars
 │   │   │   ├── crm/            # Pipeline, kanban, lead detail, scoring
 │   │   │   ├── reports/        # Shared reporting components + chart components (support/, sales/)
 │   │   │   ├── editor/         # Message editor, toolbar, revision history
@@ -141,7 +143,9 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 |---|---|
 | `/` | Home / dashboard — tier-aware: renders the correct home screen for the current user's tier with customisable widget layout. Platform admins (tier 6) see a navigation hub linking to the admin console |
 | `/docs/[...slug]` | Public documentation (global-docs space) — no auth required |
-| `/forum/[...slug]` | Public community forum (global-forum space) — no auth required |
+|| `/forum` | Community forum index — "DEFT General Discussion" with gradient header, pinned threads, card-based thread list with interactive vote buttons, author names + org badges. Public (no auth required) |
+|| `/forum/new` | New forum thread creation — title + rich text body editor. Requires authentication (tier 2+) |
+|| `/forum/[slug]` | Forum thread detail — full body, author info with org badge, vote count, and inline reply section with real-time message loading. Public (no auth required) |
 | `/sign-in`, `/sign-up` | Clerk authentication |
 | `/orgs/create` | Create organization |
 | `/orgs/[org]` | Org overview |
@@ -169,7 +173,8 @@ A full-stack CRM and community platform built on a hierarchical threaded content
 | `/admin/billing` | Billing dashboard (FlexPoint) |
 | `/admin/webhooks` | Webhook management + delivery log |
 | `/admin/members` | Organization membership manager |
-| `/admin/moderation` | Content moderation queue |
+|| `/admin/moderation` | Content moderation queue |
+|| `/admin/forums` | Forum management — list all threads with pin/unpin, hide/unhide, lock/unlock controls; hidden threads visible to admins via `include_hidden` flag |
 | `/admin/audit-log` | Platform-wide audit log — date range picker, action/entity-type/user filters, expandable before/after JSON diffs, user names with org badges |
 | `/admin/channels` | IO Channel configuration hub |
 || `/admin/channels/[type]` | Per-channel config, health, and DLQ monitor (`email` \| `voice` \| `chat`) |

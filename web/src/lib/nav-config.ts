@@ -224,6 +224,13 @@ export const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
         icon: Shield,
         minTier: 6,
       },
+      {
+        id: "admin-forums",
+        label: "Forums",
+        href: "/admin/forums",
+        icon: MessageSquare,
+        minTier: 6,
+      },
       // Integrations
       {
         id: "admin-webhooks",

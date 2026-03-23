@@ -9,6 +9,12 @@ import {
   fetchUserSupportTickets,
   createForumThread,
   createSupportTicket,
+  fetchForumMessages,
+  createForumReply,
+  fetchSupportTicket,
+  updateSupportTicket,
+  fetchThreadAttachments,
+  uploadThreadAttachment,
 } from "./global-api";
 
 const mockFetch = vi.fn();
@@ -351,6 +357,117 @@ describe("fetchGlobalThread", () => {
   it("throws on API error", async () => {
     mockFetch.mockResolvedValue(mockErrorResponse(500));
     await expect(fetchGlobalThread("global-leads", "slug")).rejects.toThrow();
+  });
+});
+
+describe("fetchForumMessages", () => {
+  it("fetches messages for a forum thread without auth", async () => {
+    const body = { data: [{ id: "m1", body: "Reply" }], page_info: { has_more: false } };
+    mockFetch.mockResolvedValue(mockOkResponse(body));
+
+    const result = await fetchForumMessages("test-thread");
+
+    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/global-spaces/global-forum/threads/test-thread/messages");
+    expect(options.method).toBe("GET");
+    expect(result.data).toHaveLength(1);
+  });
+
+  it("passes limit and cursor params", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ data: [], page_info: { has_more: false } }));
+
+    await fetchForumMessages("slug", { limit: 10, cursor: "c1" });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("limit=10");
+    expect(url).toContain("cursor=c1");
+  });
+
+  it("throws on API error", async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(500));
+    await expect(fetchForumMessages("slug")).rejects.toThrow();
+  });
+});
+
+describe("createForumReply", () => {
+  it("creates a reply via POST with auth", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ id: "m1", body: "My reply" }));
+
+    const result = await createForumReply("token", "test-thread", "My reply");
+
+    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/global-spaces/global-forum/threads/test-thread/messages");
+    expect(options.method).toBe("POST");
+    const body = JSON.parse(options.body as string) as Record<string, unknown>;
+    expect(body["body"]).toBe("My reply");
+    expect(result.body).toBe("My reply");
+  });
+
+  it("throws on API error", async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(401));
+    await expect(createForumReply("token", "slug", "text")).rejects.toThrow();
+  });
+});
+
+describe("fetchSupportTicket", () => {
+  it("fetches a single support ticket by slug", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse(THREAD_FIXTURE));
+    const result = await fetchSupportTicket("token", "ticket-slug");
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("/global-spaces/global-support/threads/ticket-slug");
+    expect(result.id).toBe("t1");
+  });
+});
+
+describe("updateSupportTicket", () => {
+  it("patches a support ticket", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse(THREAD_FIXTURE));
+    await updateSupportTicket("token", "slug", { status: "resolved" });
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(options.method).toBe("PATCH");
+    const body = JSON.parse(options.body as string) as Record<string, unknown>;
+    expect(body["status"]).toBe("resolved");
+  });
+});
+
+describe("fetchThreadAttachments", () => {
+  it("fetches attachments for a ticket", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse([{ id: "u1", filename: "a.txt" }]));
+    const result = await fetchThreadAttachments("token", "slug");
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("/threads/slug/attachments");
+    expect(result).toHaveLength(1);
+  });
+});
+
+describe("uploadThreadAttachment", () => {
+  it("uploads a file via multipart form", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ id: "u1", filename: "test.txt" }));
+    const file = new File(["content"], "test.txt", { type: "text/plain" });
+    const result = await uploadThreadAttachment("token", "slug", file);
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(options.method).toBe("POST");
+    expect(options.body).toBeInstanceOf(FormData);
+    expect(result.filename).toBe("test.txt");
+  });
+});
+
+describe("uploadThreadAttachment", () => {
+  it("includes auth header without Content-Type for multipart", async () => {
+    mockFetch.mockResolvedValue(mockOkResponse({ id: "u1", filename: "a.txt" }));
+    const file = new File(["x"], "a.txt", { type: "text/plain" });
+    await uploadThreadAttachment("my-token", "slug", file);
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer my-token");
+    // Content-Type should NOT be set (browser sets multipart boundary)
+    expect(headers["Content-Type"]).toBeUndefined();
+  });
+
+  it("throws on upload failure", async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(413));
+    const file = new File(["x"], "big.txt");
+    await expect(uploadThreadAttachment("token", "slug", file)).rejects.toThrow();
   });
 });
 

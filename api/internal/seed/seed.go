@@ -51,7 +51,8 @@ var deftSpaces = []deftSpaceDef{
 }
 
 // Run executes all seed operations idempotently.
-// It creates the system org with global spaces and the deft org with department spaces.
+// It creates the system org with global spaces, the deft org with department spaces,
+// and seeds forum threads for the community.
 func Run(db *gorm.DB) error {
 	if err := seedSystemOrg(db); err != nil {
 		return fmt.Errorf("seeding system org: %w", err)
@@ -59,7 +60,40 @@ func Run(db *gorm.DB) error {
 	if err := seedDeftOrg(db); err != nil {
 		return fmt.Errorf("seeding deft org: %w", err)
 	}
+	if err := seedForum(db); err != nil {
+		return fmt.Errorf("seeding forum: %w", err)
+	}
 	return nil
+}
+
+// seedForum seeds forum threads into the existing default board of global-forum.
+// The default board is created by seedSystemOrg — we must not create a second board
+// because FindDefaultBoard uses First() and multiple boards cause ambiguity.
+func seedForum(db *gorm.DB) error {
+	// Look up the global-forum space.
+	var space models.Space
+	err := db.Joins("JOIN orgs ON orgs.id = spaces.org_id").
+		Where("orgs.slug = ? AND spaces.slug = ?", SystemOrgSlug, "global-forum").
+		First(&space).Error
+	if err != nil {
+		return fmt.Errorf("finding global-forum space: %w", err)
+	}
+
+	// Use the existing default board (seeded by seedSystemOrg).
+	var board models.Board
+	if err := db.Where("space_id = ? AND slug = ?", space.ID, defaultBoardSlug).First(&board).Error; err != nil {
+		return fmt.Errorf("finding forum default board: %w", err)
+	}
+
+	// Clean up stale "general-discussion" board from earlier deploy if it exists.
+	// Move any threads that ended up there into the default board.
+	var staleBoard models.Board
+	if err := db.Where("space_id = ? AND slug = ?", space.ID, "general-discussion").First(&staleBoard).Error; err == nil {
+		_ = db.Model(&models.Thread{}).Where("board_id = ?", staleBoard.ID).Update("board_id", board.ID).Error
+		_ = db.Delete(&staleBoard).Error
+	}
+
+	return seedForumThreads(db, board.ID)
 }
 
 // seedSystemOrg creates the system org, its global spaces, and a default

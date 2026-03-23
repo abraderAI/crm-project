@@ -108,6 +108,12 @@ export interface Message extends BaseEntity {
   type: AnyMessageType;
 }
 
+/** MessageWithAuthor extends Message with resolved author display info. */
+export interface MessageWithAuthor extends Message {
+  author_name?: string;
+  author_org?: string;
+}
+
 /**
  * SupportEntry extends Message with support-specific lifecycle fields.
  * Returned by GET /v1/support/tickets/{slug}/entries.

@@ -2,38 +2,29 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Audit log filtering — date range + search filters",
-    "created": "2026-03-22T19:22:00Z"
+    "description": "Forum experience feature: seed data, modern UI, admin management",
+    "created": "2026-03-23T01:05:00Z"
   },
   "plan": {
-    "id": "audit-log-filtering",
-    "title": "Audit Log Filtering — Date Range + Search",
+    "id": "forum-experience",
+    "title": "Forums Feature: DEFT General Discussion + Admin Management",
     "status": "running",
-    "tags": [
-      "frontend",
-      "admin"
-    ],
+    "tags": ["forum", "frontend", "backend", "admin"],
     "items": [
-      {
-        "id": "rewrite-audit-page",
-        "title": "Convert audit-log page to client component with filter bar",
-        "status": "pending"
-      },
-      {
-        "id": "tests",
-        "title": "Add/update tests for audit-log page filters",
-        "status": "pending"
-      },
-      {
-        "id": "verify",
-        "title": "Run task check and ensure full pass",
-        "status": "pending"
-      },
-      {
-        "id": "deploy",
-        "title": "Deploy frontend to Fly.io for review",
-        "status": "pending"
-      }
+      { "id": "branch", "title": "Create feat/forum-experience branch", "status": "completed" },
+      { "id": "seed", "title": "Add forum seed data (Go)", "status": "running" },
+      { "id": "components", "title": "Build forum UI components", "status": "pending" },
+      { "id": "index-page", "title": "Rewrite forum index page", "status": "pending" },
+      { "id": "detail-page", "title": "Build thread detail page", "status": "pending" },
+      { "id": "create-page", "title": "Build forum creation page", "status": "pending" },
+      { "id": "admin-page", "title": "Build admin forums management", "status": "pending" },
+      { "id": "admin-api", "title": "Add admin API functions", "status": "pending" },
+      { "id": "tests", "title": "Write tests (>=85% coverage)", "status": "pending" },
+      { "id": "check", "title": "Run task check", "status": "pending" },
+      { "id": "deploy", "title": "Commit, push, deploy to fly.io", "status": "pending" },
+      { "id": "replies", "title": "Add reply system (API + UI)", "status": "running" },
+      { "id": "author-display", "title": "Fix author display on thread detail", "status": "pending" },
+      { "id": "strip-markdown", "title": "Strip HTML from card body preview", "status": "pending" }
     ]
   }
 }
