@@ -1,0 +1,4711 @@
+openapi: 3.1.0
+info:
+  title: DEFT Evolution CRM API
+  version: 1.0.0
+  description: |
+    REST API for the DEFT Evolution CRM platform.
+    All authenticated endpoints require a Bearer JWT or API key.
+    Errors follow RFC 7807 Problem Details (`application/problem+json`).
+    Pagination is cursor-based using UUIDv7-encoded cursors.
+  contact:
+    name: DEFT Platform Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.deft.example.com
+    description: Production
+
+tags:
+  - name: health
+    description: Health check endpoints
+  - name: orgs
+    description: Organization management
+  - name: spaces
+    description: Space management within orgs
+  - name: boards
+    description: Board management within spaces
+  - name: threads
+    description: Thread management within boards
+  - name: messages
+    description: Message management within threads
+  - name: members
+    description: Membership management (org, space, board)
+  - name: votes
+    description: Thread voting
+  - name: moderation
+    description: Moderation flags and thread operations
+  - name: webhooks
+    description: Webhook subscription management
+  - name: notifications
+    description: User notifications and preferences
+  - name: uploads
+    description: File upload management
+  - name: revisions
+    description: Content revision history
+  - name: search
+    description: Full-text search
+  - name: billing
+    description: Billing and invoicing
+  - name: voice
+    description: Voice call management
+  - name: channels
+    description: IO channel gateway configuration
+  - name: chat
+    description: AI chat widget sessions
+  - name: pipeline
+    description: CRM pipeline stage management
+  - name: admin
+    description: Platform administration (requires platform admin)
+  - name: reporting
+    description: Org-level and platform reporting
+  - name: global-spaces
+    description: Platform-wide global spaces (forum, support, leads)
+  - name: support
+    description: Support ticket entries
+  - name: tier
+    description: User tier and home preferences
+  - name: conversion
+    description: Tier upgrade and lead conversion flows
+  - name: api-keys
+    description: API key management
+  - name: websocket
+    description: Real-time WebSocket connection
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  # ─── Health ────────────────────────────────────────────────────────────────
+  /healthz:
+    get:
+      operationId: getHealthz
+      tags: [health]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Server is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /readyz:
+    get:
+      operationId: getReadyz
+      tags: [health]
+      summary: Readiness probe (includes DB check)
+      security: []
+      responses:
+        "200":
+          description: Server is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  # ─── API Root ──────────────────────────────────────────────────────────────
+  /v1:
+    get:
+      operationId: getApiRoot
+      tags: [health]
+      summary: API version info
+      security: []
+      responses:
+        "200":
+          description: API version and status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: v1
+                  status:
+                    type: string
+                    example: ok
+
+  # ─── WebSocket ─────────────────────────────────────────────────────────────
+  /v1/ws:
+    get:
+      operationId: wsUpgrade
+      tags: [websocket]
+      summary: Upgrade to WebSocket connection
+      description: Auth via query param token. Returns 101 Switching Protocols on success.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Webhooks (public) ─────────────────────────────────────────────────────
+  /v1/webhooks/billing:
+    post:
+      operationId: handleBillingWebhook
+      tags: [billing]
+      summary: Billing provider webhook (HMAC-verified)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook processed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/webhooks/livekit:
+    post:
+      operationId: handleLiveKitWebhook
+      tags: [voice]
+      summary: LiveKit voice webhook (token-verified)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook processed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Internal Bridge ───────────────────────────────────────────────────────
+  /v1/internal/contacts/lookup:
+    get:
+      operationId: lookupContact
+      tags: [voice]
+      summary: Internal contact lookup (X-Internal-Key auth)
+      security: []
+      parameters:
+        - name: phone
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Contact found
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/internal/threads/{id}/summary:
+    get:
+      operationId: getThreadSummary
+      tags: [voice]
+      summary: Internal thread summary (X-Internal-Key auth)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Thread summary
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Chat Widget (public) ──────────────────────────────────────────────────
+  /v1/chat/session:
+    post:
+      operationId: createChatSession
+      tags: [chat]
+      summary: Create anonymous chat session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatSessionCreateInput"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatSessionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/chat/message:
+    post:
+      operationId: sendChatMessage
+      tags: [chat]
+      summary: Send a message in a chat session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageInput"
+      responses:
+        "200":
+          description: Message sent and AI response returned
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/chat/promote:
+    post:
+      operationId: promoteChatSession
+      tags: [chat]
+      summary: Promote anonymous chat session to authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id:
+                  type: string
+                  format: uuid
+              required: [session_id]
+      responses:
+        "200":
+          description: Session promoted
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── User Tier & Preferences ───────────────────────────────────────────────
+  /v1/me/tier:
+    get:
+      operationId: getMyTier
+      tags: [tier]
+      summary: Get current user's tier information
+      responses:
+        "200":
+          description: Tier info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tier:
+                    type: integer
+                    example: 2
+                  name:
+                    type: string
+                    example: registered
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me/home-preferences:
+    get:
+      operationId: getHomePreferences
+      tags: [tier]
+      summary: Get user's home screen widget preferences
+      responses:
+        "200":
+          description: Home preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserHomePreferences"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      operationId: putHomePreferences
+      tags: [tier]
+      summary: Replace user's home screen widget preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserHomePreferencesInput"
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserHomePreferences"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Conversion ────────────────────────────────────────────────────────────
+  /v1/me/upgrade:
+    post:
+      operationId: selfServiceUpgrade
+      tags: [conversion]
+      summary: Self-service upgrade from Tier 2 to Tier 3
+      responses:
+        "200":
+          description: Upgrade successful
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/leads/{lead_id}/convert:
+    post:
+      operationId: salesConvertLead
+      tags: [conversion]
+      summary: Sales-assisted lead conversion (DEFT members only)
+      parameters:
+        - name: lead_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Lead converted
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ─── Search ────────────────────────────────────────────────────────────────
+  /v1/search:
+    get:
+      operationId: search
+      tags: [search]
+      summary: Full-text search across threads and messages
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [thread, message]
+          description: Restrict search to entity type
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Uploads ───────────────────────────────────────────────────────────────
+  /v1/uploads:
+    post:
+      operationId: createUpload
+      tags: [uploads]
+      summary: Upload a file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                org_id:
+                  type: string
+                entity_type:
+                  type: string
+                entity_id:
+                  type: string
+              required: [file, org_id, entity_type, entity_id]
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/uploads/{id}:
+    get:
+      operationId: getUpload
+      tags: [uploads]
+      summary: Get upload metadata
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Upload metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteUpload
+      tags: [uploads]
+      summary: Delete an upload
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Upload deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/uploads/{id}/download:
+    get:
+      operationId: downloadUpload
+      tags: [uploads]
+      summary: Download an uploaded file
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Revisions ─────────────────────────────────────────────────────────────
+  /v1/revisions/{entityType}/{entityID}:
+    get:
+      operationId: listRevisions
+      tags: [revisions]
+      summary: List revision history for an entity
+      parameters:
+        - name: entityType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [thread, message]
+        - name: entityID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Revision list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevisionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/revisions/{id}:
+    get:
+      operationId: getRevision
+      tags: [revisions]
+      summary: Get a single revision
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Revision detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Revision"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Orgs ──────────────────────────────────────────────────────────────────
+  /v1/orgs:
+    post:
+      operationId: createOrg
+      tags: [orgs]
+      summary: Create an organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrgCreateInput"
+      responses:
+        "201":
+          description: Org created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      operationId: listOrgs
+      tags: [orgs]
+      summary: List organizations
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated org list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgListResponse"
+
+  /v1/orgs/{org}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: getOrg
+      tags: [orgs]
+      summary: Get an organization by ID or slug
+      responses:
+        "200":
+          description: Org detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateOrg
+      tags: [orgs]
+      summary: Partially update an organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrgUpdateInput"
+      responses:
+        "200":
+          description: Org updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteOrg
+      tags: [orgs]
+      summary: Soft-delete an organization
+      responses:
+        "204":
+          description: Org deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── API Keys ──────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/api-keys:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: createApiKey
+      tags: [api-keys]
+      summary: Create an API key for the org
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyCreateInput"
+      responses:
+        "201":
+          description: API key created (key value returned only once)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreatedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      operationId: listApiKeys
+      tags: [api-keys]
+      summary: List API keys for the org
+      responses:
+        "200":
+          description: API key list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKey"
+
+  /v1/orgs/{org}/api-keys/{id}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/IdPath"
+    delete:
+      operationId: revokeApiKey
+      tags: [api-keys]
+      summary: Revoke an API key
+      responses:
+        "204":
+          description: API key revoked
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Voice Calls ───────────────────────────────────────────────────────────
+  /v1/orgs/{org}/calls:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: logCall
+      tags: [voice]
+      summary: Log a voice call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallLogCreateInput"
+      responses:
+        "201":
+          description: Call logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallLog"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/orgs/{org}/calls/{call}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - name: call
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getCallTranscript
+      tags: [voice]
+      summary: Get call transcript
+      responses:
+        "200":
+          description: Call with transcript
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallLog"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/calls/{call}/escalate:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - name: call
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: escalateCall
+      tags: [voice]
+      summary: Escalate a call to a human agent
+      responses:
+        "200":
+          description: Call escalated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallLog"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Org Members ───────────────────────────────────────────────────────────
+  /v1/orgs/{org}/members:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: addOrgMember
+      tags: [members]
+      summary: Add a member to the org
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberInput"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgMembership"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      operationId: listOrgMembers
+      tags: [members]
+      summary: List org members
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrgMembership"
+
+  /v1/orgs/{org}/members/{userID}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/UserIdPath"
+    patch:
+      operationId: updateOrgMember
+      tags: [members]
+      summary: Update a member's role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: "#/components/schemas/Role"
+              required: [role]
+      responses:
+        "200":
+          description: Member updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgMembership"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeOrgMember
+      tags: [members]
+      summary: Remove a member from the org
+      responses:
+        "204":
+          description: Member removed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Billing ───────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/billing:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: getBillingStatus
+      tags: [billing]
+      summary: Get billing status for org
+      responses:
+        "200":
+          description: Billing status
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/orgs/{org}/billing/customers:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: createBillingCustomer
+      tags: [billing]
+      summary: Create billing customer for org
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/orgs/{org}/billing/invoices:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: createInvoice
+      tags: [billing]
+      summary: Create an invoice
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ─── Vote ──────────────────────────────────────────────────────────────────
+  /v1/vote/weights:
+    get:
+      operationId: getVoteWeights
+      tags: [votes]
+      summary: Get vote weight configuration table
+      responses:
+        "200":
+          description: Weight table
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  role_weights:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  tier_bonuses:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  default_weight:
+                    type: integer
+
+  # ─── Moderation Flags ──────────────────────────────────────────────────────
+  /v1/orgs/{org}/flags:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: createFlag
+      tags: [moderation]
+      summary: Create a moderation flag on a thread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlagInput"
+      responses:
+        "201":
+          description: Flag created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      operationId: listFlags
+      tags: [moderation]
+      summary: List open moderation flags for org
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Flag list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlagListResponse"
+
+  /v1/orgs/{org}/flags/{flag}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - name: flag
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: resolveFlag
+      tags: [moderation]
+      summary: Resolve a moderation flag
+      responses:
+        "200":
+          description: Flag resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/flags/{flag}/dismiss:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - name: flag
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: dismissFlag
+      tags: [moderation]
+      summary: Dismiss a moderation flag
+      responses:
+        "200":
+          description: Flag dismissed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Spaces ────────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/spaces:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: createSpace
+      tags: [spaces]
+      summary: Create a space in an org
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpaceCreateInput"
+      responses:
+        "201":
+          description: Space created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Space"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      operationId: listSpaces
+      tags: [spaces]
+      summary: List spaces in an org
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated space list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpaceListResponse"
+
+  /v1/orgs/{org}/spaces/{space}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+    get:
+      operationId: getSpace
+      tags: [spaces]
+      summary: Get a space by ID or slug
+      responses:
+        "200":
+          description: Space detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Space"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateSpace
+      tags: [spaces]
+      summary: Partially update a space
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpaceUpdateInput"
+      responses:
+        "200":
+          description: Space updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Space"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteSpace
+      tags: [spaces]
+      summary: Soft-delete a space
+      responses:
+        "204":
+          description: Space deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Space Members ─────────────────────────────────────────────────────────
+  /v1/orgs/{org}/spaces/{space}/members:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+    post:
+      operationId: addSpaceMember
+      tags: [members]
+      summary: Add a member to a space
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberInput"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpaceMembership"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      operationId: listSpaceMembers
+      tags: [members]
+      summary: List space members
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SpaceMembership"
+
+  /v1/orgs/{org}/spaces/{space}/members/{userID}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/UserIdPath"
+    delete:
+      operationId: removeSpaceMember
+      tags: [members]
+      summary: Remove a member from a space
+      responses:
+        "204":
+          description: Member removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Boards ────────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/spaces/{space}/boards:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+    post:
+      operationId: createBoard
+      tags: [boards]
+      summary: Create a board in a space
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoardCreateInput"
+      responses:
+        "201":
+          description: Board created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      operationId: listBoards
+      tags: [boards]
+      summary: List boards in a space
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated board list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardListResponse"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+    get:
+      operationId: getBoard
+      tags: [boards]
+      summary: Get a board by ID or slug
+      responses:
+        "200":
+          description: Board detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateBoard
+      tags: [boards]
+      summary: Partially update a board
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoardUpdateInput"
+      responses:
+        "200":
+          description: Board updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteBoard
+      tags: [boards]
+      summary: Soft-delete a board
+      responses:
+        "204":
+          description: Board deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/lock:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+    post:
+      operationId: lockBoard
+      tags: [boards]
+      summary: Lock a board (prevents new threads)
+      responses:
+        "200":
+          description: Board locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/unlock:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+    post:
+      operationId: unlockBoard
+      tags: [boards]
+      summary: Unlock a board
+      responses:
+        "200":
+          description: Board unlocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Board Members ─────────────────────────────────────────────────────────
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/members:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+    post:
+      operationId: addBoardMember
+      tags: [members]
+      summary: Add a member to a board
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberInput"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardMembership"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      operationId: listBoardMembers
+      tags: [members]
+      summary: List board members
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BoardMembership"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/members/{userID}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/UserIdPath"
+    delete:
+      operationId: removeBoardMember
+      tags: [members]
+      summary: Remove a member from a board
+      responses:
+        "204":
+          description: Member removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Threads ───────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+    post:
+      operationId: createThread
+      tags: [threads]
+      summary: Create a thread in a board
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThreadCreateInput"
+      responses:
+        "201":
+          description: Thread created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      operationId: listThreads
+      tags: [threads]
+      summary: List threads in a board with optional metadata filters
+      description: |
+        Supports metadata filtering via query params:
+        - `?metadata[status]=open` — equality filter
+        - `?metadata[priority][gt]=3` — comparison filter (gt, gte, lt, lte, eq, ne)
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated thread list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThreadListResponse"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    get:
+      operationId: getThread
+      tags: [threads]
+      summary: Get a thread by ID or slug
+      responses:
+        "200":
+          description: Thread detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateThread
+      tags: [threads]
+      summary: Partially update a thread (creates revision)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThreadUpdateInput"
+      responses:
+        "200":
+          description: Thread updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteThread
+      tags: [threads]
+      summary: Soft-delete a thread
+      responses:
+        "204":
+          description: Thread deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Thread Actions ────────────────────────────────────────────────────────
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/pin:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: pinThread
+      tags: [threads]
+      summary: Pin a thread
+      responses:
+        "200":
+          description: Thread pinned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/unpin:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: unpinThread
+      tags: [threads]
+      summary: Unpin a thread
+      responses:
+        "200":
+          description: Thread unpinned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/lock:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: lockThread
+      tags: [threads]
+      summary: Lock a thread (prevents new messages)
+      responses:
+        "200":
+          description: Thread locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/unlock:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: unlockThread
+      tags: [threads]
+      summary: Unlock a thread
+      responses:
+        "200":
+          description: Thread unlocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/vote:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: toggleVote
+      tags: [votes]
+      summary: Toggle authenticated user's vote on a thread
+      responses:
+        "200":
+          description: Vote toggled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voted:
+                    type: boolean
+                  vote_score:
+                    type: integer
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/move:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: moveThread
+      tags: [moderation]
+      summary: Move a thread to a different board
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveInput"
+      responses:
+        "200":
+          description: Thread moved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/merge:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: mergeThread
+      tags: [moderation]
+      summary: Merge this thread into a target thread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeInput"
+      responses:
+        "200":
+          description: Thread merged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/hide:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: hideThread
+      tags: [moderation]
+      summary: Hide a thread from public view
+      responses:
+        "200":
+          description: Thread hidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/unhide:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: unhideThread
+      tags: [moderation]
+      summary: Unhide a thread
+      responses:
+        "200":
+          description: Thread unhidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── CRM Pipeline Actions ─────────────────────────────────────────────────
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/stage:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: transitionStage
+      tags: [pipeline]
+      summary: Transition thread to a new pipeline stage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stage:
+                  type: string
+                  description: Target pipeline stage name
+              required: [stage]
+      responses:
+        "200":
+          description: Stage transitioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/enrich:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: enrichThread
+      tags: [pipeline]
+      summary: Enrich a thread with LLM-generated metadata
+      responses:
+        "200":
+          description: Thread enriched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/provision:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: provisionThread
+      tags: [pipeline]
+      summary: Provision resources for a closed-won deal
+      responses:
+        "200":
+          description: Thread provisioned
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Messages ──────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/messages:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+    post:
+      operationId: createMessage
+      tags: [messages]
+      summary: Create a message in a thread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageCreateInput"
+      responses:
+        "201":
+          description: Message created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: List messages in a thread
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated message list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageListResponse"
+
+  /v1/orgs/{org}/spaces/{space}/boards/{board}/threads/{thread}/messages/{message}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/SpacePath"
+      - $ref: "#/components/parameters/BoardPath"
+      - $ref: "#/components/parameters/ThreadPath"
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getMessage
+      tags: [messages]
+      summary: Get a single message
+      responses:
+        "200":
+          description: Message detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateMessage
+      tags: [messages]
+      summary: Update a message (author-only, creates revision)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageUpdateInput"
+      responses:
+        "200":
+          description: Message updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteMessage
+      tags: [messages]
+      summary: Soft-delete a message
+      responses:
+        "204":
+          description: Message deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Channels ──────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/channels/health:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: getChannelHealth
+      tags: [channels]
+      summary: Get channel health status for org
+      responses:
+        "200":
+          description: Channel health
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/orgs/{org}/channels/dlq:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: listDLQ
+      tags: [channels]
+      summary: List dead letter queue events
+      responses:
+        "200":
+          description: DLQ events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DeadLetterEvent"
+
+  /v1/orgs/{org}/channels/dlq/{id}/retry:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/IdPath"
+    post:
+      operationId: retryDLQ
+      tags: [channels]
+      summary: Retry a dead letter queue event
+      responses:
+        "200":
+          description: Event retried
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeadLetterEvent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/channels/dlq/{id}/dismiss:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/IdPath"
+    post:
+      operationId: dismissDLQ
+      tags: [channels]
+      summary: Dismiss a dead letter queue event
+      responses:
+        "200":
+          description: Event dismissed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeadLetterEvent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/channels/{type}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - name: type
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/ChannelType"
+    get:
+      operationId: getChannelConfig
+      tags: [channels]
+      summary: Get channel configuration
+      responses:
+        "200":
+          description: Channel config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelConfig"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: putChannelConfig
+      tags: [channels]
+      summary: Create or replace channel configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings:
+                  type: string
+                  description: JSON settings string
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Config saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─── Email Inboxes ─────────────────────────────────────────────────────────
+  /v1/orgs/{org}/channels/email/inboxes:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: listEmailInboxes
+      tags: [channels]
+      summary: List email inboxes for org
+      responses:
+        "200":
+          description: Inbox list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EmailInbox"
+    post:
+      operationId: createEmailInbox
+      tags: [channels]
+      summary: Create an email inbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailInboxInput"
+      responses:
+        "201":
+          description: Inbox created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailInbox"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/orgs/{org}/channels/email/inboxes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/IdPath"
+    put:
+      operationId: updateEmailInbox
+      tags: [channels]
+      summary: Update an email inbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailInboxInput"
+      responses:
+        "200":
+          description: Inbox updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailInbox"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteEmailInbox
+      tags: [channels]
+      summary: Delete an email inbox
+      responses:
+        "204":
+          description: Inbox deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Voice Phone Numbers ───────────────────────────────────────────────────
+  /v1/orgs/{org}/channels/voice/numbers:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: listPhoneNumbers
+      tags: [channels]
+      summary: List org phone numbers
+      responses:
+        "200":
+          description: Phone numbers
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/orgs/{org}/channels/voice/numbers/search:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: searchPhoneNumbers
+      tags: [channels]
+      summary: Search available phone numbers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                area_code:
+                  type: string
+      responses:
+        "200":
+          description: Available numbers
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/orgs/{org}/channels/voice/numbers/purchase:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: purchasePhoneNumber
+      tags: [channels]
+      summary: Purchase a phone number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone_number:
+                  type: string
+              required: [phone_number]
+      responses:
+        "201":
+          description: Number purchased
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─── Webhooks ──────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/webhooks:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: createWebhook
+      tags: [webhooks]
+      summary: Create a webhook subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookCreateInput"
+      responses:
+        "201":
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookSubscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      operationId: listWebhooks
+      tags: [webhooks]
+      summary: List webhook subscriptions for org
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Webhook list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookListResponse"
+
+  /v1/orgs/{org}/webhooks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      operationId: getWebhook
+      tags: [webhooks]
+      summary: Get a webhook subscription
+      responses:
+        "200":
+          description: Webhook detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookSubscription"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteWebhook
+      tags: [webhooks]
+      summary: Delete a webhook subscription
+      responses:
+        "204":
+          description: Webhook deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/orgs/{org}/webhooks/{id}/deliveries:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      operationId: listWebhookDeliveries
+      tags: [webhooks]
+      summary: List deliveries for a webhook
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Delivery list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookDeliveryListResponse"
+
+  /v1/orgs/{org}/webhooks/{id}/deliveries/{deliveryID}/replay:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+      - $ref: "#/components/parameters/IdPath"
+      - name: deliveryID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: replayWebhookDelivery
+      tags: [webhooks]
+      summary: Replay a webhook delivery
+      responses:
+        "200":
+          description: Delivery replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookDelivery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Audit Log ─────────────────────────────────────────────────────────────
+  /v1/orgs/{org}/audit-log:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: listOrgAuditLog
+      tags: [orgs]
+      summary: List audit log entries for org
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogListResponse"
+
+  # ─── Org Reporting ─────────────────────────────────────────────────────────
+  /v1/orgs/{org}/reports/support:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: getOrgSupportMetrics
+      tags: [reporting]
+      summary: Get support metrics for org (admin/owner only)
+      parameters:
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+      responses:
+        "200":
+          description: Support metrics
+          content:
+            application/json:
+              schema:
+                type: object
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/orgs/{org}/reports/support/export:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: getOrgSupportExport
+      tags: [reporting]
+      summary: Export support report as CSV
+      parameters:
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/orgs/{org}/reports/sales:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: getOrgSalesMetrics
+      tags: [reporting]
+      summary: Get sales metrics for org (admin/owner only)
+      parameters:
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+      responses:
+        "200":
+          description: Sales metrics
+          content:
+            application/json:
+              schema:
+                type: object
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/orgs/{org}/reports/sales/export:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: getOrgSalesExport
+      tags: [reporting]
+      summary: Export sales report as CSV
+      parameters:
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ─── Pipeline Stages ───────────────────────────────────────────────────────
+  /v1/orgs/{org}/pipeline/stages:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: getPipelineStages
+      tags: [pipeline]
+      summary: Get available pipeline stages
+      responses:
+        "200":
+          description: Pipeline stages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        order:
+                          type: integer
+
+  # ─── Support ───────────────────────────────────────────────────────────────
+  /v1/support/deft-members:
+    get:
+      operationId: listDeftMembers
+      tags: [support]
+      summary: List DEFT platform members
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /v1/support/tickets/{slug}/entries:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: listTicketEntries
+      tags: [support]
+      summary: List entries for a support ticket
+      responses:
+        "200":
+          description: Entry list
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      operationId: createTicketEntry
+      tags: [support]
+      summary: Create an entry on a support ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: string
+                type:
+                  $ref: "#/components/schemas/MessageType"
+              required: [body]
+      responses:
+        "201":
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/support/tickets/{slug}/entries/{id}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: "#/components/parameters/IdPath"
+    patch:
+      operationId: updateTicketEntry
+      tags: [support]
+      summary: Update a support ticket entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: string
+      responses:
+        "200":
+          description: Entry updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/support/tickets/{slug}/entries/{id}/publish:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: "#/components/parameters/IdPath"
+    post:
+      operationId: publishTicketEntry
+      tags: [support]
+      summary: Publish a draft entry (promotes to agent_reply)
+      responses:
+        "200":
+          description: Entry published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/support/tickets/{slug}/entries/{id}/deft-visibility:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: "#/components/parameters/IdPath"
+    patch:
+      operationId: setDeftVisibility
+      tags: [support]
+      summary: Toggle DEFT-only visibility on an entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_deft_only:
+                  type: boolean
+              required: [is_deft_only]
+      responses:
+        "200":
+          description: Visibility updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/support/tickets/{slug}/notifications:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: setTicketNotificationPref
+      tags: [support]
+      summary: Set notification preference for a ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Preference updated
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ─── Global Spaces ─────────────────────────────────────────────────────────
+  /v1/global-spaces/{space}/threads:
+    parameters:
+      - name: space
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Global space slug
+    get:
+      operationId: listGlobalSpaceThreads
+      tags: [global-spaces]
+      summary: List threads in a global space
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Thread list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThreadListResponse"
+    post:
+      operationId: createGlobalSpaceThread
+      tags: [global-spaces]
+      summary: Create a thread in a global space
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThreadCreateInput"
+      responses:
+        "201":
+          description: Thread created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/global-spaces/{space}/threads/{slug}:
+    parameters:
+      - name: space
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getGlobalSpaceThread
+      tags: [global-spaces]
+      summary: Get a global space thread by slug
+      responses:
+        "200":
+          description: Thread detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateGlobalSpaceThread
+      tags: [global-spaces]
+      summary: Update a global space thread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThreadUpdateInput"
+      responses:
+        "200":
+          description: Thread updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/global-spaces/{space}/threads/{slug}/attachments:
+    parameters:
+      - name: space
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: listGlobalSpaceAttachments
+      tags: [global-spaces]
+      summary: List attachments on a global space thread
+      responses:
+        "200":
+          description: Attachment list
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      operationId: uploadGlobalSpaceAttachment
+      tags: [global-spaces]
+      summary: Upload an attachment to a global space thread
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Attachment uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─── Notifications ─────────────────────────────────────────────────────────
+  /v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for the authenticated user
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Notifications with unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  page_info:
+                    $ref: "#/components/schemas/PageInfo"
+                  unread_count:
+                    type: integer
+
+  /v1/notifications/{id}/read:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a notification as read
+      responses:
+        "200":
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  is_read:
+                    type: boolean
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/notifications/mark-all-read:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All notifications marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  marked_read:
+                    type: integer
+
+  /v1/notifications/preferences:
+    get:
+      operationId: getNotificationPreferences
+      tags: [notifications]
+      summary: Get notification preferences and digest schedule
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preferences:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotificationPreference"
+                  digest:
+                    $ref: "#/components/schemas/DigestSchedule"
+    put:
+      operationId: updateNotificationPreferences
+      tags: [notifications]
+      summary: Update notification preferences and digest schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPreferencesInput"
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  # ─── Admin ─────────────────────────────────────────────────────────────────
+  /v1/admin/users:
+    get:
+      operationId: adminListUsers
+      tags: [admin]
+      summary: List all platform users
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: object
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/admin/users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: adminGetUser
+      tags: [admin]
+      summary: Get a user's details
+      responses:
+        "200":
+          description: User detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserShadow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/admin/users/{user_id}/ban:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: adminBanUser
+      tags: [admin]
+      summary: Ban a user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: User banned
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/users/{user_id}/unban:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: adminUnbanUser
+      tags: [admin]
+      summary: Unban a user
+      responses:
+        "200":
+          description: User unbanned
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/users/{user_id}/purge:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: adminPurgeUser
+      tags: [admin]
+      summary: Permanently purge a user and their data (GDPR)
+      responses:
+        "204":
+          description: User purged
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/admin/users/{user_id}/export:
+    parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: adminExportUserData
+      tags: [admin]
+      summary: GDPR data export for a user
+      responses:
+        "200":
+          description: User data export
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/users/{user_id}/promote:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: adminPromoteUser
+      tags: [admin]
+      summary: Promote a user from Tier 2 to Tier 3
+      responses:
+        "200":
+          description: User promoted
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/users/{user_id}/impersonate:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: adminImpersonateUser
+      tags: [admin]
+      summary: Generate an impersonation token for a user
+      responses:
+        "200":
+          description: Impersonation token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+
+  /v1/admin/orgs:
+    get:
+      operationId: adminListOrgs
+      tags: [admin]
+      summary: List all organizations (admin view)
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Org list
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/orgs/{org}:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    get:
+      operationId: adminGetOrg
+      tags: [admin]
+      summary: Get org details (admin view)
+      responses:
+        "200":
+          description: Org detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+
+  /v1/admin/orgs/{org}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: adminSuspendOrg
+      tags: [admin]
+      summary: Suspend an org
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Org suspended
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/orgs/{org}/unsuspend:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: adminUnsuspendOrg
+      tags: [admin]
+      summary: Unsuspend an org
+      responses:
+        "200":
+          description: Org unsuspended
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/orgs/{org}/transfer-ownership:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    post:
+      operationId: adminTransferOwnership
+      tags: [admin]
+      summary: Transfer org ownership to another user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_owner_id:
+                  type: string
+              required: [new_owner_id]
+      responses:
+        "200":
+          description: Ownership transferred
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/orgs/{org}/purge:
+    parameters:
+      - $ref: "#/components/parameters/OrgPath"
+    delete:
+      operationId: adminPurgeOrg
+      tags: [admin]
+      summary: Permanently purge an org and all data
+      responses:
+        "204":
+          description: Org purged
+
+  /v1/admin/audit-log:
+    get:
+      operationId: adminListAuditLog
+      tags: [admin]
+      summary: Platform-wide audit log
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Audit log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogListResponse"
+
+  /v1/admin/platform-admins:
+    get:
+      operationId: listPlatformAdmins
+      tags: [admin]
+      summary: List platform admins
+      responses:
+        "200":
+          description: Admin list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PlatformAdmin"
+    post:
+      operationId: addPlatformAdmin
+      tags: [admin]
+      summary: Grant platform admin to a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+              required: [user_id]
+      responses:
+        "201":
+          description: Admin added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformAdmin"
+
+  /v1/admin/platform-admins/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: removePlatformAdmin
+      tags: [admin]
+      summary: Revoke platform admin from a user
+      responses:
+        "204":
+          description: Admin removed
+
+  /v1/admin/settings:
+    get:
+      operationId: adminGetSettings
+      tags: [admin]
+      summary: Get all platform settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                type: object
+    patch:
+      operationId: adminPatchSettings
+      tags: [admin]
+      summary: Update platform settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/rbac-policy:
+    get:
+      operationId: adminGetRBACPolicy
+      tags: [admin]
+      summary: Get RBAC policy
+      responses:
+        "200":
+          description: RBAC policy
+          content:
+            application/json:
+              schema:
+                type: object
+    patch:
+      operationId: adminPatchRBACPolicy
+      tags: [admin]
+      summary: Update RBAC policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Policy updated
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/rbac-policy/preview:
+    post:
+      operationId: adminPreviewRBACPolicy
+      tags: [admin]
+      summary: Preview RBAC policy changes without applying
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Preview results
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/feature-flags:
+    get:
+      operationId: adminListFeatureFlags
+      tags: [admin]
+      summary: List all feature flags
+      responses:
+        "200":
+          description: Feature flags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FeatureFlag"
+
+  /v1/admin/feature-flags/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: adminPatchFeatureFlag
+      tags: [admin]
+      summary: Update a feature flag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Flag updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureFlag"
+
+  /v1/admin/stats:
+    get:
+      operationId: adminGetStats
+      tags: [admin]
+      summary: Get platform-wide statistics
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/webhooks/deliveries:
+    get:
+      operationId: adminListWebhookDeliveries
+      tags: [admin]
+      summary: List all webhook deliveries platform-wide
+      responses:
+        "200":
+          description: Delivery list
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/integrations/status:
+    get:
+      operationId: adminGetIntegrationHealth
+      tags: [admin]
+      summary: Get integration health status
+      responses:
+        "200":
+          description: Integration health
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/exports:
+    post:
+      operationId: adminCreateExport
+      tags: [admin]
+      summary: Create an async data export
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [users, orgs, audit]
+                format:
+                  type: string
+                  enum: [csv, json]
+                filters:
+                  type: object
+              required: [type, format]
+      responses:
+        "201":
+          description: Export created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminExport"
+    get:
+      operationId: adminListExports
+      tags: [admin]
+      summary: List data exports
+      responses:
+        "200":
+          description: Export list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminExport"
+
+  /v1/admin/exports/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      operationId: adminGetExport
+      tags: [admin]
+      summary: Get export status and download link
+      responses:
+        "200":
+          description: Export detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminExport"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/admin/api-usage:
+    get:
+      operationId: adminGetAPIUsage
+      tags: [admin]
+      summary: Get API usage statistics
+      responses:
+        "200":
+          description: API usage stats
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/llm-usage:
+    get:
+      operationId: adminGetLLMUsage
+      tags: [admin]
+      summary: Get LLM usage statistics
+      responses:
+        "200":
+          description: LLM usage stats
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/security/recent-logins:
+    get:
+      operationId: adminGetRecentLogins
+      tags: [admin]
+      summary: Get recent login events
+      responses:
+        "200":
+          description: Login events
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/security/failed-auths:
+    get:
+      operationId: adminGetFailedAuths
+      tags: [admin]
+      summary: Get failed authentication attempts
+      responses:
+        "200":
+          description: Failed auth attempts
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/reports/support:
+    get:
+      operationId: adminGetSupportMetrics
+      tags: [admin]
+      summary: Platform-wide support metrics
+      parameters:
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+      responses:
+        "200":
+          description: Support metrics
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/reports/support/export:
+    get:
+      operationId: adminGetSupportExport
+      tags: [admin]
+      summary: Export platform-wide support report
+      parameters:
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /v1/admin/reports/sales:
+    get:
+      operationId: adminGetSalesMetrics
+      tags: [admin]
+      summary: Platform-wide sales metrics
+      parameters:
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+      responses:
+        "200":
+          description: Sales metrics
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/admin/reports/sales/export:
+    get:
+      operationId: adminGetSalesExport
+      tags: [admin]
+      summary: Export platform-wide sales report
+      parameters:
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Components
+# ═══════════════════════════════════════════════════════════════════════════════
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Clerk-issued JWT token
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Org-scoped API key
+
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OrgPath:
+      name: org
+      in: path
+      required: true
+      description: Org ID or slug
+      schema:
+        type: string
+    SpacePath:
+      name: space
+      in: path
+      required: true
+      description: Space ID or slug
+      schema:
+        type: string
+    BoardPath:
+      name: board
+      in: path
+      required: true
+      description: Board ID or slug
+      schema:
+        type: string
+    ThreadPath:
+      name: thread
+      in: path
+      required: true
+      description: Thread ID or slug
+      schema:
+        type: string
+    UserIdPath:
+      name: userID
+      in: path
+      required: true
+      schema:
+        type: string
+    Cursor:
+      name: cursor
+      in: query
+      description: Base64-encoded UUIDv7 cursor for pagination
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      description: Number of items per page (1-100, default 50)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    DateFrom:
+      name: from
+      in: query
+      description: Start date (ISO 8601)
+      schema:
+        type: string
+        format: date
+    DateTo:
+      name: to
+      in: query
+      description: End date (ISO 8601)
+      schema:
+        type: string
+        format: date
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    NotFound:
+      description: Not Found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    Conflict:
+      description: Conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    ServiceUnavailable:
+      description: Service Unavailable
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+  schemas:
+    # ─── Shared ────────────────────────────────────────────────────────────
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://httpstatuses.com/400"
+        title:
+          type: string
+          example: Bad Request
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+
+    PageInfo:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+        has_more:
+          type: boolean
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    # ─── Enums ─────────────────────────────────────────────────────────────
+    Role:
+      type: string
+      enum: [viewer, commenter, contributor, moderator, admin, owner]
+
+    SpaceType:
+      type: string
+      enum: [general, crm, support, community, knowledge_base]
+
+    ThreadType:
+      type: string
+      enum: [wiki, documentation, tutorial, forum, support, lead]
+
+    ThreadVisibility:
+      type: string
+      enum: [public, org-only, deft-only]
+
+    MessageType:
+      type: string
+      enum: [note, email, call_log, comment, system, customer, agent_reply, draft, context, system_event]
+
+    FlagStatus:
+      type: string
+      enum: [open, resolved, dismissed]
+
+    ChannelType:
+      type: string
+      enum: [email, voice, chat]
+
+    CallDirection:
+      type: string
+      enum: [inbound, outbound]
+
+    CallStatus:
+      type: string
+      enum: [ringing, active, completed, failed, escalated]
+
+    LeadStatus:
+      type: string
+      enum: [anonymous, registered, converted]
+
+    RoutingAction:
+      type: string
+      enum: [support_ticket, sales_lead, general]
+
+    DLQStatus:
+      type: string
+      enum: [failed, retrying, resolved, dismissed]
+
+    AuditAction:
+      type: string
+      enum: [create, update, delete]
+
+    # ─── Models ────────────────────────────────────────────────────────────
+    Org:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+        billing_tier:
+          type: string
+        payment_status:
+          type: string
+        suspended_at:
+          type: string
+          format: date-time
+          nullable: true
+        suspend_reason:
+          type: string
+        suspended_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Space:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+        type:
+          $ref: "#/components/schemas/SpaceType"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Board:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        space_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+        is_locked:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Thread:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        board_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        slug:
+          type: string
+        metadata:
+          type: string
+        author_id:
+          type: string
+        is_pinned:
+          type: boolean
+        is_locked:
+          type: boolean
+        is_hidden:
+          type: boolean
+        vote_score:
+          type: integer
+        thread_type:
+          $ref: "#/components/schemas/ThreadType"
+        visibility:
+          $ref: "#/components/schemas/ThreadVisibility"
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        priority:
+          type: string
+        stage:
+          type: string
+        assigned_to:
+          type: string
+        ticket_number:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        thread_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+        author_id:
+          type: string
+        metadata:
+          type: string
+        type:
+          $ref: "#/components/schemas/MessageType"
+        is_deft_only:
+          type: boolean
+        is_published:
+          type: boolean
+        is_immutable:
+          type: boolean
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrgMembership:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SpaceMembership:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        space_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BoardMembership:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        board_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Flag:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        thread_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        reason:
+          type: string
+        status:
+          $ref: "#/components/schemas/FlagStatus"
+        resolved_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WebhookSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        scope_type:
+          type: string
+        scope_id:
+          type: string
+        url:
+          type: string
+          format: uri
+        event_filter:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WebhookDelivery:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subscription_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        payload:
+          type: string
+        status_code:
+          type: integer
+        response_body:
+          type: string
+        attempts:
+          type: integer
+        next_retry_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        entity_type:
+          type: string
+        entity_id:
+          type: string
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationPreference:
+      type: object
+      properties:
+        user_id:
+          type: string
+        event_type:
+          type: string
+        channel:
+          type: string
+        enabled:
+          type: boolean
+
+    DigestSchedule:
+      type: object
+      properties:
+        user_id:
+          type: string
+        frequency:
+          type: string
+          enum: [daily, weekly]
+        enabled:
+          type: boolean
+
+    Upload:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        entity_type:
+          type: string
+        entity_id:
+          type: string
+        filename:
+          type: string
+        content_type:
+          type: string
+        size:
+          type: integer
+          format: int64
+        storage_path:
+          type: string
+        uploader_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Revision:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        entity_type:
+          type: string
+        entity_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        previous_content:
+          type: string
+        editor_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        action:
+          $ref: "#/components/schemas/AuditAction"
+        entity_type:
+          type: string
+        entity_id:
+          type: string
+        before_state:
+          type: string
+        after_state:
+          type: string
+        ip_address:
+          type: string
+        request_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CallLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        thread_id:
+          type: string
+        caller_id:
+          type: string
+        direction:
+          $ref: "#/components/schemas/CallDirection"
+        duration:
+          type: integer
+        status:
+          $ref: "#/components/schemas/CallStatus"
+        transcript:
+          type: string
+        metadata:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        key_prefix:
+          type: string
+        permissions:
+          type: string
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ChannelConfig:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        channel_type:
+          $ref: "#/components/schemas/ChannelType"
+        settings:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DeadLetterEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        channel_type:
+          $ref: "#/components/schemas/ChannelType"
+        event_payload:
+          type: string
+        error_message:
+          type: string
+        attempts:
+          type: integer
+        last_attempt_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: "#/components/schemas/DLQStatus"
+        created_at:
+          type: string
+          format: date-time
+
+    EmailInbox:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email_address:
+          type: string
+        imap_host:
+          type: string
+        imap_port:
+          type: integer
+        username:
+          type: string
+        mailbox:
+          type: string
+        routing_action:
+          $ref: "#/components/schemas/RoutingAction"
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FeatureFlag:
+      type: object
+      properties:
+        key:
+          type: string
+        enabled:
+          type: boolean
+        org_scope:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+
+    PlatformAdmin:
+      type: object
+      properties:
+        user_id:
+          type: string
+        granted_by:
+          type: string
+        granted_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+
+    UserShadow:
+      type: object
+      properties:
+        clerk_user_id:
+          type: string
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        last_seen_at:
+          type: string
+          format: date-time
+        is_banned:
+          type: boolean
+        ban_reason:
+          type: string
+        synced_at:
+          type: string
+          format: date-time
+
+    UserHomePreferences:
+      type: object
+      properties:
+        user_id:
+          type: string
+        tier:
+          type: integer
+        layout:
+          type: string
+          description: JSON-encoded array of WidgetPreference objects
+        updated_at:
+          type: string
+          format: date-time
+
+    AdminExport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        filters:
+          type: string
+        format:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        file_path:
+          type: string
+        requested_by:
+          type: string
+        error_msg:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ─── Input Schemas ─────────────────────────────────────────────────────
+    OrgCreateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+          description: JSON string
+      required: [name]
+
+    OrgUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+          description: JSON string (deep-merged with existing)
+
+    SpaceCreateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+        type:
+          $ref: "#/components/schemas/SpaceType"
+      required: [name]
+
+    SpaceUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+        type:
+          $ref: "#/components/schemas/SpaceType"
+
+    BoardCreateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+      required: [name]
+
+    BoardUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: string
+
+    ThreadCreateInput:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        metadata:
+          type: string
+      required: [title]
+
+    ThreadUpdateInput:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        metadata:
+          type: string
+
+    MessageCreateInput:
+      type: object
+      properties:
+        body:
+          type: string
+        metadata:
+          type: string
+        type:
+          $ref: "#/components/schemas/MessageType"
+      required: [body]
+
+    MessageUpdateInput:
+      type: object
+      properties:
+        body:
+          type: string
+
+    MemberInput:
+      type: object
+      properties:
+        user_id:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+      required: [user_id]
+
+    FlagInput:
+      type: object
+      properties:
+        thread_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+      required: [thread_id, reason]
+
+    MoveInput:
+      type: object
+      properties:
+        target_board_id:
+          type: string
+          format: uuid
+      required: [target_board_id]
+
+    MergeInput:
+      type: object
+      properties:
+        target_thread_id:
+          type: string
+          format: uuid
+      required: [target_thread_id]
+
+    WebhookCreateInput:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        secret:
+          type: string
+        event_filter:
+          type: array
+          items:
+            type: string
+        scope_type:
+          type: string
+        scope_id:
+          type: string
+      required: [url, secret]
+
+    ApiKeyCreateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        permissions:
+          type: string
+          description: JSON string
+        expires_at:
+          type: string
+          format: date-time
+      required: [name]
+
+    ApiKeyCreatedResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        key:
+          type: string
+          description: Full API key value (shown only once)
+        key_prefix:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CallLogCreateInput:
+      type: object
+      properties:
+        thread_id:
+          type: string
+        caller_id:
+          type: string
+        direction:
+          $ref: "#/components/schemas/CallDirection"
+        duration:
+          type: integer
+        status:
+          $ref: "#/components/schemas/CallStatus"
+        transcript:
+          type: string
+        metadata:
+          type: string
+      required: [caller_id]
+
+    EmailInboxInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email_address:
+          type: string
+        imap_host:
+          type: string
+        imap_port:
+          type: integer
+        username:
+          type: string
+        password:
+          type: string
+        mailbox:
+          type: string
+        routing_action:
+          $ref: "#/components/schemas/RoutingAction"
+        enabled:
+          type: boolean
+      required: [name, imap_host, username]
+
+    ChatSessionCreateInput:
+      type: object
+      properties:
+        embed_key:
+          type: string
+        fingerprint_hash:
+          type: string
+        org_id:
+          type: string
+          format: uuid
+      required: [embed_key, fingerprint_hash]
+
+    ChatSessionResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        token:
+          type: string
+          description: Short-lived HMAC JWT for the session
+        visitor_id:
+          type: string
+          format: uuid
+        thread_id:
+          type: string
+
+    ChatMessageInput:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        token:
+          type: string
+        message:
+          type: string
+      required: [session_id, token, message]
+
+    UserHomePreferencesInput:
+      type: object
+      properties:
+        layout:
+          type: string
+          description: JSON-encoded array of WidgetPreference objects
+      required: [layout]
+
+    NotificationPreferencesInput:
+      type: object
+      properties:
+        preferences:
+          type: array
+          items:
+            type: object
+            properties:
+              event_type:
+                type: string
+              channel:
+                type: string
+              enabled:
+                type: boolean
+        digest:
+          type: object
+          properties:
+            frequency:
+              type: string
+              enum: [daily, weekly]
+            enabled:
+              type: boolean
+
+    # ─── List Response Wrappers ────────────────────────────────────────────
+    OrgListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Org"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    SpaceListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Space"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    BoardListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Board"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    ThreadListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Thread"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    MessageListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    FlagListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flag"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    WebhookListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookSubscription"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    WebhookDeliveryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookDelivery"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    AuditLogListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"
+
+    RevisionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Revision"
+        page_info:
+          $ref: "#/components/schemas/PageInfo"

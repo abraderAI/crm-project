@@ -141,6 +141,16 @@ tasks:
       - go test -race -fuzz=FuzzDateParams -fuzztime=5s ./internal/reporting/
       - go test -race -fuzz=FuzzAssigneeParam -fuzztime=5s ./internal/reporting/
 
+  go:openapi:sync:
+    desc: Copy canonical openapi.yaml into the docs embed directory
+    dir: '{{.API_DIR}}'
+    cmds:
+      - cp openapi.yaml internal/docs/openapi.yaml
+    sources:
+      - 'openapi.yaml'
+    generates:
+      - 'internal/docs/openapi.yaml'
+
   check:
     desc: Run all pre-commit checks (fmt, lint, test, coverage)
     cmds:

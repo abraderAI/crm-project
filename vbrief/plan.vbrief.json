@@ -2,37 +2,50 @@
   "vBRIEFInfo": {
     "version": "0.5",
     "author": "agent:warp-oz",
-    "description": "Audit log filtering — date range + search filters",
-    "created": "2026-03-22T19:22:00Z"
+    "description": "Comprehensive OpenAPI 3.1 spec and Swagger UI for the DEFT Evolution CRM REST API",
+    "created": "2026-03-23T18:08:00Z"
   },
   "plan": {
-    "id": "audit-log-filtering",
-    "title": "Audit Log Filtering — Date Range + Search",
-    "status": "running",
-    "tags": [
-      "frontend",
-      "admin"
-    ],
+    "id": "openapi-swagger",
+    "title": "OpenAPI 3.1 Spec + Swagger UI Implementation",
+    "status": "completed",
+    "tags": ["api", "documentation", "openapi", "swagger"],
     "items": [
       {
-        "id": "rewrite-audit-page",
-        "title": "Convert audit-log page to client component with filter bar",
-        "status": "pending"
+        "id": "openapi-spec",
+        "title": "Create api/openapi.yaml — full OpenAPI 3.1 spec covering all 100+ endpoints",
+        "status": "completed",
+        "narrative": {
+          "Approach": "Hand-written YAML derived from router, models, and DTOs. Covers all paths, schemas, enums, auth, pagination, and RFC 7807 errors."
+        }
       },
       {
-        "id": "tests",
-        "title": "Add/update tests for audit-log page filters",
-        "status": "pending"
+        "id": "docs-package",
+        "title": "Create api/internal/docs/docs.go — embed spec + serve Swagger UI",
+        "status": "completed",
+        "narrative": {
+          "Approach": "Go embed directive to bundle openapi.yaml; single HTML page loads Swagger UI from CDN. No external Go dependency."
+        }
       },
       {
-        "id": "verify",
-        "title": "Run task check and ensure full pass",
-        "status": "pending"
+        "id": "server-routes",
+        "title": "Add /docs routes to api/internal/server/server.go",
+        "status": "completed"
       },
       {
-        "id": "deploy",
-        "title": "Deploy frontend to Fly.io for review",
-        "status": "pending"
+        "id": "taskfile",
+        "title": "Add go:openapi:sync task to Taskfile.yml",
+        "status": "completed"
+      },
+      {
+        "id": "history-archive",
+        "title": "Archive plan to history/",
+        "status": "completed"
+      },
+      {
+        "id": "validate",
+        "title": "Build and validate — task go:build compiles with embedded spec",
+        "status": "completed"
       }
     ]
   }

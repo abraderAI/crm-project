@@ -11,6 +11,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/admin"
 	"github.com/abraderAI/crm-project/api/internal/auth"
 	"github.com/abraderAI/crm-project/api/internal/config"
+	"github.com/abraderAI/crm-project/api/internal/docs"
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/middleware"
 	"github.com/abraderAI/crm-project/api/internal/reporting"
@@ -56,6 +57,10 @@ func NewRouter(cfg Config) http.Handler {
 	// Health check endpoints (outside /v1 — no auth required).
 	r.Get("/healthz", h.healthHandler.Healthz)
 	r.Get("/readyz", h.healthHandler.Readyz)
+
+	// API documentation — Swagger UI and OpenAPI spec (no auth required).
+	r.Get("/docs", docs.ServeSwaggerUI)
+	r.Get("/docs/openapi.yaml", docs.ServeSpec)
 
 	// API v1 subrouter.
 	r.Route("/v1", func(v1 chi.Router) {
