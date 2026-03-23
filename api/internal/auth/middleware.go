@@ -134,6 +134,51 @@ func DualAuth(validator *JWTValidator, apiKeyService *APIKeyService) func(http.H
 	}
 }
 
+// OptionalDualAuth middleware tries to extract a user context from a JWT or API key
+// but does NOT reject unauthenticated requests. The handler receives a nil UserContext
+// when no valid credentials are present. This is used for public endpoints that
+// optionally benefit from knowing the caller (e.g. forum thread listing).
+func OptionalDualAuth(validator *JWTValidator, apiKeyService *APIKeyService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Try JWT.
+			token := extractBearerToken(r)
+			if token != "" {
+				claims, err := validator.Validate(token)
+				if err == nil {
+					ctx := SetUserContext(r.Context(), &UserContext{
+						UserID:      claims.Subject,
+						AuthMethod:  AuthMethodJWT,
+						Email:       strings.TrimSpace(claims.Email),
+						DisplayName: buildDisplayName(claims.FirstName, claims.LastName),
+					})
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+				// Invalid token — proceed without user context rather than rejecting.
+			}
+
+			// Try API key.
+			rawKey := r.Header.Get("X-API-Key")
+			if rawKey != "" {
+				key, err := apiKeyService.ValidateKey(rawKey)
+				if err == nil {
+					ctx := SetUserContext(r.Context(), &UserContext{
+						UserID:     "apikey:" + key.ID,
+						AuthMethod: AuthMethodAPIKey,
+						OrgID:      key.OrgID,
+					})
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+			}
+
+			// No credentials — proceed without user context.
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // RequirePermission returns middleware that checks the authenticated user has
 // the specified permission on the entity identified by URL params.
 func RequirePermission(rbac *RBACEngine, permission string) func(http.Handler) http.Handler {
