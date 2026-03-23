@@ -3,6 +3,13 @@ import { render, screen } from "@testing-library/react";
 import { ThreadCard } from "./thread-card";
 import type { ThreadWithAuthor } from "@/lib/api-types";
 
+// Mock ForumVoteButton to avoid Clerk dependency in tests.
+vi.mock("./forum-vote-button", () => ({
+  ForumVoteButton: ({ initialScore }: { initialScore: number }) => (
+    <div data-testid="forum-vote-btn">{initialScore}</div>
+  ),
+}));
+
 const baseThread: ThreadWithAuthor = {
   id: "t1",
   board_id: "b1",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { MessageSquare, Send } from "lucide-react";
 
@@ -139,9 +140,9 @@ export function ForumReplies({ threadSlug, isLocked }: ForumRepliesProps): React
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          <a href="/sign-in?redirect_url=/forum" className="text-primary hover:underline">
+          <Link href="/sign-in?redirect_url=/forum" className="text-primary hover:underline">
             Sign in
-          </a>{" "}
+          </Link>{" "}
           to reply.
         </p>
       )}
