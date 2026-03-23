@@ -95,6 +95,7 @@ func NewRouter(cfg Config) http.Handler {
 			pub.Use(auth.OptionalDualAuth(h.jwtValidator, h.apiKeyService))
 			pub.Get("/global-spaces/{space}/threads", h.globalSpaceHandler.ListThreads)
 			pub.Get("/global-spaces/{space}/threads/{slug}", h.globalSpaceHandler.GetThread)
+			pub.Get("/global-spaces/{space}/threads/{slug}/messages", h.globalSpaceHandler.ListMessages)
 		})
 
 		// Authenticated routes.
@@ -382,6 +383,7 @@ func NewRouter(cfg Config) http.Handler {
 			authed.Patch("/global-spaces/{space}/threads/{slug}", h.globalSpaceHandler.UpdateThread)
 			authed.Get("/global-spaces/{space}/threads/{slug}/attachments", h.globalSpaceHandler.ListAttachments)
 			authed.Post("/global-spaces/{space}/threads/{slug}/attachments", h.globalSpaceHandler.UploadAttachment)
+			authed.Post("/global-spaces/{space}/threads/{slug}/messages", h.globalSpaceHandler.CreateMessage)
 
 			// Notification routes.
 			authed.Route("/notifications", func(n chi.Router) {

@@ -21,7 +21,10 @@
       { "id": "admin-api", "title": "Add admin API functions", "status": "pending" },
       { "id": "tests", "title": "Write tests (>=85% coverage)", "status": "pending" },
       { "id": "check", "title": "Run task check", "status": "pending" },
-      { "id": "deploy", "title": "Commit, push, deploy to fly.io", "status": "pending" }
+      { "id": "deploy", "title": "Commit, push, deploy to fly.io", "status": "pending" },
+      { "id": "replies", "title": "Add reply system (API + UI)", "status": "running" },
+      { "id": "author-display", "title": "Fix author display on thread detail", "status": "pending" },
+      { "id": "strip-markdown", "title": "Strip HTML from card body preview", "status": "pending" }
     ]
   }
 }

@@ -461,6 +461,72 @@ func (s *Service) UploadAttachment(ctx context.Context, spaceSlug, threadSlug, u
 	return s.uploadSvc.Create(ctx, orgID, "thread", t.ID, uploaderID, filename, size, file)
 }
 
+// ListMessages returns paginated messages for a thread in the given global space.
+// Returns nil, nil, nil when the space or thread does not exist.
+func (s *Service) ListMessages(ctx context.Context, spaceSlug, threadSlug string, params pagination.Params) ([]models.Message, *pagination.PageInfo, error) {
+	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing messages: %w", err)
+	}
+	if board == nil {
+		return nil, nil, nil
+	}
+
+	t, err := s.repo.FindThreadBySlug(ctx, board.ID, threadSlug)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing messages: %w", err)
+	}
+	if t == nil {
+		return nil, nil, nil
+	}
+
+	return s.repo.ListMessages(ctx, t.ID, params)
+}
+
+// CreateMessageInput holds data needed to create a message in a global space thread.
+type CreateMessageInput struct {
+	Body string `json:"body"`
+}
+
+// CreateMessage adds a message to a thread in the given global space.
+// Returns nil, nil when the space or thread does not exist.
+func (s *Service) CreateMessage(ctx context.Context, spaceSlug, threadSlug, authorID string, input CreateMessageInput) (*models.Message, error) {
+	if input.Body == "" {
+		return nil, fmt.Errorf("body is required")
+	}
+
+	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
+	if err != nil {
+		return nil, fmt.Errorf("creating message: %w", err)
+	}
+	if board == nil {
+		return nil, nil
+	}
+
+	t, err := s.repo.FindThreadBySlug(ctx, board.ID, threadSlug)
+	if err != nil {
+		return nil, fmt.Errorf("creating message: %w", err)
+	}
+	if t == nil {
+		return nil, nil
+	}
+	if t.IsLocked {
+		return nil, fmt.Errorf("thread is locked")
+	}
+
+	msg := &models.Message{
+		ThreadID: t.ID,
+		Body:     input.Body,
+		AuthorID: authorID,
+		Metadata: "{}",
+		Type:     models.MessageTypeComment,
+	}
+	if err := s.repo.CreateMessage(ctx, msg); err != nil {
+		return nil, err
+	}
+	return msg, nil
+}
+
 // TicketNumberer can assign sequential ticket numbers to support threads.
 // It is satisfied by the support.Repository type.
 type TicketNumberer interface {

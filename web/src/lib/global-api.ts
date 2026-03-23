@@ -1,4 +1,4 @@
-import type { PaginatedResponse, Thread, ThreadWithAuthor, Upload } from "./api-types";
+import type { Message, PaginatedResponse, Thread, ThreadWithAuthor, Upload } from "./api-types";
 import { buildHeaders, buildUrl, parseResponse, clientMutate } from "./api-client";
 
 /** Global space slugs. */
@@ -184,6 +184,40 @@ export async function createForumThread(
     token,
     body: values,
   });
+}
+
+/** Fetch messages (replies) for a forum thread by slug. No auth required. */
+export async function fetchForumMessages(
+  threadSlug: string,
+  params?: { limit?: number; cursor?: string },
+): Promise<PaginatedResponse<Message>> {
+  const queryParams: Record<string, string> = {};
+  if (params?.limit) queryParams["limit"] = String(params.limit);
+  if (params?.cursor) queryParams["cursor"] = params.cursor;
+
+  const url = buildUrl(
+    `/global-spaces/${GLOBAL_SPACES.FORUM}/threads/${encodeURIComponent(threadSlug)}/messages`,
+    queryParams,
+  );
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(),
+    cache: "no-store",
+  });
+  return parseResponse<PaginatedResponse<Message>>(response);
+}
+
+/** Create a reply on a forum thread. Requires authentication. */
+export async function createForumReply(
+  token: string,
+  threadSlug: string,
+  body: string,
+): Promise<Message> {
+  return clientMutate<Message>(
+    "POST",
+    `/global-spaces/${GLOBAL_SPACES.FORUM}/threads/${encodeURIComponent(threadSlug)}/messages`,
+    { token, body: { body } },
+  );
 }
 
 /**

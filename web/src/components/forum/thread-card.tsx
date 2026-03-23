@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import type { Thread } from "@/lib/api-types";
 import { AuthorAvatar } from "./author-avatar";
 import { relativeTime } from "./relative-time";
+import { stripHtml } from "./strip-html";
 
 interface ThreadCardProps {
   thread: Thread;
@@ -36,7 +37,9 @@ export function ThreadCard({ thread }: ThreadCardProps): ReactNode {
         </div>
 
         {thread.body && (
-          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{thread.body}</p>
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+            {stripHtml(thread.body)}
+          </p>
         )}
 
         <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">

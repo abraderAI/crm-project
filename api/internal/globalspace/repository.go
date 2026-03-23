@@ -186,6 +186,41 @@ func (r *Repository) CreateRevision(ctx context.Context, rev *models.Revision) e
 	return nil
 }
 
+// ListMessages returns paginated messages for a thread.
+func (r *Repository) ListMessages(ctx context.Context, threadID string, params pagination.Params) ([]models.Message, *pagination.PageInfo, error) {
+	var messages []models.Message
+	query := r.db.WithContext(ctx).Where("thread_id = ? AND deleted_at IS NULL", threadID).Order("id ASC")
+
+	if params.Cursor != "" {
+		cursorID, err := pagination.DecodeCursor(params.Cursor)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid cursor: %w", err)
+		}
+		query = query.Where("id > ?", cursorID.String())
+	}
+
+	if err := query.Limit(params.Limit + 1).Find(&messages).Error; err != nil {
+		return nil, nil, fmt.Errorf("listing messages: %w", err)
+	}
+
+	pageInfo := &pagination.PageInfo{}
+	if len(messages) > params.Limit {
+		pageInfo.HasMore = true
+		lastID, _ := uuid.Parse(messages[params.Limit-1].ID)
+		pageInfo.NextCursor = pagination.EncodeCursor(lastID)
+		messages = messages[:params.Limit]
+	}
+	return messages, pageInfo, nil
+}
+
+// CreateMessage inserts a new message record.
+func (r *Repository) CreateMessage(ctx context.Context, msg *models.Message) error {
+	if err := r.db.WithContext(ctx).Create(msg).Error; err != nil {
+		return fmt.Errorf("creating message: %w", err)
+	}
+	return nil
+}
+
 // ListUploadsByThread returns all non-deleted uploads attached to the given thread ID.
 func (r *Repository) ListUploadsByThread(ctx context.Context, threadID string) ([]models.Upload, error) {
 	var uploads []models.Upload

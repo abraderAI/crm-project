@@ -3,12 +3,21 @@ import Link from "next/link";
 import { ArrowLeft, ArrowBigUp, Calendar, User } from "lucide-react";
 
 import { fetchGlobalThread, GLOBAL_SPACES } from "@/lib/global-api";
-import type { Thread } from "@/lib/api-types";
+import type { ThreadWithAuthor } from "@/lib/api-types";
 import { AuthorAvatar } from "@/components/forum/author-avatar";
 import { relativeTime } from "@/components/forum/relative-time";
+import { ForumReplies } from "@/components/forum/forum-replies";
 
 interface ForumPageProps {
   params: Promise<{ slug: string[] }>;
+}
+
+/** Resolve a display name from the enriched thread author fields. */
+function authorDisplayName(thread: ThreadWithAuthor): string {
+  if (thread.author_name) return thread.author_name;
+  if (thread.author_email) return thread.author_email;
+  if (thread.author_id === "system-seed") return "DEFT Team";
+  return thread.author_id.slice(0, 12);
 }
 
 /** Public forum thread detail page. */
@@ -16,9 +25,10 @@ export default async function ForumPage({ params }: ForumPageProps): Promise<Rea
   const { slug } = await params;
   const threadSlug = slug[0] ?? "";
 
-  let thread: Thread | null = null;
+  let thread: ThreadWithAuthor | null = null;
   try {
-    thread = await fetchGlobalThread(GLOBAL_SPACES.FORUM, threadSlug);
+    // The API returns ThreadWithAuthor (author_name, author_email enriched).
+    thread = (await fetchGlobalThread(GLOBAL_SPACES.FORUM, threadSlug)) as ThreadWithAuthor;
   } catch {
     // Fall through to not-found state.
   }
@@ -33,6 +43,8 @@ export default async function ForumPage({ params }: ForumPageProps): Promise<Rea
       </div>
     );
   }
+
+  const displayName = authorDisplayName(thread);
 
   return (
     <div data-testid="forum-thread-detail" className="mx-auto max-w-3xl space-y-6 p-6">
@@ -50,12 +62,12 @@ export default async function ForumPage({ params }: ForumPageProps): Promise<Rea
       <div className="rounded-2xl border border-border bg-background p-6 shadow-sm">
         <h1 className="text-xl font-bold text-foreground">{thread.title}</h1>
 
-        <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
-            <AuthorAvatar authorId={thread.author_id} size="sm" />
-            <span className="flex items-center gap-1">
+            <AuthorAvatar authorId={thread.author_id} authorName={displayName} size="sm" />
+            <span className="flex items-center gap-1 font-medium text-foreground">
               <User className="h-3 w-3" />
-              {thread.author_id === "system-seed" ? "DEFT Team" : thread.author_id.slice(0, 8)}
+              {displayName}
             </span>
           </div>
           <span className="flex items-center gap-1">
@@ -72,22 +84,15 @@ export default async function ForumPage({ params }: ForumPageProps): Promise<Rea
         {thread.body && (
           <div
             data-testid="forum-thread-body"
-            className="mt-6 prose prose-sm max-w-none text-foreground whitespace-pre-wrap"
+            className="mt-6 text-sm leading-relaxed text-foreground whitespace-pre-wrap"
           >
             {thread.body}
           </div>
         )}
       </div>
 
-      {/* Replies placeholder */}
-      <div
-        data-testid="forum-replies-placeholder"
-        className="rounded-xl border border-dashed border-border p-8 text-center"
-      >
-        <p className="text-sm text-muted-foreground">
-          Replies coming soon. Sign in to be notified when this feature launches.
-        </p>
-      </div>
+      {/* Replies section */}
+      <ForumReplies threadSlug={threadSlug} isLocked={thread.is_locked} />
     </div>
   );
 }
