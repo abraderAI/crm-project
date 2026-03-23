@@ -18,7 +18,7 @@ type forumThreadDef struct {
 }
 
 // forumSeedThreads lists the seed threads for the DEFT General Discussion forum.
-// All threads are themed around setting up and using the deftai/directive repo.
+// Threads cover the deftai/directive framework and the deftai/vBRIEF specification.
 var forumSeedThreads = []forumThreadDef{
 	{
 		Title:    "Welcome to DEFT General Discussion!",
@@ -116,6 +116,109 @@ The RFC 2119 notation helps too — the compact symbols (!, ~, ⊗) pack more me
 For larger projects, the context/ directory has advanced strategies: deterministic splits, fractal summaries, working memory patterns. Worth reading if you're managing complex codebases.
 
 What are your strategies for keeping context efficient?`,
+	},
+	{
+		Title: "What is vBRIEF and why should I care?",
+		Body: `If you haven't looked at vBRIEF yet (github.com/deftai/vBRIEF), it's worth understanding even outside of Deft.
+
+vBRIEF stands for Basic Relational Intent Exchange Format. It's a universal JSON format for structured thinking — todo lists, project plans, playbooks, specs, and even AI agent memory. One schema, graduated complexity.
+
+The key insight: every AI agent invents its own memory format. Every planning tool has its own schema. vBRIEF is the common language. A minimal document is just 4 fields:
+
+  vBRIEFInfo: { version: "0.5" }
+  plan: { title, status, items: [{ title, status }] }
+
+That's it. Everything else is optional — narratives, edges (DAG), tags, metadata. You add complexity only when you need it.
+
+The "graduated complexity" design means you're never fighting boilerplate for simple tasks, but the format scales up to full DAG workflows when you need them.`,
+	},
+	{
+		Title: "TRON encoding: 35-40% fewer tokens for LLM plans",
+		Body: `One of the hidden gems in the vBRIEF spec is TRON encoding (documented in docs/tron-encoding.md). It's an alternative serialization that cuts LLM token usage by 35-40% compared to standard JSON.
+
+The idea: LLMs don't need pretty-printed JSON with redundant keys. TRON strips the format down to the minimum needed for accurate round-tripping while staying human-readable.
+
+This matters a lot when you're working with large plans inside context windows. A 200-item plan in JSON might eat 3000 tokens. In TRON, it's closer to 1800. That's context budget you can spend on actual code.
+
+Anyone benchmarked TRON vs JSON for their workflows? I'm seeing consistent 37% savings on my project plans.`,
+	},
+	{
+		Title: "Graduated complexity in practice: from todo list to DAG workflow",
+		Body: `The vBRIEF spec defines four complexity levels. Here's how I actually use them:
+
+**Minimal** — Quick task tracking. I use this for daily standup notes and quick bug lists. Just title + status + items. Takes 30 seconds to write.
+
+**Structured** — When I need to explain WHY something is happening. Narratives on items add context like "Problem: API timeout under load" or "Outcome: Reduced p95 latency from 2s to 200ms". Great for handoffs.
+
+**Retrospective** — After a sprint or feature delivery. Captures outcomes, strengths, weaknesses, and lessons learned. I use the retrospective-plan.vbrief.json example as a template.
+
+**Graph/DAG** — For complex features with dependencies. The edges array lets you model "task B depends on task A" relationships. I used this for a database migration that had 12 interdependent steps.
+
+The beauty is you can start minimal and graduate up. My plans often start as flat lists and gain narratives as I learn things worth documenting.`,
+	},
+	{
+		Title: "Using the Python library (libvbrief) for plan automation",
+		Body: `Just discovered that vBRIEF ships a Python library: pip install libvbrief
+
+This is useful for automating plan management in CI/CD or custom tooling. A few things I've built with it:
+
+1. A pre-commit hook that validates all .vbrief.json files against the JSON schema
+2. A script that extracts "blocked" items from plan.vbrief.json and posts them to Slack
+3. A GitHub Action that checks if the plan status matches the PR state
+
+The validation is especially handy — the JSON Schema in schemas/ catches issues like invalid status values or missing required fields before they cause problems downstream.
+
+The library handles both JSON and TRON serialization, so you can read TRON files and write JSON (or vice versa) without manual parsing.`,
+	},
+	{
+		Title: "How I use plan.vbrief.json as my single source of truth",
+		Body: `The vBRIEF spec says there should be exactly ONE plan.vbrief.json per project. At first I thought this was limiting, but it's actually the point.
+
+Before vBRIEF, I had TODO.md, PLAN.md, a Notion board, and random notes scattered across files. Now everything is in plan.vbrief.json:
+
+- Current sprint items with status tracking
+- Blocked items with narrative explanations
+- Completed items preserved for context (don't delete — mark cancelled or completed)
+
+The status lifecycle is clean: draft → proposed → approved → pending → running → completed/blocked/cancelled
+
+When I start a new coding session, the AI reads plan.vbrief.json and immediately knows what's in progress, what's blocked, and what's next. No more "where was I?" moments.
+
+Tip: use the specification.vbrief.json for project requirements and keep plan.vbrief.json for execution tracking. They serve different purposes.`,
+	},
+	{
+		Title: "DAG plans: modeling task dependencies with edges",
+		Body: `The DAG (Directed Acyclic Graph) feature in vBRIEF v0.5 is powerful for complex workflows. Instead of a flat list, you define edges between items:
+
+  edges: [
+    { from: "design-api", to: "implement-api" },
+    { from: "implement-api", to: "write-tests" },
+    { from: "write-tests", to: "deploy" }
+  ]
+
+This tells the AI (and any tooling) that implement-api can't start until design-api is complete. The examples/dag-plan.vbrief.json file has a full example.
+
+I've been using this for:
+- Database migrations with ordering constraints
+- Multi-service deployments where services depend on each other
+- Feature rollouts with feature-flag gating
+
+The validator catches cycles too — if you accidentally create A → B → C → A, it fails validation. This has saved me from some gnarly circular dependency bugs in deployment plans.`,
+	},
+	{
+		Title: "Migrating from v0.4 to v0.5: what changed and why",
+		Body: `If you're coming from vBRIEF v0.4, the migration guide (MIGRATION.md) covers everything, but here are the highlights:
+
+Key changes in v0.5:
+- The vBRIEFInfo envelope is now required (was optional in v0.4)
+- Status enum is formalized: exactly 8 values (draft, proposed, approved, pending, running, completed, blocked, cancelled)
+- TRON encoding is now part of the spec (was experimental)
+- DAG edges use a simpler format: { from, to } instead of the old dependency arrays
+- Narratives use free-form key-value maps instead of fixed fields
+
+The biggest philosophical shift: v0.5 treats the plan as a living document that evolves during execution. The status lifecycle reflects this — items move through states rather than being static checkboxes.
+
+Migration is straightforward: update the version field, ensure status values match the new enum, and restructure any dependency arrays into edges. The validator catches anything you miss.`,
 	},
 }
 
