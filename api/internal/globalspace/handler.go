@@ -302,6 +302,31 @@ func (h *Handler) CreateMessage(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, msg)
 }
 
+// ToggleVote handles POST /v1/global-spaces/{space}/threads/{slug}/vote.
+// Requires authentication. Toggles the user's vote on/off.
+func (h *Handler) ToggleVote(w http.ResponseWriter, r *http.Request) {
+	spaceSlug := chi.URLParam(r, "space")
+	threadSlug := chi.URLParam(r, "slug")
+
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	result, err := h.service.ToggleVote(r.Context(), spaceSlug, threadSlug, uc.UserID)
+	if err != nil {
+		apierrors.InternalError(w, "failed to toggle vote")
+		return
+	}
+	if result == nil {
+		apierrors.NotFound(w, "thread not found")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, result)
+}
+
 // CreateThread handles POST /v1/global-spaces/{space}/threads.
 // Requires authentication. Tier enforcement is handled client-side.
 func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {

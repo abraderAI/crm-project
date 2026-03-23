@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ArrowBigUp, MessageSquare, Pin } from "lucide-react";
+import { MessageSquare, Pin } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ThreadWithAuthor } from "@/lib/api-types";
 import { AuthorAvatar } from "./author-avatar";
 import { relativeTime } from "./relative-time";
 import { stripHtml } from "./strip-html";
+import { ForumVoteButton } from "./forum-vote-button";
 
 interface ThreadCardProps {
   thread: ThreadWithAuthor;
@@ -19,11 +20,8 @@ export function ThreadCard({ thread }: ThreadCardProps): ReactNode {
       data-testid={`forum-thread-card-${thread.id}`}
       className="group flex gap-4 rounded-xl border border-border bg-background p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
     >
-      {/* Vote column */}
-      <div className="flex flex-col items-center gap-0.5 pt-0.5">
-        <ArrowBigUp className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
-        <span className="text-sm font-semibold text-foreground">{thread.vote_score}</span>
-      </div>
+      {/* Vote column — interactive, stops link propagation */}
+      <ForumVoteButton threadSlug={thread.slug} initialScore={thread.vote_score} />
 
       {/* Content */}
       <div className="min-w-0 flex-1">

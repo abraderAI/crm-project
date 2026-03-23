@@ -10,6 +10,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/models"
 	"github.com/abraderAI/crm-project/api/internal/upload"
+	"github.com/abraderAI/crm-project/api/internal/vote"
 	"github.com/abraderAI/crm-project/api/pkg/metadata"
 	"github.com/abraderAI/crm-project/api/pkg/pagination"
 	"github.com/abraderAI/crm-project/api/pkg/slug"
@@ -40,13 +41,23 @@ type Service struct {
 	repo      *Repository
 	bus       *eventbus.Bus
 	uploadSvc *upload.Service
+	voteSvc   VoteToggler
+}
+
+// VoteToggler abstracts the vote toggle operation. Satisfied by *vote.Service.
+type VoteToggler interface {
+	Toggle(ctx context.Context, threadID, userID string, role models.Role, billingTier string) (*vote.VoteResult, error)
 }
 
 // NewService creates a new global space Service.
-// bus and uploadSvc may be nil; when provided, events are published and file
-// attachments are supported respectively.
+// bus, uploadSvc, and voteSvc may be nil.
 func NewService(repo *Repository, bus *eventbus.Bus, uploadSvc *upload.Service) *Service {
 	return &Service{repo: repo, bus: bus, uploadSvc: uploadSvc}
+}
+
+// SetVoteService injects the vote service dependency. Called during server startup.
+func (s *Service) SetVoteService(v VoteToggler) {
+	s.voteSvc = v
 }
 
 // ResolveVisibility determines the caller's visibility tier for support tickets.
@@ -600,6 +611,37 @@ func (s *Service) CreateMessage(ctx context.Context, spaceSlug, threadSlug, auth
 		return nil, err
 	}
 	return msg, nil
+}
+
+// ToggleVote toggles the authenticated user's vote on a forum thread.
+// Returns nil, nil when the space or thread does not exist.
+func (s *Service) ToggleVote(ctx context.Context, spaceSlug, threadSlug, userID string) (*vote.VoteResult, error) {
+	if s.voteSvc == nil {
+		return nil, fmt.Errorf("vote service not available")
+	}
+
+	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
+	if err != nil {
+		return nil, fmt.Errorf("toggling vote: %w", err)
+	}
+	if board == nil {
+		return nil, nil
+	}
+
+	t, err := s.repo.FindThreadBySlug(ctx, board.ID, threadSlug)
+	if err != nil {
+		return nil, fmt.Errorf("toggling vote: %w", err)
+	}
+	if t == nil {
+		return nil, nil
+	}
+
+	// Use default viewer role / no tier bonus for forum votes.
+	result, err := s.voteSvc.Toggle(ctx, t.ID, userID, models.RoleViewer, "free")
+	if err != nil {
+		return nil, fmt.Errorf("toggling vote: %w", err)
+	}
+	return result, nil
 }
 
 // TicketNumberer can assign sequential ticket numbers to support threads.

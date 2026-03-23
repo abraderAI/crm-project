@@ -384,6 +384,7 @@ func NewRouter(cfg Config) http.Handler {
 			authed.Get("/global-spaces/{space}/threads/{slug}/attachments", h.globalSpaceHandler.ListAttachments)
 			authed.Post("/global-spaces/{space}/threads/{slug}/attachments", h.globalSpaceHandler.UploadAttachment)
 			authed.Post("/global-spaces/{space}/threads/{slug}/messages", h.globalSpaceHandler.CreateMessage)
+			authed.Post("/global-spaces/{space}/threads/{slug}/vote", h.globalSpaceHandler.ToggleVote)
 
 			// Notification routes.
 			authed.Route("/notifications", func(n chi.Router) {
