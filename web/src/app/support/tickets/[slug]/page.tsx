@@ -261,10 +261,7 @@ export default function TicketDetailPage(): ReactNode {
    * back through the author resolution chain.
    */
   const requestorLabel =
-    ticket.contact_email ??
-    ticket.author_name ??
-    ticket.author_email ??
-    ticket.author_id;
+    ticket.contact_email ?? ticket.author_name ?? ticket.author_email ?? ticket.author_id;
 
   return (
     <div data-testid="ticket-detail-page" className="mx-auto max-w-5xl px-4 py-6">
@@ -297,10 +294,7 @@ export default function TicketDetailPage(): ReactNode {
                   {ticket.title}
                 </h1>
               </div>
-              <p
-                data-testid="ticket-requestor-label"
-                className="text-xs text-muted-foreground"
-              >
+              <p data-testid="ticket-requestor-label" className="text-xs text-muted-foreground">
                 {requestorLabel}
                 {ticket.org_name ? ` · ${ticket.org_name}` : ""}
               </p>
@@ -373,10 +367,7 @@ export default function TicketDetailPage(): ReactNode {
                 ) : null}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Requestor</dt>
-                  <dd
-                    data-testid="sidebar-requestor-value"
-                    className="truncate text-right"
-                  >
+                  <dd data-testid="sidebar-requestor-value" className="truncate text-right">
                     {requestorLabel}
                   </dd>
                 </div>

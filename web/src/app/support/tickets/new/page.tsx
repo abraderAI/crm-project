@@ -53,7 +53,7 @@ export default function NewTicketPage(): ReactNode {
       if (emailNotResolved) {
         setOrphanWarning(
           `"${contactEmail.trim()}" is not registered yet. The ticket has been saved with that email ` +
-          `and will be linked to them automatically when they sign up.`,
+            `and will be linked to them automatically when they sign up.`,
         );
         // Delay redirect so the agent can read the warning.
         setTimeout(() => router.push(`/support/tickets/${ticket.slug}`), 4000);

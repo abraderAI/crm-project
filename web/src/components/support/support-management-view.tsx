@@ -471,8 +471,8 @@ export function SupportManagementView(): ReactNode {
             // external user. In that case resolved belongs to the DEFT agent, so
             // never use their org as the badge — use only the ticket's own org_name.
             const orgLabel = ticket.contact_email
-              ? (ticket.org_name || null)
-              : (resolved?.org_name || ticket.org_name || null);
+              ? ticket.org_name || null
+              : resolved?.org_name || ticket.org_name || null;
             return (
               <div
                 key={ticket.id}
