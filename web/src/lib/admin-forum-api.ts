@@ -9,7 +9,7 @@ export async function fetchAdminForumThreads(
   token: string,
   params?: { limit?: number; cursor?: string },
 ): Promise<PaginatedResponse<Thread>> {
-  const queryParams: Record<string, string> = {};
+  const queryParams: Record<string, string> = { include_hidden: "true" };
   if (params?.limit) queryParams["limit"] = String(params.limit);
   if (params?.cursor) queryParams["cursor"] = params.cursor;
 

@@ -55,12 +55,18 @@ type ListParams struct {
 	// VisibleUserID enforces owner-tier visibility: only threads authored by or
 	// assigned to this user are returned. Applied when the caller has no org (ScopeOwner).
 	VisibleUserID string
+	// IncludeHidden, when true, includes hidden threads in results (admin view).
+	IncludeHidden bool
 }
 
 // ListThreads returns a paginated list of threads in boardID, filtered by ListParams.
+// Hidden threads are excluded from results.
 func (r *Repository) ListThreads(ctx context.Context, boardID string, params ListParams) ([]models.Thread, *pagination.PageInfo, error) {
 	var threads []models.Thread
 	query := r.db.WithContext(ctx).Where("board_id = ?", boardID).Order("id ASC")
+	if !params.IncludeHidden {
+		query = query.Where("is_hidden = ?", false)
+	}
 
 	if params.Cursor != "" {
 		cursorID, err := pagination.DecodeCursor(params.Cursor)

@@ -64,12 +64,13 @@ func (h *Handler) ListThreads(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := ListInput{
-		SpaceSlug:  spaceSlug,
-		Params:     params,
-		UserID:     userID,
-		Mine:       q.Get("mine") == "true",
-		OrgID:      q.Get("org_id"),
-		Visibility: cv,
+		SpaceSlug:     spaceSlug,
+		Params:        params,
+		UserID:        userID,
+		Mine:          q.Get("mine") == "true",
+		OrgID:         q.Get("org_id"),
+		IncludeHidden: q.Get("include_hidden") == "true",
+		Visibility:    cv,
 	}
 
 	threads, pageInfo, err := h.service.ListThreads(r.Context(), input)

@@ -121,6 +121,8 @@ type ListInput struct {
 	Mine bool
 	// OrgID, when non-empty, restricts results to threads belonging to this org.
 	OrgID string
+	// IncludeHidden, when true, returns hidden threads (admin view).
+	IncludeHidden bool
 	// Visibility is the resolved visibility tier for the caller. When non-nil
 	// and the space is global-support, the service enforces scoping.
 	Visibility *CallerVisibility
@@ -137,7 +139,7 @@ func (s *Service) ListThreads(ctx context.Context, input ListInput) ([]ThreadWit
 		return []ThreadWithAuthor{}, &pagination.PageInfo{}, nil
 	}
 
-	params := ListParams{Params: input.Params}
+	params := ListParams{Params: input.Params, IncludeHidden: input.IncludeHidden}
 	if input.Mine && input.UserID != "" {
 		params.AuthorID = input.UserID
 	}
