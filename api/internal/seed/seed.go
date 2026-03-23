@@ -66,7 +66,9 @@ func Run(db *gorm.DB) error {
 	return nil
 }
 
-// seedForum creates the DEFT General Discussion board and seed threads.
+// seedForum seeds forum threads into the existing default board of global-forum.
+// The default board is created by seedSystemOrg — we must not create a second board
+// because FindDefaultBoard uses First() and multiple boards cause ambiguity.
 func seedForum(db *gorm.DB) error {
 	// Look up the global-forum space.
 	var space models.Space
@@ -77,15 +79,18 @@ func seedForum(db *gorm.DB) error {
 		return fmt.Errorf("finding global-forum space: %w", err)
 	}
 
-	// Create or find the discussion board.
-	boardSlug := "general-discussion"
-	if err := findOrCreateBoard(db, space.ID, boardSlug, "DEFT General Discussion"); err != nil {
-		return fmt.Errorf("seeding forum board: %w", err)
+	// Use the existing default board (seeded by seedSystemOrg).
+	var board models.Board
+	if err := db.Where("space_id = ? AND slug = ?", space.ID, defaultBoardSlug).First(&board).Error; err != nil {
+		return fmt.Errorf("finding forum default board: %w", err)
 	}
 
-	var board models.Board
-	if err := db.Where("space_id = ? AND slug = ?", space.ID, boardSlug).First(&board).Error; err != nil {
-		return fmt.Errorf("finding forum board: %w", err)
+	// Clean up stale "general-discussion" board from earlier deploy if it exists.
+	// Move any threads that ended up there into the default board.
+	var staleBoard models.Board
+	if err := db.Where("space_id = ? AND slug = ?", space.ID, "general-discussion").First(&staleBoard).Error; err == nil {
+		_ = db.Model(&models.Thread{}).Where("board_id = ?", staleBoard.ID).Update("board_id", board.ID).Error
+		_ = db.Delete(&staleBoard).Error
 	}
 
 	return seedForumThreads(db, board.ID)
