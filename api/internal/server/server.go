@@ -89,6 +89,10 @@ func NewRouter(cfg Config) http.Handler {
 			promoteRouter.Post("/chat/promote", h.chatHandler.HandleSessionPromotion)
 		})
 
+		// Public forum read endpoints — no auth required.
+		v1.Get("/global-spaces/{space}/threads", h.globalSpaceHandler.ListThreads)
+		v1.Get("/global-spaces/{space}/threads/{slug}", h.globalSpaceHandler.GetThread)
+
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {
 			authed.Use(auth.DualAuth(h.jwtValidator, h.apiKeyService))
