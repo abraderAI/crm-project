@@ -343,10 +343,12 @@ func (r *Repository) GetUserPrimaryOrgNames(ctx context.Context, userIDs []strin
 }
 
 // FindUserShadowByEmail looks up a UserShadow by email address.
+// The comparison is case-insensitive to handle variations in how email
+// addresses are stored vs entered (e.g. Clerk may preserve original casing).
 // Returns nil, nil when no user with that email exists.
 func (r *Repository) FindUserShadowByEmail(ctx context.Context, email string) (*models.UserShadow, error) {
 	var shadow models.UserShadow
-	err := r.db.WithContext(ctx).Where("email = ?", email).First(&shadow).Error
+	err := r.db.WithContext(ctx).Where("LOWER(email) = LOWER(?)", email).First(&shadow).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

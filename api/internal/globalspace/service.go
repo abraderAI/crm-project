@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
+	"strings"
 	"time"
 
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
@@ -251,15 +252,35 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 		if t.OrgID != nil {
 			rich.OrgName = orgNames[*t.OrgID]
 		}
-		// If thread has no org_name but author has an org, use the author's org.
+		// If thread has no explicit org_name, fall back to the author's primary org.
+		// For email-assigned tickets only do this when the contact has registered
+		// (author_id == the contact's clerk ID). When the contact is unregistered
+		// author_id is still the DEFT agent, so we must not use their org.
 		if rich.OrgName == "" {
-			rich.OrgName = authorOrgNames[t.AuthorID]
+			authorIsContact := t.ContactEmail == ""
+			if !authorIsContact {
+				if s, found := shadows[t.AuthorID]; found && strings.EqualFold(s.Email, t.ContactEmail) {
+					authorIsContact = true
+				}
+			}
+			if authorIsContact {
+				rich.OrgName = authorOrgNames[t.AuthorID]
+			}
 		}
 
 		// Derive registration status for the ticket creator.
 		if t.ContactEmail != "" {
-			// Orphaned ticket — check whether the contact has since registered.
-			if _, found := shadows[t.AuthorID]; !found {
+			// Email-assigned ticket: determine whether the contact has registered.
+			// When the contact was found at creation time, author_id was set to
+			// their clerk ID and their shadow email matches contact_email.
+			// Otherwise author_id is the DEFT agent — the contact is unregistered.
+			if s, found := shadows[t.AuthorID]; found && strings.EqualFold(s.Email, t.ContactEmail) {
+				// Contact is a registered user who owns this ticket.
+				if rich.OrgName == "" {
+					rich.RegistrationStatus = "registered"
+				}
+			} else {
+				// Author is a DEFT agent — contact has not yet registered.
 				rich.RegistrationStatus = "unregistered"
 			}
 		} else if t.OrgID == nil || (t.OrgID != nil && *t.OrgID == "") {
