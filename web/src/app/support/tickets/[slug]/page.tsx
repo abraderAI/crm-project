@@ -255,6 +255,17 @@ export default function TicketDetailPage(): ReactNode {
   const notifLevel = parseNotifLevel(ticket.metadata);
   const assignedTo = parseAssignedTo(ticket.metadata);
 
+  /**
+   * Requestor label — prioritises contact_email (the address a DEFT member
+   * entered when creating the ticket on behalf of someone else), then falls
+   * back through the author resolution chain.
+   */
+  const requestorLabel =
+    ticket.contact_email ??
+    ticket.author_name ??
+    ticket.author_email ??
+    ticket.author_id;
+
   return (
     <div data-testid="ticket-detail-page" className="mx-auto max-w-5xl px-4 py-6">
       <ContentEditorLayout
@@ -286,8 +297,11 @@ export default function TicketDetailPage(): ReactNode {
                   {ticket.title}
                 </h1>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {ticket.author_name ?? ticket.author_email ?? ticket.author_id}
+              <p
+                data-testid="ticket-requestor-label"
+                className="text-xs text-muted-foreground"
+              >
+                {requestorLabel}
                 {ticket.org_name ? ` · ${ticket.org_name}` : ""}
               </p>
             </div>
@@ -357,6 +371,15 @@ export default function TicketDetailPage(): ReactNode {
                     <dd className="font-mono font-semibold">#{ticket.ticket_number}</dd>
                   </div>
                 ) : null}
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Requestor</dt>
+                  <dd
+                    data-testid="sidebar-requestor-value"
+                    className="truncate text-right"
+                  >
+                    {requestorLabel}
+                  </dd>
+                </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Status</dt>
                   <dd className="capitalize">{status}</dd>

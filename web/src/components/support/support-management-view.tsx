@@ -184,7 +184,10 @@ export function SupportManagementView(): ReactNode {
     if (filters.status !== "all" && status !== filters.status) return false;
     if (filters.search) {
       const q = filters.search.toLowerCase();
-      if (!thread.title.toLowerCase().includes(q)) return false;
+      const matchesTitle = thread.title.toLowerCase().includes(q);
+      const matchesContactEmail = thread.contact_email?.toLowerCase().includes(q) ?? false;
+      const matchesAuthorEmail = thread.author_email?.toLowerCase().includes(q) ?? false;
+      if (!matchesTitle && !matchesContactEmail && !matchesAuthorEmail) return false;
     }
     return true;
   });
@@ -456,7 +459,10 @@ export function SupportManagementView(): ReactNode {
             const status = ticket.status ?? "open";
             const badgeClass = STATUS_STYLES[status] ?? STATUS_STYLES["open"];
             const resolved = userDir.resolve(ticket.author_id);
+            // Prioritise contact_email when the ticket was created on behalf
+            // of another user, then fall back through normal author fields.
             const creatorLabel =
+              ticket.contact_email ??
               ticket.author_name ??
               resolved?.display_name ??
               ticket.author_email ??
