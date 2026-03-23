@@ -288,6 +288,36 @@ func (r *Repository) IsDeftOrAdmin(ctx context.Context, userID string) (bool, er
 	return memberCount > 0, nil
 }
 
+// GetUserPrimaryOrgNames returns a map of clerk user ID → primary org name.
+// For each user, the first active org membership's org name is returned.
+// Users without org memberships are silently omitted.
+func (r *Repository) GetUserPrimaryOrgNames(ctx context.Context, userIDs []string) (map[string]string, error) {
+	if len(userIDs) == 0 {
+		return map[string]string{}, nil
+	}
+	var rows []struct {
+		UserID  string
+		OrgName string
+	}
+	err := r.db.WithContext(ctx).
+		Table("org_memberships").
+		Select("org_memberships.user_id, orgs.name as org_name").
+		Joins("JOIN orgs ON orgs.id = org_memberships.org_id AND orgs.deleted_at IS NULL").
+		Where("org_memberships.user_id IN ? AND org_memberships.deleted_at IS NULL", userIDs).
+		Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("fetching user primary orgs: %w", err)
+	}
+	result := make(map[string]string, len(rows))
+	for _, row := range rows {
+		// First org wins (primary).
+		if _, exists := result[row.UserID]; !exists {
+			result[row.UserID] = row.OrgName
+		}
+	}
+	return result, nil
+}
+
 // GetOrgNamesByIDs returns a map of org ID → org name for the given IDs.
 // Missing entries are silently omitted.
 func (r *Repository) GetOrgNamesByIDs(ctx context.Context, ids []string) (map[string]string, error) {

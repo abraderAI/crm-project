@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useAuth } from "@clerk/nextjs";
 import { MessageSquare, Send } from "lucide-react";
 
-import type { Message } from "@/lib/api-types";
+import type { MessageWithAuthor } from "@/lib/api-types";
 import { createForumReply, fetchForumMessages } from "@/lib/global-api";
 import { AuthorAvatar } from "./author-avatar";
 import { relativeTime } from "./relative-time";
@@ -17,7 +17,7 @@ interface ForumRepliesProps {
 /** Client component that loads and displays replies, with an inline reply form. */
 export function ForumReplies({ threadSlug, isLocked }: ForumRepliesProps): ReactNode {
   const { getToken, isSignedIn } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<MessageWithAuthor[]>([]);
   const [loading, setLoading] = useState(true);
   const [replyBody, setReplyBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -92,8 +92,15 @@ export function ForumReplies({ threadSlug, isLocked }: ForumRepliesProps): React
               className="rounded-xl border border-border bg-background p-4 shadow-sm"
             >
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <AuthorAvatar authorId={msg.author_id} size="sm" />
-                <span>{msg.author_id.slice(0, 8)}</span>
+                <AuthorAvatar authorId={msg.author_id} authorName={msg.author_name} size="sm" />
+                <span className="font-medium text-foreground">
+                  {msg.author_name || msg.author_id.slice(0, 12)}
+                </span>
+                {msg.author_org && (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    {msg.author_org}
+                  </span>
+                )}
                 <span>·</span>
                 <span>{relativeTime(msg.created_at)}</span>
               </div>

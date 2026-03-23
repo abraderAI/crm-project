@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { MessageSquare } from "lucide-react";
 
 import { fetchGlobalThreads, GLOBAL_SPACES } from "@/lib/global-api";
-import type { Thread } from "@/lib/api-types";
+import type { ThreadWithAuthor } from "@/lib/api-types";
 import { ForumHeader } from "@/components/forum/forum-header";
 import { ThreadCard } from "@/components/forum/thread-card";
 
@@ -15,10 +15,10 @@ export default async function ForumIndexPage(): Promise<React.ReactNode> {
   const { userId } = await auth();
   const isAuthenticated = !!userId;
 
-  let threads: Thread[] = [];
+  let threads: ThreadWithAuthor[] = [];
   try {
     const result = await fetchGlobalThreads(GLOBAL_SPACES.FORUM, { limit: 50 });
-    threads = result.data;
+    threads = result.data as ThreadWithAuthor[];
   } catch {
     // Render empty state on API failure — forum is non-critical.
   }

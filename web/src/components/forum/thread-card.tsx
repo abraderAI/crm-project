@@ -2,13 +2,13 @@ import Link from "next/link";
 import { ArrowBigUp, MessageSquare, Pin } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { Thread } from "@/lib/api-types";
+import type { ThreadWithAuthor } from "@/lib/api-types";
 import { AuthorAvatar } from "./author-avatar";
 import { relativeTime } from "./relative-time";
 import { stripHtml } from "./strip-html";
 
 interface ThreadCardProps {
-  thread: Thread;
+  thread: ThreadWithAuthor;
 }
 
 /** A single thread card in the forum list. */
@@ -43,7 +43,16 @@ export function ThreadCard({ thread }: ThreadCardProps): ReactNode {
         )}
 
         <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-          <AuthorAvatar authorId={thread.author_id} size="sm" />
+          <AuthorAvatar authorId={thread.author_id} authorName={thread.author_name} size="sm" />
+          <span className="font-medium text-foreground">
+            {thread.author_name ||
+              (thread.author_id === "system-seed" ? "DEFT Team" : thread.author_id.slice(0, 12))}
+          </span>
+          {thread.org_name && (
+            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              {thread.org_name}
+            </span>
+          )}
           <span>{relativeTime(thread.created_at)}</span>
           {(thread.messages?.length ?? 0) > 0 && (
             <span className="flex items-center gap-1">

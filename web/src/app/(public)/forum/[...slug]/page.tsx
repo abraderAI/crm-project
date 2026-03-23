@@ -69,6 +69,11 @@ export default async function ForumPage({ params }: ForumPageProps): Promise<Rea
               <User className="h-3 w-3" />
               {displayName}
             </span>
+            {thread.org_name && (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                {thread.org_name}
+              </span>
+            )}
           </div>
           <span className="flex items-center gap-1">
             <Calendar className="h-3 w-3" />

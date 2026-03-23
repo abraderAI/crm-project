@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ThreadCard } from "./thread-card";
-import type { Thread } from "@/lib/api-types";
+import type { ThreadWithAuthor } from "@/lib/api-types";
 
-const baseThread: Thread = {
+const baseThread: ThreadWithAuthor = {
   id: "t1",
   board_id: "b1",
   title: "Test Thread",

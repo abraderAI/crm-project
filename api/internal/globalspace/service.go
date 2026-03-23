@@ -104,6 +104,13 @@ type ThreadWithAuthor struct {
 	OrgName     string `json:"org_name,omitempty"`
 }
 
+// MessageWithAuthor wraps a Message with resolved author display info.
+type MessageWithAuthor struct {
+	models.Message
+	AuthorName string `json:"author_name,omitempty"`
+	AuthorOrg  string `json:"author_org,omitempty"`
+}
+
 // ListInput holds parameters for listing threads in a global space.
 type ListInput struct {
 	SpaceSlug string
@@ -188,6 +195,12 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 		return nil, fmt.Errorf("enriching threads: %w", err)
 	}
 
+	// Resolve author org memberships.
+	authorOrgNames, err := s.repo.GetUserPrimaryOrgNames(ctx, authorIDs)
+	if err != nil {
+		return nil, fmt.Errorf("enriching threads: %w", err)
+	}
+
 	result := make([]ThreadWithAuthor, len(threads))
 	for i, t := range threads {
 		rich := ThreadWithAuthor{Thread: t}
@@ -197,6 +210,10 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 		}
 		if t.OrgID != nil {
 			rich.OrgName = orgNames[*t.OrgID]
+		}
+		// If thread has no org_name but author has an org, use the author's org.
+		if rich.OrgName == "" {
+			rich.OrgName = authorOrgNames[t.AuthorID]
 		}
 		result[i] = rich
 	}
@@ -461,9 +478,9 @@ func (s *Service) UploadAttachment(ctx context.Context, spaceSlug, threadSlug, u
 	return s.uploadSvc.Create(ctx, orgID, "thread", t.ID, uploaderID, filename, size, file)
 }
 
-// ListMessages returns paginated messages for a thread in the given global space.
+// ListMessages returns paginated, author-enriched messages for a thread.
 // Returns nil, nil, nil when the space or thread does not exist.
-func (s *Service) ListMessages(ctx context.Context, spaceSlug, threadSlug string, params pagination.Params) ([]models.Message, *pagination.PageInfo, error) {
+func (s *Service) ListMessages(ctx context.Context, spaceSlug, threadSlug string, params pagination.Params) ([]MessageWithAuthor, *pagination.PageInfo, error) {
 	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing messages: %w", err)
@@ -480,7 +497,48 @@ func (s *Service) ListMessages(ctx context.Context, spaceSlug, threadSlug string
 		return nil, nil, nil
 	}
 
-	return s.repo.ListMessages(ctx, t.ID, params)
+	messages, pageInfo, err := s.repo.ListMessages(ctx, t.ID, params)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	enriched, err := s.enrichMessages(ctx, messages)
+	if err != nil {
+		return nil, nil, err
+	}
+	return enriched, pageInfo, nil
+}
+
+// enrichMessages batch-resolves author display info for a slice of messages.
+func (s *Service) enrichMessages(ctx context.Context, messages []models.Message) ([]MessageWithAuthor, error) {
+	authorIDs := make([]string, 0, len(messages))
+	seen := map[string]bool{}
+	for _, m := range messages {
+		if m.AuthorID != "" && !seen[m.AuthorID] {
+			authorIDs = append(authorIDs, m.AuthorID)
+			seen[m.AuthorID] = true
+		}
+	}
+
+	shadows, err := s.repo.GetUserShadowsByIDs(ctx, authorIDs)
+	if err != nil {
+		return nil, fmt.Errorf("enriching messages: %w", err)
+	}
+	orgNames, err := s.repo.GetUserPrimaryOrgNames(ctx, authorIDs)
+	if err != nil {
+		return nil, fmt.Errorf("enriching messages: %w", err)
+	}
+
+	result := make([]MessageWithAuthor, len(messages))
+	for i, m := range messages {
+		rich := MessageWithAuthor{Message: m}
+		if s, ok := shadows[m.AuthorID]; ok {
+			rich.AuthorName = s.DisplayName
+		}
+		rich.AuthorOrg = orgNames[m.AuthorID]
+		result[i] = rich
+	}
+	return result, nil
 }
 
 // CreateMessageInput holds data needed to create a message in a global space thread.
