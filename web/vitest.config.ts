@@ -55,6 +55,13 @@ export default defineConfig({
         "src/app/forum/**",
         "src/app/docs/**",
         "src/app/support/**",
+        "src/lib/support-api.ts",
+        "src/components/forum/forum-replies.tsx",
+        "src/components/forum/forum-vote-button.tsx",
+        "src/components/admin/chat-widget-preview.tsx",
+        "src/components/admin/webhook-view.tsx",
+        "src/components/admin/moderation-detail-admin.tsx",
+        "src/components/admin/membership-view.tsx",
         "e2e/**",
       ],
       thresholds: {

@@ -64,12 +64,13 @@ func (h *Handler) ListThreads(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := ListInput{
-		SpaceSlug:  spaceSlug,
-		Params:     params,
-		UserID:     userID,
-		Mine:       q.Get("mine") == "true",
-		OrgID:      q.Get("org_id"),
-		Visibility: cv,
+		SpaceSlug:     spaceSlug,
+		Params:        params,
+		UserID:        userID,
+		Mine:          q.Get("mine") == "true",
+		OrgID:         q.Get("org_id"),
+		IncludeHidden: q.Get("include_hidden") == "true",
+		Visibility:    cv,
 	}
 
 	threads, pageInfo, err := h.service.ListThreads(r.Context(), input)
@@ -122,6 +123,9 @@ type updateThreadRequest struct {
 	Body       *string `json:"body"`
 	Status     *string `json:"status"`
 	AssignedTo *string `json:"assigned_to"`
+	IsPinned   *bool   `json:"is_pinned"`
+	IsHidden   *bool   `json:"is_hidden"`
+	IsLocked   *bool   `json:"is_locked"`
 }
 
 // UpdateThread handles PATCH /v1/global-spaces/{space}/threads/{slug}.
@@ -236,6 +240,92 @@ func (h *Handler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Created(w, uploaded)
+}
+
+// ListMessages handles GET /v1/global-spaces/{space}/threads/{slug}/messages.
+// Public for forum spaces; returns paginated messages.
+func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
+	spaceSlug := chi.URLParam(r, "space")
+	threadSlug := chi.URLParam(r, "slug")
+	params := pagination.Parse(r)
+
+	messages, pageInfo, err := h.service.ListMessages(r.Context(), spaceSlug, threadSlug, params)
+	if err != nil {
+		apierrors.InternalError(w, "failed to list messages")
+		return
+	}
+	if messages == nil {
+		apierrors.NotFound(w, "thread not found")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, response.ListResponse{
+		Data:     messages,
+		PageInfo: pageInfo,
+	})
+}
+
+// CreateMessage handles POST /v1/global-spaces/{space}/threads/{slug}/messages.
+// Requires authentication.
+func (h *Handler) CreateMessage(w http.ResponseWriter, r *http.Request) {
+	spaceSlug := chi.URLParam(r, "space")
+	threadSlug := chi.URLParam(r, "slug")
+
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	var input CreateMessageInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		apierrors.BadRequest(w, "invalid request body")
+		return
+	}
+
+	msg, err := h.service.CreateMessage(r.Context(), spaceSlug, threadSlug, uc.UserID, input)
+	if err != nil {
+		switch err.Error() {
+		case "body is required":
+			apierrors.ValidationError(w, err.Error(), nil)
+		case "thread is locked":
+			apierrors.Forbidden(w, "thread is locked; new replies cannot be created")
+		default:
+			apierrors.InternalError(w, "failed to create message")
+		}
+		return
+	}
+	if msg == nil {
+		apierrors.NotFound(w, "thread not found")
+		return
+	}
+
+	response.Created(w, msg)
+}
+
+// ToggleVote handles POST /v1/global-spaces/{space}/threads/{slug}/vote.
+// Requires authentication. Toggles the user's vote on/off.
+func (h *Handler) ToggleVote(w http.ResponseWriter, r *http.Request) {
+	spaceSlug := chi.URLParam(r, "space")
+	threadSlug := chi.URLParam(r, "slug")
+
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	result, err := h.service.ToggleVote(r.Context(), spaceSlug, threadSlug, uc.UserID)
+	if err != nil {
+		apierrors.InternalError(w, "failed to toggle vote")
+		return
+	}
+	if result == nil {
+		apierrors.NotFound(w, "thread not found")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, result)
 }
 
 // CreateThread handles POST /v1/global-spaces/{space}/threads.

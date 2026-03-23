@@ -58,19 +58,33 @@ type ListParams struct {
 	// VisibleUserEmail is the email of the owner-scope caller, used to include
 	// tickets where ContactEmail matches (orphaned tickets assigned by email).
 	VisibleUserEmail string
+	// IncludeHidden, when true, includes hidden threads in results (admin view).
+	IncludeHidden bool
+	// SortDesc, when true, sorts by id DESC (newest first). Default is ASC.
+	SortDesc bool
 }
 
 // ListThreads returns a paginated list of threads in boardID, filtered by ListParams.
+// Hidden threads are excluded from results.
 func (r *Repository) ListThreads(ctx context.Context, boardID string, params ListParams) ([]models.Thread, *pagination.PageInfo, error) {
 	var threads []models.Thread
-	query := r.db.WithContext(ctx).Where("board_id = ?", boardID).Order("id DESC")
+	orderDir := "id ASC"
+	cursorOp := "id > ?"
+	if params.SortDesc {
+		orderDir = "id DESC"
+		cursorOp = "id < ?"
+	}
+	query := r.db.WithContext(ctx).Where("board_id = ?", boardID).Order(orderDir)
+	if !params.IncludeHidden {
+		query = query.Where("is_hidden = ?", false)
+	}
 
 	if params.Cursor != "" {
 		cursorID, err := pagination.DecodeCursor(params.Cursor)
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid cursor: %w", err)
 		}
-		query = query.Where("id < ?", cursorID.String())
+		query = query.Where(cursorOp, cursorID.String())
 	}
 	if params.AuthorID != "" {
 		query = query.Where("author_id = ?", params.AuthorID)
@@ -196,6 +210,41 @@ func (r *Repository) CreateRevision(ctx context.Context, rev *models.Revision) e
 	return nil
 }
 
+// ListMessages returns paginated messages for a thread.
+func (r *Repository) ListMessages(ctx context.Context, threadID string, params pagination.Params) ([]models.Message, *pagination.PageInfo, error) {
+	var messages []models.Message
+	query := r.db.WithContext(ctx).Where("thread_id = ? AND deleted_at IS NULL", threadID).Order("id ASC")
+
+	if params.Cursor != "" {
+		cursorID, err := pagination.DecodeCursor(params.Cursor)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid cursor: %w", err)
+		}
+		query = query.Where("id > ?", cursorID.String())
+	}
+
+	if err := query.Limit(params.Limit + 1).Find(&messages).Error; err != nil {
+		return nil, nil, fmt.Errorf("listing messages: %w", err)
+	}
+
+	pageInfo := &pagination.PageInfo{}
+	if len(messages) > params.Limit {
+		pageInfo.HasMore = true
+		lastID, _ := uuid.Parse(messages[params.Limit-1].ID)
+		pageInfo.NextCursor = pagination.EncodeCursor(lastID)
+		messages = messages[:params.Limit]
+	}
+	return messages, pageInfo, nil
+}
+
+// CreateMessage inserts a new message record.
+func (r *Repository) CreateMessage(ctx context.Context, msg *models.Message) error {
+	if err := r.db.WithContext(ctx).Create(msg).Error; err != nil {
+		return fmt.Errorf("creating message: %w", err)
+	}
+	return nil
+}
+
 // ListUploadsByThread returns all non-deleted uploads attached to the given thread ID.
 func (r *Repository) ListUploadsByThread(ctx context.Context, threadID string) ([]models.Upload, error) {
 	var uploads []models.Upload
@@ -261,6 +310,36 @@ func (r *Repository) IsDeftOrAdmin(ctx context.Context, userID string) (bool, er
 		return false, fmt.Errorf("checking deft membership: %w", err)
 	}
 	return memberCount > 0, nil
+}
+
+// GetUserPrimaryOrgNames returns a map of clerk user ID → primary org name.
+// For each user, the first active org membership's org name is returned.
+// Users without org memberships are silently omitted.
+func (r *Repository) GetUserPrimaryOrgNames(ctx context.Context, userIDs []string) (map[string]string, error) {
+	if len(userIDs) == 0 {
+		return map[string]string{}, nil
+	}
+	var rows []struct {
+		UserID  string
+		OrgName string
+	}
+	err := r.db.WithContext(ctx).
+		Table("org_memberships").
+		Select("org_memberships.user_id, orgs.name as org_name").
+		Joins("JOIN orgs ON orgs.id = org_memberships.org_id AND orgs.deleted_at IS NULL").
+		Where("org_memberships.user_id IN ? AND org_memberships.deleted_at IS NULL", userIDs).
+		Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("fetching user primary orgs: %w", err)
+	}
+	result := make(map[string]string, len(rows))
+	for _, row := range rows {
+		// First org wins (primary).
+		if _, exists := result[row.UserID]; !exists {
+			result[row.UserID] = row.OrgName
+		}
+	}
+	return result, nil
 }
 
 // FindUserShadowByEmail looks up a UserShadow by email address.

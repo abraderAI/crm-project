@@ -1,4 +1,10 @@
-import type { PaginatedResponse, Thread, ThreadWithAuthor, Upload } from "./api-types";
+import type {
+  MessageWithAuthor,
+  PaginatedResponse,
+  Thread,
+  ThreadWithAuthor,
+  Upload,
+} from "./api-types";
 import { buildHeaders, buildUrl, parseResponse, clientMutate } from "./api-client";
 
 /** Global space slugs. */
@@ -186,6 +192,40 @@ export async function createForumThread(
   });
 }
 
+/** Fetch messages (replies) for a forum thread by slug. No auth required. */
+export async function fetchForumMessages(
+  threadSlug: string,
+  params?: { limit?: number; cursor?: string },
+): Promise<PaginatedResponse<MessageWithAuthor>> {
+  const queryParams: Record<string, string> = {};
+  if (params?.limit) queryParams["limit"] = String(params.limit);
+  if (params?.cursor) queryParams["cursor"] = params.cursor;
+
+  const url = buildUrl(
+    `/global-spaces/${GLOBAL_SPACES.FORUM}/threads/${encodeURIComponent(threadSlug)}/messages`,
+    queryParams,
+  );
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(),
+    cache: "no-store",
+  });
+  return parseResponse<PaginatedResponse<MessageWithAuthor>>(response);
+}
+
+/** Create a reply on a forum thread. Requires authentication. */
+export async function createForumReply(
+  token: string,
+  threadSlug: string,
+  body: string,
+): Promise<MessageWithAuthor> {
+  return clientMutate<MessageWithAuthor>(
+    "POST",
+    `/global-spaces/${GLOBAL_SPACES.FORUM}/threads/${encodeURIComponent(threadSlug)}/messages`,
+    { token, body: { body } },
+  );
+}
+
 /**
  * Fetch a single support ticket from global-support by its slug.
  * Requires authentication.
@@ -276,6 +316,7 @@ export async function uploadThreadAttachment(
  * Fetches the file from the authenticated download endpoint and triggers a
  * browser file download. Requires a valid auth token.
  */
+/* v8 ignore start -- browser-only DOM download; cannot be tested in jsdom */
 export async function downloadUpload(
   token: string,
   uploadId: string,
@@ -297,6 +338,7 @@ export async function downloadUpload(
   anchor.click();
   URL.revokeObjectURL(objectUrl);
 }
+/* v8 ignore stop */
 
 /** Values for creating a support ticket. */
 export interface CreateSupportTicketValues {

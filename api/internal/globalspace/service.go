@@ -10,6 +10,7 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/eventbus"
 	"github.com/abraderAI/crm-project/api/internal/models"
 	"github.com/abraderAI/crm-project/api/internal/upload"
+	"github.com/abraderAI/crm-project/api/internal/vote"
 	"github.com/abraderAI/crm-project/api/pkg/metadata"
 	"github.com/abraderAI/crm-project/api/pkg/pagination"
 	"github.com/abraderAI/crm-project/api/pkg/slug"
@@ -41,13 +42,23 @@ type Service struct {
 	repo      *Repository
 	bus       *eventbus.Bus
 	uploadSvc *upload.Service
+	voteSvc   VoteToggler
+}
+
+// VoteToggler abstracts the vote toggle operation. Satisfied by *vote.Service.
+type VoteToggler interface {
+	Toggle(ctx context.Context, threadID, userID string, role models.Role, billingTier string) (*vote.VoteResult, error)
 }
 
 // NewService creates a new global space Service.
-// bus and uploadSvc may be nil; when provided, events are published and file
-// attachments are supported respectively.
+// bus, uploadSvc, and voteSvc may be nil.
 func NewService(repo *Repository, bus *eventbus.Bus, uploadSvc *upload.Service) *Service {
 	return &Service{repo: repo, bus: bus, uploadSvc: uploadSvc}
+}
+
+// SetVoteService injects the vote service dependency. Called during server startup.
+func (s *Service) SetVoteService(v VoteToggler) {
+	s.voteSvc = v
 }
 
 // ResolveVisibility determines the caller's visibility tier for support tickets.
@@ -122,6 +133,13 @@ type ThreadWithAuthor struct {
 	RegistrationStatus string `json:"registration_status,omitempty"`
 }
 
+// MessageWithAuthor wraps a Message with resolved author display info.
+type MessageWithAuthor struct {
+	models.Message
+	AuthorName string `json:"author_name,omitempty"`
+	AuthorOrg  string `json:"author_org,omitempty"`
+}
+
 // ListInput holds parameters for listing threads in a global space.
 type ListInput struct {
 	SpaceSlug string
@@ -132,6 +150,8 @@ type ListInput struct {
 	Mine bool
 	// OrgID, when non-empty, restricts results to threads belonging to this org.
 	OrgID string
+	// IncludeHidden, when true, returns hidden threads (admin view).
+	IncludeHidden bool
 	// Visibility is the resolved visibility tier for the caller. When non-nil
 	// and the space is global-support, the service enforces scoping.
 	Visibility *CallerVisibility
@@ -148,7 +168,9 @@ func (s *Service) ListThreads(ctx context.Context, input ListInput) ([]ThreadWit
 		return []ThreadWithAuthor{}, &pagination.PageInfo{}, nil
 	}
 
-	params := ListParams{Params: input.Params}
+	// Support and leads sort newest-first; forum sorts oldest-first.
+	sortDesc := input.SpaceSlug == "global-support" || input.SpaceSlug == "global-leads"
+	params := ListParams{Params: input.Params, IncludeHidden: input.IncludeHidden, SortDesc: sortDesc}
 	if input.Mine && input.UserID != "" {
 		params.AuthorID = input.UserID
 	}
@@ -213,6 +235,12 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 		return nil, fmt.Errorf("enriching threads: %w", err)
 	}
 
+	// Resolve author org memberships.
+	authorOrgNames, err := s.repo.GetUserPrimaryOrgNames(ctx, authorIDs)
+	if err != nil {
+		return nil, fmt.Errorf("enriching threads: %w", err)
+	}
+
 	result := make([]ThreadWithAuthor, len(threads))
 	for i, t := range threads {
 		rich := ThreadWithAuthor{Thread: t}
@@ -222,6 +250,10 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 		}
 		if t.OrgID != nil {
 			rich.OrgName = orgNames[*t.OrgID]
+		}
+		// If thread has no org_name but author has an org, use the author's org.
+		if rich.OrgName == "" {
+			rich.OrgName = authorOrgNames[t.AuthorID]
 		}
 
 		// Derive registration status for the ticket creator.
@@ -239,7 +271,6 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 			}
 		}
 		// When OrgName is set, registration_status stays empty (org badge shown instead).
-
 		result[i] = rich
 	}
 	return result, nil
@@ -324,6 +355,12 @@ type UpdateInput struct {
 	Status *string `json:"status"`
 	// AssignedTo sets the assigned_to field in metadata. Must be a DEFT org member.
 	AssignedTo *string `json:"assigned_to"`
+	// IsPinned sets the thread pin state when non-nil.
+	IsPinned *bool `json:"is_pinned"`
+	// IsHidden sets the thread hidden state when non-nil.
+	IsHidden *bool `json:"is_hidden"`
+	// IsLocked sets the thread lock state when non-nil.
+	IsLocked *bool `json:"is_locked"`
 }
 
 // UpdateThread applies a partial update to a thread in the given global space.
@@ -357,6 +394,15 @@ func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, edito
 
 	if input.Body != nil {
 		t.Body = *input.Body
+	}
+	if input.IsPinned != nil {
+		t.IsPinned = *input.IsPinned
+	}
+	if input.IsHidden != nil {
+		t.IsHidden = *input.IsHidden
+	}
+	if input.IsLocked != nil {
+		t.IsLocked = *input.IsLocked
 	}
 	if input.Status != nil {
 		patch := fmt.Sprintf(`{"status":%q}`, *input.Status)
@@ -518,6 +564,144 @@ func (s *Service) UploadAttachment(ctx context.Context, spaceSlug, threadSlug, u
 	}
 
 	return s.uploadSvc.Create(ctx, orgID, "thread", t.ID, uploaderID, filename, size, file)
+}
+
+// ListMessages returns paginated, author-enriched messages for a thread.
+// Returns nil, nil, nil when the space or thread does not exist.
+func (s *Service) ListMessages(ctx context.Context, spaceSlug, threadSlug string, params pagination.Params) ([]MessageWithAuthor, *pagination.PageInfo, error) {
+	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing messages: %w", err)
+	}
+	if board == nil {
+		return nil, nil, nil
+	}
+
+	t, err := s.repo.FindThreadBySlug(ctx, board.ID, threadSlug)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing messages: %w", err)
+	}
+	if t == nil {
+		return nil, nil, nil
+	}
+
+	messages, pageInfo, err := s.repo.ListMessages(ctx, t.ID, params)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	enriched, err := s.enrichMessages(ctx, messages)
+	if err != nil {
+		return nil, nil, err
+	}
+	return enriched, pageInfo, nil
+}
+
+// enrichMessages batch-resolves author display info for a slice of messages.
+func (s *Service) enrichMessages(ctx context.Context, messages []models.Message) ([]MessageWithAuthor, error) {
+	authorIDs := make([]string, 0, len(messages))
+	seen := map[string]bool{}
+	for _, m := range messages {
+		if m.AuthorID != "" && !seen[m.AuthorID] {
+			authorIDs = append(authorIDs, m.AuthorID)
+			seen[m.AuthorID] = true
+		}
+	}
+
+	shadows, err := s.repo.GetUserShadowsByIDs(ctx, authorIDs)
+	if err != nil {
+		return nil, fmt.Errorf("enriching messages: %w", err)
+	}
+	orgNames, err := s.repo.GetUserPrimaryOrgNames(ctx, authorIDs)
+	if err != nil {
+		return nil, fmt.Errorf("enriching messages: %w", err)
+	}
+
+	result := make([]MessageWithAuthor, len(messages))
+	for i, m := range messages {
+		rich := MessageWithAuthor{Message: m}
+		if s, ok := shadows[m.AuthorID]; ok {
+			rich.AuthorName = s.DisplayName
+		}
+		rich.AuthorOrg = orgNames[m.AuthorID]
+		result[i] = rich
+	}
+	return result, nil
+}
+
+// CreateMessageInput holds data needed to create a message in a global space thread.
+type CreateMessageInput struct {
+	Body string `json:"body"`
+}
+
+// CreateMessage adds a message to a thread in the given global space.
+// Returns nil, nil when the space or thread does not exist.
+func (s *Service) CreateMessage(ctx context.Context, spaceSlug, threadSlug, authorID string, input CreateMessageInput) (*models.Message, error) {
+	if input.Body == "" {
+		return nil, fmt.Errorf("body is required")
+	}
+
+	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
+	if err != nil {
+		return nil, fmt.Errorf("creating message: %w", err)
+	}
+	if board == nil {
+		return nil, nil
+	}
+
+	t, err := s.repo.FindThreadBySlug(ctx, board.ID, threadSlug)
+	if err != nil {
+		return nil, fmt.Errorf("creating message: %w", err)
+	}
+	if t == nil {
+		return nil, nil
+	}
+	if t.IsLocked {
+		return nil, fmt.Errorf("thread is locked")
+	}
+
+	msg := &models.Message{
+		ThreadID: t.ID,
+		Body:     input.Body,
+		AuthorID: authorID,
+		Metadata: "{}",
+		Type:     models.MessageTypeComment,
+	}
+	if err := s.repo.CreateMessage(ctx, msg); err != nil {
+		return nil, err
+	}
+	return msg, nil
+}
+
+// ToggleVote toggles the authenticated user's vote on a forum thread.
+// Returns nil, nil when the space or thread does not exist.
+func (s *Service) ToggleVote(ctx context.Context, spaceSlug, threadSlug, userID string) (*vote.VoteResult, error) {
+	if s.voteSvc == nil {
+		return nil, fmt.Errorf("vote service not available")
+	}
+
+	board, err := s.repo.FindDefaultBoard(ctx, spaceSlug)
+	if err != nil {
+		return nil, fmt.Errorf("toggling vote: %w", err)
+	}
+	if board == nil {
+		return nil, nil
+	}
+
+	t, err := s.repo.FindThreadBySlug(ctx, board.ID, threadSlug)
+	if err != nil {
+		return nil, fmt.Errorf("toggling vote: %w", err)
+	}
+	if t == nil {
+		return nil, nil
+	}
+
+	// Use default viewer role / no tier bonus for forum votes.
+	result, err := s.voteSvc.Toggle(ctx, t.ID, userID, models.RoleViewer, "free")
+	if err != nil {
+		return nil, fmt.Errorf("toggling vote: %w", err)
+	}
+	return result, nil
 }
 
 // TicketNumberer can assign sequential ticket numbers to support threads.

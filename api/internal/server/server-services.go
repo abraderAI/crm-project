@@ -256,6 +256,7 @@ func newHandlers(cfg Config) serverHandlers {
 	// Global space handler (forum, support, leads — slug-based access).
 	globalSpaceRepo := globalspace.NewRepository(cfg.DB)
 	globalSpaceService := globalspace.NewService(globalSpaceRepo, cfg.EventBus, uploadService)
+	globalSpaceService.SetVoteService(voteService)
 	globalSpaceHandler := globalspace.NewHandler(globalSpaceService)
 
 	// Support ticket entry handler.

@@ -89,6 +89,15 @@ func NewRouter(cfg Config) http.Handler {
 			promoteRouter.Post("/chat/promote", h.chatHandler.HandleSessionPromotion)
 		})
 
+		// Public global-space read endpoints — optional auth (extracts user context
+		// when a token is present but does not reject anonymous requests).
+		v1.Group(func(pub chi.Router) {
+			pub.Use(auth.OptionalDualAuth(h.jwtValidator, h.apiKeyService))
+			pub.Get("/global-spaces/{space}/threads", h.globalSpaceHandler.ListThreads)
+			pub.Get("/global-spaces/{space}/threads/{slug}", h.globalSpaceHandler.GetThread)
+			pub.Get("/global-spaces/{space}/threads/{slug}/messages", h.globalSpaceHandler.ListMessages)
+		})
+
 		// Authenticated routes.
 		v1.Group(func(authed chi.Router) {
 			authed.Use(auth.DualAuth(h.jwtValidator, h.apiKeyService))
@@ -371,15 +380,15 @@ func NewRouter(cfg Config) http.Handler {
 				st.Patch("/notifications", h.supportHandler.SetNotificationPref)
 			})
 
-			// Global space routes — slug-based access to platform-wide spaces.
-			authed.Route("/global-spaces/{space}/threads", func(gs chi.Router) {
-				gs.Get("/", h.globalSpaceHandler.ListThreads)
-				gs.Post("/", h.globalSpaceHandler.CreateThread)
-				gs.Get("/{slug}", h.globalSpaceHandler.GetThread)
-				gs.Patch("/{slug}", h.globalSpaceHandler.UpdateThread)
-				gs.Get("/{slug}/attachments", h.globalSpaceHandler.ListAttachments)
-				gs.Post("/{slug}/attachments", h.globalSpaceHandler.UploadAttachment)
-			})
+			// Global space write routes — auth required.
+			// GETs for threads list/detail are registered publicly above with OptionalDualAuth.
+			// Individual registrations (not Route()) to avoid a sub-router that shadows public GETs.
+			authed.Post("/global-spaces/{space}/threads", h.globalSpaceHandler.CreateThread)
+			authed.Patch("/global-spaces/{space}/threads/{slug}", h.globalSpaceHandler.UpdateThread)
+			authed.Get("/global-spaces/{space}/threads/{slug}/attachments", h.globalSpaceHandler.ListAttachments)
+			authed.Post("/global-spaces/{space}/threads/{slug}/attachments", h.globalSpaceHandler.UploadAttachment)
+			authed.Post("/global-spaces/{space}/threads/{slug}/messages", h.globalSpaceHandler.CreateMessage)
+			authed.Post("/global-spaces/{space}/threads/{slug}/vote", h.globalSpaceHandler.ToggleVote)
 
 			// Notification routes.
 			authed.Route("/notifications", func(n chi.Router) {
