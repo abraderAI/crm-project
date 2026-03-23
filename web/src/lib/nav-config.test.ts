@@ -128,15 +128,16 @@ describe("getNavItemsForTier", () => {
       expect(hasItem(6, "admin")).toBe(true);
     });
 
-    it("has all 18 admin sub-items", () => {
+    it("has all 19 admin sub-items", () => {
       const adminChildren = childIds(6, "admin");
-      expect(adminChildren.length).toBe(18);
+      expect(adminChildren.length).toBe(19);
       expect(adminChildren).toContain("admin-overview");
       expect(adminChildren).toContain("admin-orgs");
       expect(adminChildren).toContain("admin-users");
       expect(adminChildren).toContain("admin-settings");
       expect(adminChildren).toContain("admin-webhooks");
       expect(adminChildren).toContain("admin-billing");
+      expect(adminChildren).toContain("admin-forums");
     });
 
     it("sees all items from every tier", () => {

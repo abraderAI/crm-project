@@ -51,7 +51,8 @@ var deftSpaces = []deftSpaceDef{
 }
 
 // Run executes all seed operations idempotently.
-// It creates the system org with global spaces and the deft org with department spaces.
+// It creates the system org with global spaces, the deft org with department spaces,
+// and seeds forum threads for the community.
 func Run(db *gorm.DB) error {
 	if err := seedSystemOrg(db); err != nil {
 		return fmt.Errorf("seeding system org: %w", err)
@@ -59,7 +60,35 @@ func Run(db *gorm.DB) error {
 	if err := seedDeftOrg(db); err != nil {
 		return fmt.Errorf("seeding deft org: %w", err)
 	}
+	if err := seedForum(db); err != nil {
+		return fmt.Errorf("seeding forum: %w", err)
+	}
 	return nil
+}
+
+// seedForum creates the DEFT General Discussion board and seed threads.
+func seedForum(db *gorm.DB) error {
+	// Look up the global-forum space.
+	var space models.Space
+	err := db.Joins("JOIN orgs ON orgs.id = spaces.org_id").
+		Where("orgs.slug = ? AND spaces.slug = ?", SystemOrgSlug, "global-forum").
+		First(&space).Error
+	if err != nil {
+		return fmt.Errorf("finding global-forum space: %w", err)
+	}
+
+	// Create or find the discussion board.
+	boardSlug := "general-discussion"
+	if err := findOrCreateBoard(db, space.ID, boardSlug, "DEFT General Discussion"); err != nil {
+		return fmt.Errorf("seeding forum board: %w", err)
+	}
+
+	var board models.Board
+	if err := db.Where("space_id = ? AND slug = ?", space.ID, boardSlug).First(&board).Error; err != nil {
+		return fmt.Errorf("finding forum board: %w", err)
+	}
+
+	return seedForumThreads(db, board.ID)
 }
 
 // seedSystemOrg creates the system org, its global spaces, and a default

@@ -8,8 +8,12 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks(.*)",
   "/api/healthz",
   "/docs(.*)",
-  "/forum(.*)",
+  "/forum",
+  "/forum/:slug+",
 ]);
+
+/** Forum routes that require auth (thread creation). */
+const isForumAuthRoute = createRouteMatcher(["/forum/new"]);
 
 /** Routes restricted to platform admins only. */
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
@@ -42,6 +46,12 @@ async function resolveUserTier(token: string): Promise<number> {
 }
 
 export default clerkMiddleware(async (auth, request) => {
+  // Forum creation requires auth even though /forum is public.
+  if (isForumAuthRoute(request)) {
+    await auth.protect();
+    return NextResponse.next();
+  }
+
   // Public routes: no auth required.
   if (isPublicRoute(request)) {
     return NextResponse.next();
