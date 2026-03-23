@@ -282,6 +282,12 @@ type UpdateInput struct {
 	Status *string `json:"status"`
 	// AssignedTo sets the assigned_to field in metadata. Must be a DEFT org member.
 	AssignedTo *string `json:"assigned_to"`
+	// IsPinned sets the thread pin state when non-nil.
+	IsPinned *bool `json:"is_pinned"`
+	// IsHidden sets the thread hidden state when non-nil.
+	IsHidden *bool `json:"is_hidden"`
+	// IsLocked sets the thread lock state when non-nil.
+	IsLocked *bool `json:"is_locked"`
 }
 
 // UpdateThread applies a partial update to a thread in the given global space.
@@ -315,6 +321,15 @@ func (s *Service) UpdateThread(ctx context.Context, spaceSlug, threadSlug, edito
 
 	if input.Body != nil {
 		t.Body = *input.Body
+	}
+	if input.IsPinned != nil {
+		t.IsPinned = *input.IsPinned
+	}
+	if input.IsHidden != nil {
+		t.IsHidden = *input.IsHidden
+	}
+	if input.IsLocked != nil {
+		t.IsLocked = *input.IsLocked
 	}
 	if input.Status != nil {
 		patch := fmt.Sprintf(`{"status":%q}`, *input.Status)

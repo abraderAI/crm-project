@@ -121,6 +121,9 @@ type updateThreadRequest struct {
 	Body       *string `json:"body"`
 	Status     *string `json:"status"`
 	AssignedTo *string `json:"assigned_to"`
+	IsPinned   *bool   `json:"is_pinned"`
+	IsHidden   *bool   `json:"is_hidden"`
+	IsLocked   *bool   `json:"is_locked"`
 }
 
 // UpdateThread handles PATCH /v1/global-spaces/{space}/threads/{slug}.
