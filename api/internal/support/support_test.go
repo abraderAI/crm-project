@@ -426,6 +426,108 @@ func TestRepository_FindUnclaimedTickets_EmptyEmail(t *testing.T) {
 	assert.Nil(t, tickets)
 }
 
+func TestRepository_FindUserShadowByID(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "shadow-test",
+		Email:       "shadow@example.com",
+		DisplayName: "Shadow Test",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	t.Run("found", func(t *testing.T) {
+		s, err := repo.FindUserShadowByID(ctx, "shadow-test")
+		require.NoError(t, err)
+		require.NotNil(t, s)
+		assert.Equal(t, "shadow@example.com", s.Email)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		s, err := repo.FindUserShadowByID(ctx, "no-such-user")
+		require.NoError(t, err)
+		assert.Nil(t, s)
+	})
+}
+
+func TestRepository_FindTicketByID(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	ticket := createTicket(t, db, board.ID, "author1")
+
+	t.Run("found", func(t *testing.T) {
+		found, err := repo.FindTicketByID(ctx, ticket.ID)
+		require.NoError(t, err)
+		require.NotNil(t, found)
+		assert.Equal(t, ticket.ID, found.ID)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		found, err := repo.FindTicketByID(ctx, "nonexistent-id")
+		require.NoError(t, err)
+		assert.Nil(t, found)
+	})
+}
+
+func TestRepository_ClaimTicket(t *testing.T) {
+	db := setupTestDB(t)
+	_, board := createHierarchy(t, db)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	ticket := &models.Thread{
+		BoardID:      board.ID,
+		Title:        "Claim Repo Test",
+		Slug:         "claim-repo-test",
+		Metadata:     "{}",
+		AuthorID:     "original-author",
+		ContactEmail: "claimer-repo@example.com",
+		ThreadType:   models.ThreadTypeSupport,
+		Visibility:   models.ThreadVisibilityOrgOnly,
+	}
+	require.NoError(t, db.Create(ticket).Error)
+
+	t.Run("claims and clears email", func(t *testing.T) {
+		updated, err := repo.ClaimTicket(ctx, ticket.ID, "new-owner")
+		require.NoError(t, err)
+		require.NotNil(t, updated)
+		assert.Equal(t, "new-owner", updated.AuthorID)
+		assert.Equal(t, "", updated.ContactEmail)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		updated, err := repo.ClaimTicket(ctx, "nonexistent-id", "user")
+		require.NoError(t, err)
+		assert.Nil(t, updated)
+	})
+}
+
+func TestService_ClaimTickets_NonexistentTicket(t *testing.T) {
+	db := setupTestDB(t)
+	createHierarchy(t, db)
+	repo := NewRepository(db)
+	svc := NewService(repo, nil)
+	ctx := context.Background()
+
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "claimer-skip",
+		Email:       "skip@example.com",
+		DisplayName: "Skipper",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	claimed, err := svc.ClaimTickets(ctx, "claimer-skip", []string{"nonexistent-id"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, claimed)
+}
+
 // --- DEFT members list ---
 
 func TestRepository_ListDeftMembers(t *testing.T) {
