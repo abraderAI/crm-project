@@ -1,0 +1,288 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.5",
+    "created": "2026-03-23T05:15:00Z",
+    "updated": "2026-03-23T05:15:00Z",
+    "author": "agent:warp-oz",
+    "metadata": {
+      "type": "specification",
+      "planRef": "deft-evolution-spec",
+      "prd": "PRD.md",
+      "specOutput": "SPECIFICATION-sales-crm.md",
+      "sourceSpec": "v1.4 (March 2026)"
+    }
+  },
+  "plan": {
+    "id": "sales-crm-spec",
+    "title": "Sales CRM Leads Interface",
+    "status": "draft",
+    "author": "agent:warp-oz",
+    "narratives": {
+      "Overview": "A purpose-built internal Sales CRM for the DEFT sales team, layered on top of the existing Thread/Message/Space architecture. Company, Contact, and Opportunity are Threads with crm_type metadata in a CRM-type Space. Record-level access control is enforced via a thread_acl table. Cross-entity relationships live in a crm_links join table. Per-rep Gmail OAuth2 handles email; sales@deft.co is a lead generation inbox. Five LLM features extend the existing LLMProvider interface.",
+      "KeyDecisions": "Thread model preserved (Company/Contact/Opportunity = Threads + crm_type); thread_acl for record-level ACL; crm_links join table; crm_tasks dedicated table; per-rep Gmail OAuth2 (not shared inbox); USD only; CSV import synchronous+transactional; PDF export deferred; CEO identified by DEFT_CEO_USER_ID env var; stage probability = default per stage + per-opportunity override; custom fields via metadata JSON (no admin UI); task notifications via existing NotificationProvider; phasing = Core CRM first, then email, then reports.",
+      "Constraint": "No breaking changes to existing API contracts. All new endpoints under /v1/. Backend >=85% coverage before any frontend phase begins. ACL recalculation must be atomic within the triggering transaction."
+    },
+    "metadata": {
+      "branch": "feat/sales-crm",
+"newTables": ["thread_acl", "crm_links", "crm_tasks", "crm_import_history", "crm_unassigned_emails"],
+"newPackages": ["api/internal/crm", "api/internal/crmtask", "api/internal/crmimport", "api/internal/crmhandoff"],
+      "extendedPackages": ["api/internal/pipeline", "api/internal/llm", "api/internal/channel", "api/internal/reporting", "api/internal/search"],
+      "modelExtensions": ["models/email-inbox.go: +sales_crm RoutingAction, +AssignedUserID, +OAuthRefreshToken, +PubSubSubscription, +LastHistoryID"],
+      "newEnvVars": ["DEFT_CEO_USER_ID", "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_PUBSUB_PROJECT_ID"]
+    },
+    "tags": ["crm", "sales", "gmail", "llm", "acl", "reporting"],
+    "items": [
+      {
+        "id": "phase1",
+        "title": "Phase 1: Data Models & Infrastructure",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "New database tables, pipeline probability extension, and config additions. All subsequent phases depend on this."
+        },
+        "subItems": [
+          {"id": "phase1.1", "title": "Subphase 1.1: Database Schema", "status": "pending", "priority": "high", "subItems": [
+            {"id": "phase1.1.1", "title": "thread_acl GORM model: id, thread_id FK, user_id, grant_type enum, created_at. Index (user_id, thread_id).", "status": "pending", "priority": "high", "traces": ["FR-14", "NFR-1"]},
+            {"id": "phase1.1.2", "title": "crm_links GORM model: id, from_thread_id FK, to_thread_id FK, link_type enum, is_primary bool. Unique (from, to, type).", "status": "pending", "priority": "high", "traces": ["FR-2"]},
+            {"id": "phase1.1.3", "title": "crm_tasks GORM model: id, parent_type, parent_id, title, description, assigned_to, due_date, priority enum, status enum. Indexes on (assigned_to, status), (parent_id), (due_date, status).", "status": "pending", "priority": "high", "traces": ["FR-20"]},
+            {"id": "phase1.1.4", "title": "crm_import_history GORM model: id, org_id FK, imported_by, entity_type, total_rows, success_count, error_count, error_detail JSON.", "status": "pending", "priority": "high", "traces": ["FR-19"]},
+{"id": "phase1.1.5", "title": "crm_unassigned_emails GORM model: id, inbox_id FK, assigned_user_id, gmail_message_id (UNIQUE), sender_email, subject, body_snippet, received_at.", "status": "pending", "priority": "high", "traces": ["FR-29"]},
+            {"id": "phase1.1.6", "title": "Phase 1.1 tests: all model CRUD, constraint enforcement, ACL query construction. Fuzz >=50 inputs on ACL queries. Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+          ]},
+          {"id": "phase1.2", "title": "Subphase 1.2: Pipeline Probability Extension", "status": "pending", "priority": "high", "subItems": [
+            {"id": "phase1.2.1", "title": "Add Probability int field to StageInfo struct. Update DefaultStages() with probabilities: NewLead=5, Contacted=15, Qualified=30, Proposal=50, Negotiation=75, ClosedWon=100, ClosedLost=0, Nurturing=10.", "status": "pending", "priority": "high", "traces": ["FR-10"]},
+            {"id": "phase1.2.2", "title": "WeightedForecast(amountCents, probability) helper. Per-opportunity override: metadata.probability_override (0-100 int) takes precedence over stage default.", "status": "pending", "priority": "high", "traces": ["FR-9", "FR-10"]}
+          ]},
+          {"id": "phase1.3", "title": "Subphase 1.3: Config & Environment", "status": "pending", "priority": "high", "subItems": [
+            {"id": "phase1.3.1", "title": "Add DEFT_CEO_USER_ID, CRMConfig{StaleOpportunityDays=30, DataQualityCheckDays=14} to existing config system. Add to secrets/secrets.example.env.", "status": "pending", "priority": "high", "traces": ["FR-39", "FR-49"]}
+          ]}
+        ]
+      },
+      {
+        "id": "phase2",
+        "title": "Phase 2: CRM Entity CRUD APIs",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Core Company/Contact/Opportunity APIs with ACL enforcement, entity linking, and ownership reassignment. Depends on Phase 1."
+        },
+        "subItems": [
+          {"id": "phase2.1", "title": "CRM Space Initialization: EnsureCRMSpace(ctx, db, orgID) — idempotently creates CRM Space + companies/contacts/opportunities boards.", "status": "pending", "priority": "high", "traces": ["FR-1"]},
+          {"id": "phase2.2", "title": "ACL Engine (api/internal/crm/acl.go): GrantOwner, RevokeOwner, GrantTaskAssignee, RevokeTaskAssignee, RecalculateLinkedContactACL, HasAccess. All mutations within caller's transaction.", "status": "pending", "priority": "high", "traces": ["FR-14", "FR-15", "NFR-5"]},
+          {"id": "phase2.3", "title": "FilterByACL(db, userID, isAdmin) scope joining thread_acl. Used by all CRM repositories.", "status": "pending", "priority": "high", "traces": ["FR-15", "NFR-1", "NFR-2"]},
+          {"id": "phase2.4", "title": "Company API (crm/company/): POST/GET/PATCH/DELETE /v1/orgs/{org}/crm/companies. ACL on create/read/edit. Audit log on all mutations. Duplicate check endpoint.", "status": "pending", "priority": "high", "traces": ["FR-3", "FR-5", "FR-15", "FR-17", "FR-44"]},
+          {"id": "phase2.5", "title": "Contact API (crm/contact/): full CRUD + optional company_id on create (atomic crm_links + ACL). Private by default. Duplicate email check endpoint.", "status": "pending", "priority": "high", "traces": ["FR-6", "FR-8", "FR-14", "FR-17", "FR-44"]},
+          {"id": "phase2.6", "title": "Opportunity API (crm/opportunity/): full CRUD. Create requires company_id. Accepts contact_ids[]+primary_contact_id. Calculates weighted_forecast on create/update. Pipeline transition endpoint with probability update, reason enforcement, close reason gate, Closed Won event.", "status": "pending", "priority": "high", "traces": ["FR-9", "FR-10", "FR-11", "FR-12", "FR-13", "FR-14", "FR-44"]},
+          {"id": "phase2.7", "title": "Entity Linking API: POST/DELETE /v1/orgs/{org}/crm/links. Atomic crm_links + ACL recalculation for all link type mutations.", "status": "pending", "priority": "high", "traces": ["FR-2", "FR-14", "NFR-5"]},
+          {"id": "phase2.8", "title": "Ownership Reassignment: POST /v1/orgs/{org}/crm/{type}/{id}/reassign. Revoke old owner ACL, grant new owner, recalculate downstream, audit log with before/after.", "status": "pending", "priority": "high", "traces": ["FR-24", "FR-25", "NFR-4"]},
+          {"id": "phase2.9", "title": "Phase 2 tests: full CRUD lifecycle for all 3 entities, ACL grant/deny for every scenario, transition validation, weighted forecast math, concurrent ACL recalculation. Fuzz >=50 on request bodies. Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase3",
+        "title": "Phase 3: Tasks, Ownership & Data Quality",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "crm_tasks CRUD, task-driven ACL grants, notification integration, reminder background jobs, and data quality rules engine. Depends on Phase 2."
+        },
+        "subItems": [
+          {"id": "phase3.1", "title": "crm_tasks CRUD API (api/internal/crmtask/): POST/GET/PATCH/DELETE /v1/orgs/{org}/crm/tasks. Task creation grants assignee ACL on parent entity. Reassign triggers ACL update. Audit log on all mutations.", "status": "pending", "priority": "high", "traces": ["FR-20", "FR-21", "FR-23"]},
+          {"id": "phase3.2", "title": "Task notifications via existing NotificationProvider: task_assigned (immediate), task_due_tomorrow (24h before), task_overdue (daily while open). User preference via existing prefs page.", "status": "pending", "priority": "high", "traces": ["FR-22"]},
+          {"id": "phase3.3", "title": "Task reminder background goroutine: nightly scan, fires due-tomorrow + overdue notifications. No duplicate notifications per task per day.", "status": "pending", "priority": "high", "traces": ["FR-22"]},
+          {"id": "phase3.4", "title": "Data quality rules engine (crmtask/quality.go): DefaultQualityRules() — Opp missing deal_amount/expected_close_date after 48h, missing Company link, no activity in 14 days; Contact missing email/phone. Runs async on save + nightly batch.", "status": "pending", "priority": "high", "traces": ["FR-49"]},
+          {"id": "phase3.5", "title": "Quality violation handler: subscribes to quality_violation event, calls LLMProvider.QualityMessage async, sends in-app notification to owner, accumulates admin digest.", "status": "pending", "priority": "medium", "traces": ["FR-49", "NFR-8"]},
+          {"id": "phase3.6", "title": "Phase 3 tests: task lifecycle, ACL grant/revoke on assign/complete/cancel, notification firing, reminder scan with time-mocked tasks, quality rule evaluation, mock LLM. Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase4",
+        "title": "Phase 4: Gmail Integration via Existing Channel Infrastructure",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Extends the existing channel package and EmailInbox model. Admin registers rep addresses in channel settings with routing_action=sales_crm. Rep connects Gmail via CRM profile OAuth flow. All email routing flows through the existing ChannelGateway.Process. No new crmail package needed."
+        },
+        "subItems": [
+          {"id": "phase4.1", "title": "Add sales_crm to RoutingAction enum. Add nullable EmailInbox fields: AssignedUserID, OAuthRefreshToken (AES-256 encrypted), PubSubSubscription, LastHistoryID. Update EmailInboxService auth to allow AssignedUserID user to PATCH own inbox credentials.", "status": "pending", "priority": "high", "traces": ["FR-27", "NFR-1"]},
+          {"id": "phase4.2", "title": "Extend Gateway.resolveThread for sales_crm routing: look up CRM Contact Thread by sender email scoped to AssignedUserID rep ACL. Matched -> route to Contact/Opportunity Thread. Unmatched -> crm_unassigned_emails. Add RoutingAction to InboundEvent.", "status": "pending", "priority": "high", "traces": ["FR-29", "FR-14"]},
+          {"id": "phase4.3", "title": "Unassigned CRM inbox API: GET /v1/orgs/{org}/crm/email/inbox (rep-scoped), POST .../inbox/{id}/assign (link to entity Thread). Extends existing channel package.", "status": "pending", "priority": "medium", "traces": ["FR-29"]},
+          {"id": "phase4.4", "title": "Gmail watch lifecycle: create watch when rep stores OAuth token, store in EmailInbox.PubSubSubscription/LastHistoryID, auto-renew before 7-day expiry, stop on disconnect.", "status": "pending", "priority": "high", "traces": ["FR-27", "FR-29"]},
+          {"id": "phase4.5", "title": "Unified Pub/Sub webhook (POST /v1/crm/email/webhook): lookup EmailInbox by email, decrypt token, fetch new messages via Gmail API, construct InboundEvent with routing_action from inbox, pass to Gateway.Process. Update LastHistoryID. Idempotent on gmail_message_id. Publish email.received for LLM.", "status": "pending", "priority": "high", "traces": ["FR-29", "FR-46", "NFR-8"]},
+          {"id": "phase4.6", "title": "CRM profile OAuth2 flow: GET /v1/crm/email/auth (redirect), GET /v1/crm/email/callback (find EmailInbox by assigned_user_id, store encrypted token, trigger watch), DELETE /v1/crm/email/disconnect, GET /v1/crm/email/status. Returns 400 if no inbox pre-registered by admin.", "status": "pending", "priority": "high", "traces": ["FR-27", "NFR-1"]},
+          {"id": "phase4.7", "title": "Admin channel settings UI: add sales_crm to routing action dropdown, show AssignedUserID user-picker, hide IMAP fields for sales_crm inboxes.", "status": "pending", "priority": "medium", "traces": ["FR-27"]},
+          {"id": "phase4.8", "title": "sales@deft.co lead gen: admin configures EmailInbox with routing_action=sales_lead. Verify Gateway sales_lead path upserts Lead record + sends admin notification. Deduplicates by sender email.", "status": "pending", "priority": "high", "traces": ["FR-32a"]},
+          {"id": "phase4.9", "title": "Phase 4 tests: sales_crm routing validation, Gateway routing for all 4 actions, OAuth callback token storage+encryption (mocked Google API), Gmail watch lifecycle, Pub/Sub webhook (matched+unmatched+duplicate), unassigned inbox, Lead creation/dedup. Fuzz >=50 on webhook payload. Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase5",
+        "title": "Phase 5: LLM Features",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Extend LLMProvider interface, implement AI briefing, email summary, CEO pipeline strategy, Close This Deal Now, and data quality LLM notifications. Depends on Phases 2, 3, 4."
+        },
+        "subItems": [
+          {"id": "phase5.1", "title": "Extend LLMProvider interface with: Briefing, EmailSummary, PipelineStrategy, DealStrategy, QualityMessage. Implement all in GrokProvider. Add mock provider for tests.", "status": "pending", "priority": "high", "traces": ["FR-45", "FR-46", "FR-47", "FR-48", "FR-49", "NFR-8"]},
+          {"id": "phase5.2", "title": "AI Briefing endpoint: POST /v1/orgs/{org}/crm/ai/brief. Loads user's open Opportunities, Tasks, recent activity. Calls LLMProvider.Briefing. SSE streaming. ACL-scoped context.", "status": "pending", "priority": "high", "traces": ["FR-45", "NFR-8"]},
+          {"id": "phase5.3", "title": "Daily briefing scheduled job: for opted-in users, run briefing logic nightly at 08:00, deliver via NotificationProvider.", "status": "pending", "priority": "medium", "traces": ["FR-45"]},
+          {"id": "phase5.4", "title": "Deal strategy endpoint: POST /v1/orgs/{org}/crm/opportunities/{id}/strategy. Loads full Opportunity context (Thread + last 20 Messages + linked Company/Contact + Tasks + stage history). Calls LLMProvider.DealStrategy. Owner/admin only.", "status": "pending", "priority": "high", "traces": ["FR-48", "NFR-8"]},
+          {"id": "phase5.5", "title": "CEO pipeline strategy endpoint: POST /v1/orgs/{org}/crm/ai/pipeline-strategy. CEO/admin only. Loads all open Opportunities (unfiltered). Calls LLMProvider.PipelineStrategy.", "status": "pending", "priority": "high", "traces": ["FR-47", "NFR-8"]},
+          {"id": "phase5.6", "title": "Inbound email AI summary: extend Phase 4.4 webhook handler to publish async email_received event. Handler calls LLMProvider.EmailSummary(email, entityThread), delivers 1-2 line summary as system notification to assigned rep.", "status": "pending", "priority": "high", "traces": ["FR-46", "NFR-8"]},
+          {"id": "phase5.7", "title": "Phase 5 tests: all LLM endpoints with mock provider, verify context assembly (correct records passed), async email summary non-blocking, CEO gate enforced. Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase6",
+        "title": "Phase 6: Reports Backend — Extend Existing reporting/ Package",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Extends the existing api/internal/reporting/ package (which already has GetPipelineFunnel, GetLeadVelocity, GetWinLossCounts, GetAvgDealValue, GetLeadsByAssignee, GetScoreDistribution, GetStageTransitions). New CRM queries added as new files in the same package. No crmreport/ package created. Depends on Phases 2 and 3. Can run in parallel with Phase 4."
+        },
+        "subItems": [
+          {"id": "phase6.1", "title": "repository-pipeline-crm.go (new file in reporting/): PipelineByStage (extends GetPipelineFunnel with USD value + weighted forecast), PipelineByOwner (extends GetLeadsByAssignee with amounts), PipelineByCloseDate, OverdueOpportunities. ACL-scoped via FilterByACL.", "status": "pending", "priority": "high", "traces": ["FR-33", "FR-32"]},
+          {"id": "phase6.2", "title": "repository-forecast.go (new file in reporting/): ForecastByOwner, ForecastByStage, ForecastAccuracy. Weighted forecast = deal_amount * effective_probability / 100. Distinct from existing lead_score queries.", "status": "pending", "priority": "high", "traces": ["FR-34"]},
+          {"id": "phase6.3", "title": "repository-activity.go (new file in reporting/): ActivityByUser (Messages + crm_tasks join), TasksOverdue, TasksCompleted.", "status": "pending", "priority": "high", "traces": ["FR-35"]},
+          {"id": "phase6.4", "title": "repository-performance.go (new file in reporting/): WinRate (extends GetWinLossCounts), AvgSalesCycle (extends GetStageTransitions audit log pattern), ConversionByStage, SourcePerformance.", "status": "pending", "priority": "high", "traces": ["FR-36"]},
+          {"id": "phase6.5", "title": "repository-entities.go (new file in reporting/): CompaniesByStatus, ContactsByCompany (via crm_links), RecentlyModified. ACL-scoped.", "status": "pending", "priority": "medium", "traces": ["FR-37"]},
+          {"id": "phase6.6", "title": "repository-smtm.go (new file in reporting/): SMTM Section 1 (metric cards, deals-closing-soon, funnel), Section 2 (all open Opps, pipeline stats, top 10, stalled). No ACL. CEO/admin gate.", "status": "pending", "priority": "high", "traces": ["FR-39", "FR-40"]},
+          {"id": "phase6.7", "title": "Extend existing reporting/handler.go: add /v1/orgs/{org}/reports/crm/{type} route group alongside existing /reports/sales and /reports/support. ?format=csv export. Existing routes unaffected.", "status": "pending", "priority": "high", "traces": ["FR-32", "FR-38", "FR-40"]},
+          {"id": "phase6.8", "title": "Phase 6 tests: all new queries with fixture data, ACL scoping, weighted forecast math, CSV correctness, CEO gate. Confirm existing reporting/ tests still pass. Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase7",
+        "title": "Phase 7: CSV Import",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Two-step synchronous CSV import for Companies and Contacts. Preview, validate, apply in single transaction, import history log. Depends on Phase 2. Can be developed in parallel with Phases 4-6."
+        },
+        "subItems": [
+          {"id": "phase7.1", "title": "Import parser (crmimport/parser.go): POST /v1/orgs/{org}/crm/import/preview — parse CSV, validate (required fields, email format, field length, duplicate detection), return {valid_rows, error_rows, duplicate_warnings}. No DB writes. Fuzz >=50 CSV inputs.", "status": "pending", "priority": "medium", "traces": ["FR-18", "FR-19"]},
+          {"id": "phase7.2", "title": "Import apply (POST /v1/orgs/{org}/crm/import/apply): execute valid_rows in single DB transaction with ACL grants. Write crm_import_history on success or rollback. Owner from CSV owner_email or importing user.", "status": "pending", "priority": "medium", "traces": ["FR-18", "FR-19", "FR-26", "NFR-5"]},
+          {"id": "phase7.3", "title": "Phase 7 tests: validation catches all error types, rollback on failure, history written, ACL grants created. Fuzz >=50 on CSV parser. Coverage >=85%.", "status": "pending", "priority": "medium", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase8",
+        "title": "Phase 8: Closed Won Handoff",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Auto-creates a support ticket on Closed Won with full Company/Contact/Opportunity details. Notifies support + finance. Failure is non-blocking. Depends on Phase 2."
+        },
+        "subItems": [
+          {"id": "phase8.1", "title": "HandoffService (api/internal/crmhandoff/): subscribes to PipelineStageChanged event. On closed_won: load Opp + Company + primary Contact + last 5 Messages. Call support.Service.CreateTicket. Notify support_team_user_ids (assignees) + finance_team_user_ids (copy). Notify Opp owner. On failure: audit log + admin alert; do NOT roll back stage transition.", "status": "pending", "priority": "high", "traces": ["FR-44a", "NFR-4"]},
+          {"id": "phase8.2", "title": "Phase 8 tests: handoff creates correct ticket, support+finance notified, owner notified, failure path non-blocking, stage transition succeeds even on ticket failure. Integration test with mock support service. Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase9",
+        "title": "Phase 9: Frontend — Core Entity Views",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "CRM navigation, Company/Contact/Opportunity list and detail views, manual entry forms with duplicate detection, activity timeline. Depends on Phases 2 and 3."
+        },
+        "subItems": [
+          {"id": "phase9.1", "title": "Sidebar CRM nav section: Companies, Contacts, Pipeline, Inbox, Import, Reports. CRM breadcrumb support. Nav visible to DEFT sales org members only.", "status": "pending", "priority": "high", "traces": ["FR-42"]},
+          {"id": "phase9.2", "title": "Company list (sortable/filterable table, cursor pagination) + detail (attributes, linked Contacts panel, Opp summary, activity timeline).", "status": "pending", "priority": "high", "traces": ["FR-3", "FR-4", "FR-5"]},
+          {"id": "phase9.3", "title": "Company create/edit form: all attributes, real-time duplicate name check, warning dialog on duplicate.", "status": "pending", "priority": "high", "traces": ["FR-3", "FR-16", "FR-17"]},
+          {"id": "phase9.4", "title": "Contact list + detail (parent Company link, Opp list, activity timeline). Contact not visible to non-owner/non-linked rep.", "status": "pending", "priority": "high", "traces": ["FR-6", "FR-7", "FR-8"]},
+          {"id": "phase9.5", "title": "Contact create/edit form: all attributes, Company association picker, email duplicate check.", "status": "pending", "priority": "high", "traces": ["FR-6", "FR-16", "FR-17"]},
+          {"id": "phase9.6", "title": "Opportunity Kanban pipeline view (columns=stages, cards=leads with metadata) + list view. Drag-and-drop transitions. Overdue indicators. Filters.", "status": "pending", "priority": "high", "traces": ["FR-9", "FR-11", "FR-13"]},
+          {"id": "phase9.7", "title": "Opportunity detail page: metadata sidebar (including probability override), activity timeline, tasks panel, stage indicator (days-in-stage, age, overdue), all action buttons (advance/close/create task/note/attach/reassign/edit/CTDN).", "status": "pending", "priority": "high", "traces": ["FR-11", "FR-13"]},
+          {"id": "phase9.8", "title": "Opportunity create/edit form: Company picker (required), Contact picker (primary+secondary), deal amount, close date, type, lead source, stage, probability override.", "status": "pending", "priority": "high", "traces": ["FR-9", "FR-16"]},
+          {"id": "phase9.9", "title": "Phase 9 tests: Vitest component tests, Playwright E2E (sign-in -> Company -> Contact -> Opportunity -> pipeline -> close won), ACL enforcement E2E (rep A cannot see rep B's Contact). Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase10",
+        "title": "Phase 10: Frontend — Email & Tasks",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Gmail OAuth configuration UI, Tiptap email composer in entity views, unassigned inbox view, task management UI, notification preferences. Depends on Phase 4 and Phase 9."
+        },
+        "subItems": [
+          {"id": "phase10.1", "title": "Gmail OAuth config UI in CRM profile settings: Connect button (triggers OAuth flow), connected state (email address + disconnect button).", "status": "pending", "priority": "high", "traces": ["FR-27"]},
+          {"id": "phase10.2", "title": "Tiptap email composer component embedded in Company/Contact/Opp detail pages: to/cc/bcc/subject/body, file attachment (existing upload), signature selector, template picker. Sends via /crm/email/send. Shows 'Connect Gmail first' if not connected.", "status": "pending", "priority": "high", "traces": ["FR-28", "FR-30", "FR-31"]},
+          {"id": "phase10.3", "title": "Unassigned inbox view (/crm/inbox): list of unmatched emails, assign-to-entity modal, thread preview. Nav badge with unread count.", "status": "pending", "priority": "medium", "traces": ["FR-29"]},
+          {"id": "phase10.4", "title": "Task slide-over panel: create/edit task (title, description, assignee picker, due date, priority, status). Task list on each entity detail page. Global My Tasks view.", "status": "pending", "priority": "high", "traces": ["FR-20", "FR-21", "FR-22"]},
+          {"id": "phase10.5", "title": "Notification preferences: add task event toggles (task_assigned, task_due_tomorrow, task_overdue) and daily AI briefing opt-in to existing preferences page.", "status": "pending", "priority": "medium", "traces": ["FR-22", "FR-45"]},
+          {"id": "phase10.6", "title": "Phase 10 tests: Vitest component tests for email composer and task panel. Playwright E2E (connect Gmail -> send email -> email in timeline; create task -> assignee notified). Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase11",
+        "title": "Phase 11: Frontend — LLM Features",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "Brief Me panel, Close This Deal Now slide-over, CEO strategic analysis section. Depends on Phase 5 and Phase 9."
+        },
+        "subItems": [
+          {"id": "phase11.1", "title": "Brief Me panel: floating button/sidebar widget in CRM dashboard. Calls /crm/ai/brief, streams response in slide-over with loading state. Lists prioritized items, CTDN shortcut per Opportunity.", "status": "pending", "priority": "medium", "traces": ["FR-45"]},
+          {"id": "phase11.2", "title": "Close This Deal Now slide-over: from Opportunity detail, calls /crm/opportunities/{id}/strategy, streams response, Save as Note button persists Message(type=note) on Thread.", "status": "pending", "priority": "medium", "traces": ["FR-48"]},
+          {"id": "phase11.3", "title": "CEO strategic analysis in Show Me the Money report: Generate Strategic Analysis button (CEO/admin only) calls /crm/ai/pipeline-strategy, renders streaming response in report section. Regenerate supported.", "status": "pending", "priority": "medium", "traces": ["FR-47"]},
+          {"id": "phase11.4", "title": "Phase 11 tests: Vitest component tests, streaming response rendering, CEO gate (non-CEO cannot see Generate button), Save as Note creates Message. Coverage >=85%.", "status": "pending", "priority": "medium", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase12",
+        "title": "Phase 12: Frontend — Reports (Extend Existing /reports/sales/)",
+        "status": "pending",
+        "priority": "high",
+        "narrative": {
+          "Overview": "Extends existing /reports/sales/page.tsx (which already has PipelineFunnelChart, LeadVelocityChart, LeadsByAssigneeChart, ScoreDistributionChart, StageConversionChart, TimeInStageChart, DateRangePicker, AssigneeFilter, ExportButton). No /reports/crm/ route created. New tabs and sections added to the existing page. Show Me the Money at /reports/sales/show-me-the-money."
+        },
+        "subItems": [
+          {"id": "phase12.1", "title": "Extend /reports/sales/page.tsx: add tab nav (Pipeline, Forecasting, Activity, Performance, Company/Contact). Existing pipeline charts become sub-sections of Pipeline tab. Extend filter bar with stage, opportunity type, lead source. Role-based data scoping.", "status": "pending", "priority": "high", "traces": ["FR-32", "FR-38"]},
+          {"id": "phase12.2", "title": "Pipeline & Forecasting tab views: reuse existing PipelineFunnelChart; add Pipeline by Owner/Close Date tables, Overdue list, Forecast by Owner/Stage cards, Forecast Accuracy line chart.", "status": "pending", "priority": "high", "traces": ["FR-33", "FR-34"]},
+          {"id": "phase12.3", "title": "Activity, Performance & Entity tab views: Activity Summary table, Tasks Overdue/Completed, Win Rate cards+chart, Avg Sales Cycle, Conversion by Stage funnel, Source Performance, Company/Contact reports.", "status": "pending", "priority": "high", "traces": ["FR-35", "FR-36", "FR-37"]},
+          {"id": "phase12.4", "title": "Show Me the Money (/reports/sales/show-me-the-money): CEO/admin only. Reuses existing PipelineFunnelChart. Section 1 (metric cards, deals-closing-soon table, funnel, total closing). Section 2 (all open Opps, stats, top 10, stalled). LLM strategic analysis (Phase 11.3). CSV export.", "status": "pending", "priority": "high", "traces": ["FR-39", "FR-40"]},
+          {"id": "phase12.5", "title": "Phase 12 tests: confirm existing chart component tests still pass; Vitest for new components; Playwright E2E (access control, filter updates, SMTM at /reports/sales/show-me-the-money, CEO gate, CSV export). Coverage >=85%.", "status": "pending", "priority": "high", "traces": ["NFR-3"]}
+        ]
+      },
+      {
+        "id": "phase13",
+        "title": "Phase 13: Frontend — CSV Import",
+        "status": "pending",
+        "priority": "medium",
+        "narrative": {
+          "Overview": "CSV import UI with upload, preview, confirm, and history. Depends on Phase 7 and Phase 9."
+        },
+        "subItems": [
+          {"id": "phase13.1", "title": "Import UI (/crm/import): drag-drop file upload, entity type selector (Company/Contact), preview table (valid=green, error=red with per-row detail, duplicate=amber), confirm button, progress, success/error summary, import history table.", "status": "pending", "priority": "medium", "traces": ["FR-18", "FR-19"]},
+          {"id": "phase13.2", "title": "Phase 13 tests: Vitest component tests, Playwright E2E (upload CSV -> preview -> confirm -> records visible in list). Coverage >=85%.", "status": "pending", "priority": "medium", "traces": ["NFR-3"]}
+        ]
+      }
+    ],
+    "edges": [
+      {"from": "phase1", "to": "phase2", "type": "blocks"},
+      {"from": "phase2", "to": "phase3", "type": "blocks"},
+      {"from": "phase2", "to": "phase4", "type": "blocks"},
+      {"from": "phase2", "to": "phase6", "type": "blocks"},
+      {"from": "phase2", "to": "phase7", "type": "blocks"},
+      {"from": "phase2", "to": "phase8", "type": "blocks"},
+      {"from": "phase3", "to": "phase5", "type": "blocks"},
+      {"from": "phase4", "to": "phase5", "type": "blocks"},
+      {"from": "phase2", "to": "phase9", "type": "blocks"},
+      {"from": "phase3", "to": "phase9", "type": "informs"},
+      {"from": "phase4", "to": "phase10", "type": "blocks"},
+      {"from": "phase9", "to": "phase10", "type": "blocks"},
+      {"from": "phase5", "to": "phase11", "type": "blocks"},
+      {"from": "phase9", "to": "phase11", "type": "blocks"},
+      {"from": "phase6", "to": "phase12", "type": "blocks"},
+      {"from": "phase9", "to": "phase12", "type": "blocks"},
+      {"from": "phase11", "to": "phase12", "type": "informs"},
+      {"from": "phase7", "to": "phase13", "type": "blocks"},
+      {"from": "phase9", "to": "phase13", "type": "blocks"}
+    ],
+    "created": "2026-03-23T05:15:00Z",
+    "updated": "2026-03-23T05:15:00Z"
+  }
+}
