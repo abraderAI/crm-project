@@ -57,13 +57,21 @@ type ListParams struct {
 	VisibleUserID string
 	// IncludeHidden, when true, includes hidden threads in results (admin view).
 	IncludeHidden bool
+	// SortDesc, when true, sorts by id DESC (newest first). Default is ASC.
+	SortDesc bool
 }
 
 // ListThreads returns a paginated list of threads in boardID, filtered by ListParams.
 // Hidden threads are excluded from results.
 func (r *Repository) ListThreads(ctx context.Context, boardID string, params ListParams) ([]models.Thread, *pagination.PageInfo, error) {
 	var threads []models.Thread
-	query := r.db.WithContext(ctx).Where("board_id = ?", boardID).Order("id ASC")
+	orderDir := "id ASC"
+	cursorOp := "id > ?"
+	if params.SortDesc {
+		orderDir = "id DESC"
+		cursorOp = "id < ?"
+	}
+	query := r.db.WithContext(ctx).Where("board_id = ?", boardID).Order(orderDir)
 	if !params.IncludeHidden {
 		query = query.Where("is_hidden = ?", false)
 	}
@@ -73,7 +81,7 @@ func (r *Repository) ListThreads(ctx context.Context, boardID string, params Lis
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid cursor: %w", err)
 		}
-		query = query.Where("id > ?", cursorID.String())
+		query = query.Where(cursorOp, cursorID.String())
 	}
 	if params.AuthorID != "" {
 		query = query.Where("author_id = ?", params.AuthorID)

@@ -150,7 +150,9 @@ func (s *Service) ListThreads(ctx context.Context, input ListInput) ([]ThreadWit
 		return []ThreadWithAuthor{}, &pagination.PageInfo{}, nil
 	}
 
-	params := ListParams{Params: input.Params, IncludeHidden: input.IncludeHidden}
+	// Support and leads sort newest-first; forum sorts oldest-first.
+	sortDesc := input.SpaceSlug == "global-support" || input.SpaceSlug == "global-leads"
+	params := ListParams{Params: input.Params, IncludeHidden: input.IncludeHidden, SortDesc: sortDesc}
 	if input.Mine && input.UserID != "" {
 		params.AuthorID = input.UserID
 	}
