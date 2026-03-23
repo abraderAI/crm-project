@@ -252,11 +252,20 @@ func (s *Service) enrichThreads(ctx context.Context, threads []models.Thread) ([
 		if t.OrgID != nil {
 			rich.OrgName = orgNames[*t.OrgID]
 		}
-		// If thread has no org_name but author has an org, use the author's org.
-		// Skip this for email-assigned tickets: the author is the DEFT agent who
-		// created the ticket, so their org must not appear as the contact's org.
-		if rich.OrgName == "" && t.ContactEmail == "" {
-			rich.OrgName = authorOrgNames[t.AuthorID]
+		// If thread has no explicit org_name, fall back to the author's primary org.
+		// For email-assigned tickets only do this when the contact has registered
+		// (author_id == the contact's clerk ID). When the contact is unregistered
+		// author_id is still the DEFT agent, so we must not use their org.
+		if rich.OrgName == "" {
+			authorIsContact := t.ContactEmail == ""
+			if !authorIsContact {
+				if s, found := shadows[t.AuthorID]; found && strings.EqualFold(s.Email, t.ContactEmail) {
+					authorIsContact = true
+				}
+			}
+			if authorIsContact {
+				rich.OrgName = authorOrgNames[t.AuthorID]
+			}
 		}
 
 		// Derive registration status for the ticket creator.
