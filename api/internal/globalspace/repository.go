@@ -63,14 +63,14 @@ type ListParams struct {
 // ListThreads returns a paginated list of threads in boardID, filtered by ListParams.
 func (r *Repository) ListThreads(ctx context.Context, boardID string, params ListParams) ([]models.Thread, *pagination.PageInfo, error) {
 	var threads []models.Thread
-	query := r.db.WithContext(ctx).Where("board_id = ?", boardID).Order("id ASC")
+	query := r.db.WithContext(ctx).Where("board_id = ?", boardID).Order("id DESC")
 
 	if params.Cursor != "" {
 		cursorID, err := pagination.DecodeCursor(params.Cursor)
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid cursor: %w", err)
 		}
-		query = query.Where("id > ?", cursorID.String())
+		query = query.Where("id < ?", cursorID.String())
 	}
 	if params.AuthorID != "" {
 		query = query.Where("author_id = ?", params.AuthorID)
