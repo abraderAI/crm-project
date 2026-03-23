@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { AlertTriangle, ArrowLeft, LifeBuoy } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowLeft, LifeBuoy } from "lucide-react";
 
 import { createSupportTicket } from "@/lib/global-api";
 import { useTier } from "@/hooks/use-tier";
@@ -28,6 +28,7 @@ export default function NewTicketPage(): ReactNode {
   const [contactEmail, setContactEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [orphanWarning, setOrphanWarning] = useState("");
 
   const creatorName = user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? "You";
 
@@ -44,8 +45,21 @@ export default function NewTicketPage(): ReactNode {
         org_id: orgId ?? undefined,
         contact_email: contactEmail.trim() || undefined,
       });
-      // Redirect to the full ticket editor.
-      router.push(`/support/tickets/${ticket.slug}`);
+      // If a contact email was provided but the returned ticket's author is
+      // still the current user, the email wasn't matched to a registered account.
+      // Show a warning before redirecting so the agent is aware.
+      const emailProvided = contactEmail.trim() !== "";
+      const emailNotResolved = emailProvided && ticket.author_id === user?.id;
+      if (emailNotResolved) {
+        setOrphanWarning(
+          `"${contactEmail.trim()}" is not registered yet. The ticket has been saved with that email ` +
+          `and will be linked to them automatically when they sign up.`,
+        );
+        // Delay redirect so the agent can read the warning.
+        setTimeout(() => router.push(`/support/tickets/${ticket.slug}`), 4000);
+      } else {
+        router.push(`/support/tickets/${ticket.slug}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create ticket");
     } finally {
@@ -138,6 +152,17 @@ export default function NewTicketPage(): ReactNode {
             />
           </div>
         </div>
+
+        {/* Orphan email warning */}
+        {orphanWarning && (
+          <div
+            data-testid="orphan-email-warning"
+            className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{orphanWarning} Redirecting to ticket…</span>
+          </div>
+        )}
 
         {/* Error */}
         {error && (

@@ -913,8 +913,22 @@ func TestRepository_FindUserShadowByEmail(t *testing.T) {
 		SyncedAt:    time.Now(),
 	}).Error)
 
-	t.Run("found", func(t *testing.T) {
+	t.Run("found exact match", func(t *testing.T) {
 		shadow, err := repo.FindUserShadowByEmail(ctx, "lookup@example.com")
+		require.NoError(t, err)
+		require.NotNil(t, shadow)
+		assert.Equal(t, "email-lookup-user", shadow.ClerkUserID)
+	})
+
+	t.Run("found case-insensitive upper input", func(t *testing.T) {
+		shadow, err := repo.FindUserShadowByEmail(ctx, "LOOKUP@EXAMPLE.COM")
+		require.NoError(t, err)
+		require.NotNil(t, shadow)
+		assert.Equal(t, "email-lookup-user", shadow.ClerkUserID)
+	})
+
+	t.Run("found case-insensitive mixed case", func(t *testing.T) {
+		shadow, err := repo.FindUserShadowByEmail(ctx, "Lookup@Example.Com")
 		require.NoError(t, err)
 		require.NotNil(t, shadow)
 		assert.Equal(t, "email-lookup-user", shadow.ClerkUserID)
