@@ -246,7 +246,11 @@ describe("SystemSettings", () => {
     await user.click(screen.getByTestId("settings-save-btn"));
     expect(await screen.findByTestId("settings-toast")).toBeInTheDocument();
     await act(async () => {
-      vi.advanceTimersByTime(3100);
+      vi.advanceTimersByTime(3500);
+    });
+    // Allow any pending microtasks / state flushes to complete.
+    await act(async () => {
+      await Promise.resolve();
     });
     expect(screen.queryByTestId("settings-toast")).not.toBeInTheDocument();
     vi.useRealTimers();

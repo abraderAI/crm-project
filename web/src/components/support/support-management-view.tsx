@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { AlertTriangle, ExternalLink, LifeBuoy, Plus, User } from "lucide-react";
+import { AlertTriangle, CheckCircle, ExternalLink, LifeBuoy, Plus, User, X } from "lucide-react";
 
-import type { ThreadWithAuthor } from "@/lib/api-types";
+import type { Thread, ThreadWithAuthor } from "@/lib/api-types";
 import { fetchGlobalSupportTickets, type GlobalSupportParams } from "@/lib/global-api";
+import { fetchUnclaimedTickets, claimTickets } from "@/lib/support-api";
 import { useTier } from "@/hooks/use-tier";
 import { useUserDirectory } from "@/lib/use-user-directory";
 
@@ -66,7 +67,16 @@ export function SupportManagementView(): ReactNode {
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [filters, setFilters] = useState<TicketFilterValues>(DEFAULT_FILTERS);
 
-  // (Create form removed — new tickets are created at /support/tickets/new)
+  // Unclaimed ticket state.
+  const [unclaimedTickets, setUnclaimedTickets] = useState<Thread[]>([]);
+  const [selectedUnclaimed, setSelectedUnclaimed] = useState<Set<string>>(new Set());
+  const [claimingInProgress, setClaimingInProgress] = useState(false);
+  const [unclaimedDismissed, setUnclaimedDismissed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("deft-unclaimed-dismissed") === "true";
+    }
+    return false;
+  });
 
   const mountedRef = useRef(true);
 
@@ -139,15 +149,31 @@ export function SupportManagementView(): ReactNode {
     [getToken, scopesMine, scopesOrg, orgId],
   );
 
+  // Load unclaimed tickets for non-DEFT users.
+  const loadUnclaimed = useCallback(async (): Promise<void> => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const tickets = await fetchUnclaimedTickets(token);
+      if (mountedRef.current) setUnclaimedTickets(tickets);
+    } catch {
+      // best-effort; don't block the page
+    }
+  }, [getToken]);
+
   useEffect(() => {
     mountedRef.current = true;
     if (!tierLoading && hasAccess) {
       void loadTickets();
+      // Check for unclaimed tickets for non-DEFT users.
+      if (!scopesAll && !unclaimedDismissed) {
+        void loadUnclaimed();
+      }
     }
     return () => {
       mountedRef.current = false;
     };
-  }, [tierLoading, hasAccess, loadTickets]);
+  }, [tierLoading, hasAccess, loadTickets, scopesAll, unclaimedDismissed, loadUnclaimed]);
 
   // ---------------------------------------------------------------------------
   // Client-side filtering
@@ -243,6 +269,79 @@ export function SupportManagementView(): ReactNode {
           New Ticket
         </Link>
       </div>
+
+      {/* Unclaimed ticket claim banner */}
+      {unclaimedTickets.length > 0 && !unclaimedDismissed && (
+        <div
+          data-testid="unclaimed-ticket-banner"
+          className="rounded-lg border border-primary/30 bg-primary/5 p-4"
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">
+                We found {unclaimedTickets.length} ticket(s) created before you registered
+              </span>
+            </div>
+            <button
+              data-testid="unclaimed-dismiss"
+              onClick={() => {
+                setUnclaimedDismissed(true);
+                localStorage.setItem("deft-unclaimed-dismissed", "true");
+              }}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Would you like to add them to your ticket history?
+          </p>
+          <ul className="mb-3 flex flex-col gap-1">
+            {unclaimedTickets.map((t) => (
+              <li key={t.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  data-testid={`unclaimed-check-${t.id}`}
+                  checked={selectedUnclaimed.has(t.id)}
+                  onChange={(e) => {
+                    setSelectedUnclaimed((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(t.id);
+                      else next.delete(t.id);
+                      return next;
+                    });
+                  }}
+                  className="rounded border-border"
+                />
+                <span className="text-foreground">{t.title}</span>
+              </li>
+            ))}
+          </ul>
+          <button
+            data-testid="unclaimed-claim-btn"
+            disabled={selectedUnclaimed.size === 0 || claimingInProgress}
+            onClick={async () => {
+              setClaimingInProgress(true);
+              try {
+                const token = await getToken();
+                if (!token) return;
+                await claimTickets(token, Array.from(selectedUnclaimed));
+                setUnclaimedTickets([]);
+                setSelectedUnclaimed(new Set());
+                void loadTickets();
+              } catch {
+                // best-effort
+              } finally {
+                setClaimingInProgress(false);
+              }
+            }}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {claimingInProgress ? "Claiming..." : "Claim Selected"}
+          </button>
+        </div>
+      )}
 
       {/* Fetch error banner */}
       {error && (
@@ -391,14 +490,28 @@ export function SupportManagementView(): ReactNode {
                     >
                       <User className="h-3 w-3 shrink-0" />
                       <span className="truncate">{creatorLabel}</span>
-                      {orgLabel && (
+                      {orgLabel ? (
                         <span
                           className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200"
                           data-testid={`ticket-org-badge-${ticket.id}`}
                         >
                           {orgLabel}
                         </span>
-                      )}
+                      ) : ticket.registration_status === "unregistered" ? (
+                        <span
+                          className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                          data-testid={`ticket-reg-badge-${ticket.id}`}
+                        >
+                          Unregistered
+                        </span>
+                      ) : ticket.registration_status === "registered" ? (
+                        <span
+                          className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                          data-testid={`ticket-reg-badge-${ticket.id}`}
+                        >
+                          Registered
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>

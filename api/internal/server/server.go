@@ -357,6 +357,10 @@ func NewRouter(cfg Config) http.Handler {
 			// DEFT members list route.
 			authed.Get("/support/deft-members", h.supportHandler.ListDeftMembers)
 
+			// Unclaimed ticket discovery and claiming routes.
+			authed.Get("/support/unclaimed-tickets", h.supportHandler.ListUnclaimedTickets)
+			authed.Post("/support/claim-tickets", h.supportHandler.ClaimTickets)
+
 			// Support ticket entry routes.
 			authed.Route("/support/tickets/{slug}", func(st chi.Router) {
 				st.Get("/entries", h.supportHandler.ListEntries)
