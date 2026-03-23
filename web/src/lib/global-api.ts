@@ -343,6 +343,8 @@ export interface CreateSupportTicketValues {
   title: string;
   body?: string;
   org_id?: string | null;
+  /** Assign ticket to a customer by email (DEFT members only). */
+  contact_email?: string;
 }
 
 /**

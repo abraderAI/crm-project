@@ -1,4 +1,4 @@
-import type { DeftMember, SupportEntry, SupportEntryType } from "./api-types";
+import type { DeftMember, SupportEntry, SupportEntryType, Thread } from "./api-types";
 import { buildHeaders, buildUrl, parseResponse, clientMutate } from "./api-client";
 
 /**
@@ -111,6 +111,36 @@ export async function fetchDeftMembers(token: string): Promise<DeftMember[]> {
   });
   const data = await parseResponse<{ data: DeftMember[] }>(res);
   return data.data;
+}
+
+/**
+ * Fetch unclaimed tickets whose contact_email matches the caller's email.
+ * Returns tickets created before the user registered.
+ * Requires authentication.
+ */
+export async function fetchUnclaimedTickets(token: string): Promise<Thread[]> {
+  const url = buildUrl("/support/unclaimed-tickets");
+  const res = await fetch(url, {
+    method: "GET",
+    headers: buildHeaders(token),
+    cache: "no-store",
+  });
+  const data = await parseResponse<{ data: Thread[] }>(res);
+  return data.data;
+}
+
+/**
+ * Claim orphaned tickets by their IDs, transferring ownership to the caller.
+ * Requires authentication.
+ */
+export async function claimTickets(
+  token: string,
+  ticketIds: string[],
+): Promise<{ claimed: number }> {
+  return clientMutate<{ claimed: number }>("POST", "/support/claim-tickets", {
+    token,
+    body: { ticket_ids: ticketIds },
+  });
 }
 
 /**

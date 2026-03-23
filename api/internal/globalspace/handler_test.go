@@ -900,6 +900,33 @@ func TestRepository_ListThreads_InvalidCursor(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid cursor")
 }
 
+func TestRepository_FindUserShadowByEmail(t *testing.T) {
+	db, _ := setupDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "email-lookup-user",
+		Email:       "lookup@example.com",
+		DisplayName: "Lookup User",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	t.Run("found", func(t *testing.T) {
+		shadow, err := repo.FindUserShadowByEmail(ctx, "lookup@example.com")
+		require.NoError(t, err)
+		require.NotNil(t, shadow)
+		assert.Equal(t, "email-lookup-user", shadow.ClerkUserID)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		shadow, err := repo.FindUserShadowByEmail(ctx, "doesnt@exist.com")
+		require.NoError(t, err)
+		assert.Nil(t, shadow)
+	})
+}
+
 func TestRepository_EmptyLookupFastPaths(t *testing.T) {
 	db, _ := setupDB(t)
 	repo := NewRepository(db)
@@ -1356,4 +1383,162 @@ func TestService_UpdateThread_AssignPublishesEvent(t *testing.T) {
 		t.Fatal("expected assignment event was not published")
 	}
 	bus.Close()
+}
+
+// --- ContactEmail tests ---
+
+func TestService_CreateThread_ContactEmail(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	// Seed DEFT member.
+	seedDeftMember(t, db, "deft-agent")
+
+	// Seed a registered user shadow.
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "existing-user",
+		Email:       "existing@example.com",
+		DisplayName: "Existing User",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	t.Run("DEFT member with registered email sets author to matched user", func(t *testing.T) {
+		email := "existing@example.com"
+		th, err := svc.CreateThread(ctx, "global-support", "deft-agent", CreateInput{
+			Title:        "For Existing User",
+			ContactEmail: &email,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "existing-user", th.AuthorID)
+		assert.Equal(t, "existing@example.com", th.ContactEmail)
+	})
+
+	t.Run("DEFT member with unregistered email keeps self as author", func(t *testing.T) {
+		email := "newcustomer@example.com"
+		th, err := svc.CreateThread(ctx, "global-support", "deft-agent", CreateInput{
+			Title:        "For New Customer",
+			ContactEmail: &email,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "deft-agent", th.AuthorID)
+		assert.Equal(t, "newcustomer@example.com", th.ContactEmail)
+	})
+
+	t.Run("non-DEFT user rejected when using contact_email", func(t *testing.T) {
+		email := "someone@example.com"
+		_, err := svc.CreateThread(ctx, "global-support", "random-user", CreateInput{
+			Title:        "Should Fail",
+			ContactEmail: &email,
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only DEFT members may use contact_email")
+	})
+
+	t.Run("empty contact_email is ignored", func(t *testing.T) {
+		empty := ""
+		th, err := svc.CreateThread(ctx, "global-support", "deft-agent", CreateInput{
+			Title:        "No Contact",
+			ContactEmail: &empty,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "deft-agent", th.AuthorID)
+		assert.Equal(t, "", th.ContactEmail)
+	})
+}
+
+func TestVisibility_ScopeOwner_ContactEmailMatch(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	seedDeftMember(t, db, "deft-creator")
+
+	// Create a user shadow for the newly registered user.
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "new-registrant",
+		Email:       "orphan@example.com",
+		DisplayName: "New User",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	// DEFT member creates an orphaned ticket for an unregistered email.
+	email := "orphan@example.com"
+	_, err := svc.CreateThread(ctx, "global-support", "deft-creator", CreateInput{
+		Title:        "Orphan Ticket",
+		ContactEmail: &email,
+	})
+	require.NoError(t, err)
+
+	// Resolve visibility for new-registrant — should be ScopeOwner.
+	cv, err := svc.ResolveVisibility(ctx, "new-registrant")
+	require.NoError(t, err)
+	assert.Equal(t, ScopeOwner, cv.Scope)
+	assert.Equal(t, "orphan@example.com", cv.Email)
+
+	// new-registrant should see the orphaned ticket via email matching.
+	threads, _, err := svc.ListThreads(ctx, ListInput{
+		SpaceSlug:  "global-support",
+		Params:     pagination.Params{Limit: 50},
+		Visibility: cv,
+	})
+	require.NoError(t, err)
+	var found bool
+	for _, th := range threads {
+		if th.Title == "Orphan Ticket" {
+			found = true
+			// Privacy: contact_email should be stripped for non-DEFT.
+			assert.Equal(t, "", th.ContactEmail)
+		}
+	}
+	assert.True(t, found, "orphan ticket should be visible via contact email match")
+}
+
+func TestEnrichThreads_RegistrationStatus(t *testing.T) {
+	db, _ := setupDB(t)
+	svc := newSvc(db)
+	ctx := context.Background()
+
+	seedDeftMember(t, db, "deft-enricher")
+
+	// Registered user with no org.
+	require.NoError(t, db.Create(&models.UserShadow{
+		ClerkUserID: "reg-no-org",
+		Email:       "reg@example.com",
+		DisplayName: "Registered No Org",
+		LastSeenAt:  time.Now(),
+		SyncedAt:    time.Now(),
+	}).Error)
+
+	// Create tickets.
+	_, err := svc.CreateThread(ctx, "global-support", "reg-no-org", CreateInput{Title: "Registered Ticket"})
+	require.NoError(t, err)
+
+	orphanEmail := "orphan-status@example.com"
+	_, err = svc.CreateThread(ctx, "global-support", "deft-enricher", CreateInput{
+		Title:        "Unregistered Ticket",
+		ContactEmail: &orphanEmail,
+	})
+	require.NoError(t, err)
+
+	// List as DEFT member (ScopeAll, no stripping).
+	cv := &CallerVisibility{Scope: ScopeAll, UserID: "deft-enricher"}
+	threads, _, err := svc.ListThreads(ctx, ListInput{
+		SpaceSlug:  "global-support",
+		Params:     pagination.Params{Limit: 50},
+		Visibility: cv,
+	})
+	require.NoError(t, err)
+
+	for _, th := range threads {
+		switch th.Title {
+		case "Registered Ticket":
+			assert.Equal(t, "registered", th.RegistrationStatus)
+		case "Unregistered Ticket":
+			assert.Equal(t, "unregistered", th.RegistrationStatus)
+			assert.Equal(t, "orphan-status@example.com", th.ContactEmail, "DEFT sees contact_email")
+		}
+	}
 }

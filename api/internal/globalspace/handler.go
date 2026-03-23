@@ -87,9 +87,10 @@ func (h *Handler) ListThreads(w http.ResponseWriter, r *http.Request) {
 
 // createThreadRequest is the request body for POST /v1/global-spaces/{space}/threads.
 type createThreadRequest struct {
-	Title string  `json:"title"`
-	Body  string  `json:"body"`
-	OrgID *string `json:"org_id"`
+	Title        string  `json:"title"`
+	Body         string  `json:"body"`
+	OrgID        *string `json:"org_id"`
+	ContactEmail *string `json:"contact_email"`
 }
 
 // GetThread handles GET /v1/global-spaces/{space}/threads/{slug}.
@@ -355,6 +356,8 @@ func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
 			apierrors.ValidationError(w, err.Error(), nil)
 		case "board is locked":
 			apierrors.Forbidden(w, "board is locked; new threads cannot be created")
+		case "only DEFT members may use contact_email":
+			apierrors.Forbidden(w, err.Error())
 		default:
 			apierrors.InternalError(w, "failed to create thread")
 		}

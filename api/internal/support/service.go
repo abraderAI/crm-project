@@ -243,3 +243,73 @@ func (s *Service) IsDeftMember(ctx context.Context, userID string) (bool, error)
 func (s *Service) ListDeftMembers(ctx context.Context) ([]DeftMemberInfo, error) {
 	return s.repo.ListDeftMembers(ctx)
 }
+
+// ListUnclaimedTickets returns tickets whose contact_email matches the caller's
+// email but whose author_id is not the caller (orphaned tickets awaiting claim).
+func (s *Service) ListUnclaimedTickets(ctx context.Context, userID string) ([]models.Thread, error) {
+	shadow, err := s.repo.FindUserShadowByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if shadow == nil || shadow.Email == "" {
+		return nil, nil
+	}
+	return s.repo.FindUnclaimedTickets(ctx, shadow.Email, userID)
+}
+
+// ErrEmailMismatch is returned when a claim is attempted on a ticket whose
+// contact_email does not match the caller's email.
+var ErrEmailMismatch = errors.New("ticket email does not match your account")
+
+// ClaimTickets transfers ownership of orphaned tickets to the caller.
+// Only tickets whose contact_email matches the caller's email are claimed.
+// Returns the count of successfully claimed tickets.
+func (s *Service) ClaimTickets(ctx context.Context, userID string, ticketIDs []string) (int, error) {
+	shadow, err := s.repo.FindUserShadowByID(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	if shadow == nil || shadow.Email == "" {
+		return 0, ErrEmailMismatch
+	}
+
+	claimed := 0
+	for _, id := range ticketIDs {
+		ticket, err := s.repo.FindTicketByID(ctx, id)
+		if err != nil {
+			return claimed, err
+		}
+		if ticket == nil {
+			continue
+		}
+		if ticket.ContactEmail != shadow.Email {
+			continue // silently skip mismatched tickets
+		}
+
+		_, err = s.repo.ClaimTicket(ctx, id, userID)
+		if err != nil {
+			return claimed, err
+		}
+
+		// Post system_event entry.
+		displayName := shadow.DisplayName
+		if displayName == "" {
+			displayName = shadow.Email
+		}
+		sysMsg := &models.Message{
+			ThreadID:    id,
+			Body:        fmt.Sprintf("Ticket claimed by %s", displayName),
+			AuthorID:    userID,
+			Metadata:    "{}",
+			Type:        models.MessageTypeSystemEvent,
+			IsPublished: true,
+			IsImmutable: true,
+		}
+		now := time.Now()
+		sysMsg.PublishedAt = &now
+		_ = s.repo.CreateEntry(ctx, sysMsg)
+
+		claimed++
+	}
+	return claimed, nil
+}

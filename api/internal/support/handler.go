@@ -13,6 +13,9 @@ import (
 	"github.com/abraderAI/crm-project/api/pkg/response"
 )
 
+// Ensure models import is used (for ListUnclaimedTickets empty-slice init).
+var _ = models.Thread{}
+
 // Handler provides HTTP handlers for support ticket entry endpoints.
 type Handler struct {
 	service *Service
@@ -252,6 +255,65 @@ func (h *Handler) ListDeftMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, map[string]any{"data": members})
+}
+
+// ListUnclaimedTickets handles GET /v1/support/unclaimed-tickets.
+// Returns tickets where contact_email matches the caller's email but
+// author_id does not (orphaned tickets awaiting claim).
+func (h *Handler) ListUnclaimedTickets(w http.ResponseWriter, r *http.Request) {
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	tickets, err := h.service.ListUnclaimedTickets(r.Context(), uc.UserID)
+	if err != nil {
+		apierrors.InternalError(w, "failed to list unclaimed tickets")
+		return
+	}
+	if tickets == nil {
+		tickets = []models.Thread{}
+	}
+
+	response.JSON(w, http.StatusOK, map[string]any{"data": tickets})
+}
+
+// claimTicketsRequest is the request body for POST /v1/support/claim-tickets.
+type claimTicketsRequest struct {
+	TicketIDs []string `json:"ticket_ids"`
+}
+
+// ClaimTickets handles POST /v1/support/claim-tickets.
+// Transfers ownership of orphaned tickets to the authenticated caller.
+func (h *Handler) ClaimTickets(w http.ResponseWriter, r *http.Request) {
+	uc := auth.GetUserContext(r.Context())
+	if uc == nil {
+		apierrors.Unauthorized(w, "authentication required")
+		return
+	}
+
+	var req claimTicketsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierrors.BadRequest(w, "invalid request body")
+		return
+	}
+	if len(req.TicketIDs) == 0 {
+		apierrors.BadRequest(w, "ticket_ids is required")
+		return
+	}
+
+	claimed, err := h.service.ClaimTickets(r.Context(), uc.UserID, req.TicketIDs)
+	if err != nil {
+		if errors.Is(err, ErrEmailMismatch) {
+			apierrors.Forbidden(w, err.Error())
+			return
+		}
+		apierrors.InternalError(w, "failed to claim tickets")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]any{"claimed": claimed})
 }
 
 // notifPrefRequest is the request body for updating notification detail level.

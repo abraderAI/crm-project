@@ -55,6 +55,9 @@ type ListParams struct {
 	// VisibleUserID enforces owner-tier visibility: only threads authored by or
 	// assigned to this user are returned. Applied when the caller has no org (ScopeOwner).
 	VisibleUserID string
+	// VisibleUserEmail is the email of the owner-scope caller, used to include
+	// tickets where ContactEmail matches (orphaned tickets assigned by email).
+	VisibleUserEmail string
 	// IncludeHidden, when true, includes hidden threads in results (admin view).
 	IncludeHidden bool
 	// SortDesc, when true, sorts by id DESC (newest first). Default is ASC.
@@ -95,7 +98,14 @@ func (r *Repository) ListThreads(ctx context.Context, boardID string, params Lis
 		query = query.Where("org_id IN ?", params.VisibleOrgIDs)
 	}
 	if params.VisibleUserID != "" {
-		query = query.Where("(author_id = ? OR assigned_to = ?)", params.VisibleUserID, params.VisibleUserID)
+		if params.VisibleUserEmail != "" {
+			query = query.Where(
+				"(author_id = ? OR assigned_to = ? OR (contact_email != '' AND contact_email = ?))",
+				params.VisibleUserID, params.VisibleUserID, params.VisibleUserEmail,
+			)
+		} else {
+			query = query.Where("(author_id = ? OR assigned_to = ?)", params.VisibleUserID, params.VisibleUserID)
+		}
 	}
 
 	if err := query.Limit(params.Limit + 1).Find(&threads).Error; err != nil {
@@ -330,6 +340,20 @@ func (r *Repository) GetUserPrimaryOrgNames(ctx context.Context, userIDs []strin
 		}
 	}
 	return result, nil
+}
+
+// FindUserShadowByEmail looks up a UserShadow by email address.
+// Returns nil, nil when no user with that email exists.
+func (r *Repository) FindUserShadowByEmail(ctx context.Context, email string) (*models.UserShadow, error) {
+	var shadow models.UserShadow
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(&shadow).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("finding user shadow by email: %w", err)
+	}
+	return &shadow, nil
 }
 
 // GetOrgNamesByIDs returns a map of org ID → org name for the given IDs.

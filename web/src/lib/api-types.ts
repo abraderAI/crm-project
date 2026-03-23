@@ -76,6 +76,10 @@ export interface Thread extends BaseEntity {
   assigned_to?: string;
   /** Sequential human-readable ticket number; only set for support threads. */
   ticket_number?: number;
+  /** Email the ticket is assigned to (orphaned, pre-registration). DEFT-only. */
+  contact_email?: string;
+  /** Registration status of ticket creator: "unregistered" | "registered" | omitted. */
+  registration_status?: string;
   messages?: Message[];
 }
 

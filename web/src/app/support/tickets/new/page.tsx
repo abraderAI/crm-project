@@ -9,6 +9,7 @@ import { AlertTriangle, ArrowLeft, LifeBuoy } from "lucide-react";
 import { createSupportTicket } from "@/lib/global-api";
 import { useTier } from "@/hooks/use-tier";
 import { MessageEditor } from "@/components/editor/message-editor";
+import { Mail } from "lucide-react";
 
 /**
  * New support ticket creation page at /support/tickets/new.
@@ -20,10 +21,11 @@ export default function NewTicketPage(): ReactNode {
   const router = useRouter();
   const { getToken } = useAuth();
   const { user } = useUser();
-  const { orgId } = useTier();
+  const { orgId, tier } = useTier();
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -40,6 +42,7 @@ export default function NewTicketPage(): ReactNode {
         title: title.trim(),
         body: body.trim() || undefined,
         org_id: orgId ?? undefined,
+        contact_email: contactEmail.trim() || undefined,
       });
       // Redirect to the full ticket editor.
       router.push(`/support/tickets/${ticket.slug}`);
@@ -79,6 +82,30 @@ export default function NewTicketPage(): ReactNode {
             {creatorName}
           </p>
         </div>
+
+        {/* Customer email — DEFT members only (tier >= 4) */}
+        {tier >= 4 && (
+          <div>
+            <label htmlFor="new-ticket-email" className="text-xs font-medium text-foreground">
+              <span className="flex items-center gap-1">
+                <Mail className="h-3 w-3" /> Customer email
+              </span>
+            </label>
+            <input
+              id="new-ticket-email"
+              data-testid="new-ticket-email"
+              type="email"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              placeholder="customer@example.com"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Assign this ticket to a customer by email. If they haven&apos;t registered yet, the
+              ticket will be linked when they sign up.
+            </p>
+          </div>
+        )}
 
         {/* Title */}
         <div>
