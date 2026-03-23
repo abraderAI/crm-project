@@ -316,6 +316,7 @@ export async function uploadThreadAttachment(
  * Fetches the file from the authenticated download endpoint and triggers a
  * browser file download. Requires a valid auth token.
  */
+/* v8 ignore start -- browser-only DOM download; cannot be tested in jsdom */
 export async function downloadUpload(
   token: string,
   uploadId: string,
@@ -337,6 +338,7 @@ export async function downloadUpload(
   anchor.click();
   URL.revokeObjectURL(objectUrl);
 }
+/* v8 ignore stop */
 
 /** Values for creating a support ticket. */
 export interface CreateSupportTicketValues {
