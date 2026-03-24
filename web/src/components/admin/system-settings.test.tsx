@@ -245,12 +245,12 @@ describe("SystemSettings", () => {
     render(<SystemSettings initialSettings={sampleSettings} />);
     await user.click(screen.getByTestId("settings-save-btn"));
     expect(await screen.findByTestId("settings-toast")).toBeInTheDocument();
+    // Use the async variant so microtasks (React state flushes) are processed
+    // between timer callbacks — prevents CI race where the synchronous
+    // advanceTimersByTime fires the setTimeout but the resulting setState
+    // hasn't been flushed before the assertion runs.
     await act(async () => {
-      vi.advanceTimersByTime(3500);
-    });
-    // Allow any pending microtasks / state flushes to complete.
-    await act(async () => {
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(3500);
     });
     expect(screen.queryByTestId("settings-toast")).not.toBeInTheDocument();
     vi.useRealTimers();
