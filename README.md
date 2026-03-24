@@ -1,5 +1,9 @@
 # DEFT Evolution — Unified CRM & Community Platform
 
+> [!WARNING]
+> **This repository (V1) is no longer actively maintained.**
+> Active development has moved to **[abraderAI/crm-experiment](https://github.com/abraderAI/crm-experiment)**, which contains the V2 API and next-generation platform architecture. This repository is preserved as a reference for V1.
+
 A full-stack CRM and community platform built on a hierarchical threaded content model. Pre-sales teams manage leads and pipelines; converted customers get their own org with spaces for support and documentation; developers and customers collaborate in community spaces. All interactions share the same auth, permissions, search, and activity timeline.
 
 ---
