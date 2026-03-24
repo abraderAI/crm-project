@@ -789,7 +789,6 @@ describe("UserDetail", () => {
     render(<UserDetail user={badDateUser} memberships={[]} />);
     expect(screen.getByTestId("user-joined")).toBeInTheDocument();
   });
-
   // --- Promote to Platform Admin ---
 
   it("shows promote-admin button", () => {
