@@ -59,7 +59,155 @@ export interface LeadData {
   contact_email?: string;
   source?: string;
   customer_org_id?: string;
+  deal_amount?: number;
+  weighted_forecast?: number;
+  expected_close_date?: string;
+  probability_override?: number;
+  opportunity_type?: string;
+  lead_source?: string;
+  crm_type?: string;
 }
+
+/** Default stage probabilities matching backend pipeline config. */
+export const STAGE_PROBABILITIES: Record<PipelineStage, number> = {
+  new_lead: 5,
+  contacted: 15,
+  qualified: 30,
+  proposal: 50,
+  negotiation: 75,
+  closed_won: 100,
+  closed_lost: 0,
+  nurturing: 10,
+};
+
+/** Calculate weighted forecast from deal amount and probability. */
+export function calculateWeightedForecast(amountCents: number, probability: number): number {
+  return Math.round((amountCents * probability) / 100);
+}
+
+/** Get effective probability: override if set, else stage default. */
+export function getEffectiveProbability(
+  stage: PipelineStage,
+  probabilityOverride?: number,
+): number {
+  if (probabilityOverride != null && probabilityOverride >= 0 && probabilityOverride <= 100) {
+    return probabilityOverride;
+  }
+  return STAGE_PROBABILITIES[stage];
+}
+
+/** Check whether an opportunity is overdue based on expected_close_date. */
+export function isOverdue(expectedCloseDate?: string): boolean {
+  if (!expectedCloseDate) return false;
+  return new Date(expectedCloseDate) < new Date();
+}
+
+/** Calculate days between two dates. */
+export function daysBetween(startDate: string, endDate?: string): number {
+  const start = new Date(startDate);
+  const end = endDate ? new Date(endDate) : new Date();
+  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** CRM entity types for distinguishing companies, contacts, opportunities. */
+export type CrmEntityType = "company" | "contact" | "opportunity";
+
+/** Company entity returned by CRM API. */
+export interface CrmCompany {
+  id: string;
+  name: string;
+  industry?: string;
+  status?: string;
+  website?: string;
+  phone?: string;
+  address?: string;
+  description?: string;
+  owner_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Contact entity returned by CRM API. */
+export interface CrmContact {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  title?: string;
+  company_id?: string;
+  company_name?: string;
+  owner_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Opportunity entity returned by CRM API (Thread-based). */
+export interface CrmOpportunity {
+  id: string;
+  name: string;
+  company_id?: string;
+  company_name?: string;
+  contact_ids?: string[];
+  primary_contact_id?: string;
+  stage: PipelineStage;
+  deal_amount?: number;
+  weighted_forecast?: number;
+  expected_close_date?: string;
+  probability_override?: number;
+  opportunity_type?: string;
+  lead_source?: string;
+  owner_id?: string;
+  lead_score?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Opportunity type options. */
+export const OPPORTUNITY_TYPES = ["new_business", "upsell", "cross_sell", "renewal"] as const;
+export type OpportunityType = (typeof OPPORTUNITY_TYPES)[number];
+
+/** Opportunity type labels. */
+export const OPPORTUNITY_TYPE_LABELS: Record<OpportunityType, string> = {
+  new_business: "New Business",
+  upsell: "Upsell",
+  cross_sell: "Cross-sell",
+  renewal: "Renewal",
+};
+
+/** Lead source options. */
+export const LEAD_SOURCES = [
+  "website",
+  "referral",
+  "cold_outreach",
+  "inbound_email",
+  "event",
+  "partner",
+  "other",
+] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+/** Lead source labels. */
+export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
+  website: "Website",
+  referral: "Referral",
+  cold_outreach: "Cold Outreach",
+  inbound_email: "Inbound Email",
+  event: "Event",
+  partner: "Partner",
+  other: "Other",
+};
+
+/** Company status options. */
+export const COMPANY_STATUSES = ["prospect", "active", "inactive", "churned"] as const;
+export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
+
+/** Company status labels. */
+export const COMPANY_STATUS_LABELS: Record<CompanyStatus, string> = {
+  prospect: "Prospect",
+  active: "Active",
+  inactive: "Inactive",
+  churned: "Churned",
+};
 
 /** A lead card represents a thread in the CRM pipeline context. */
 export interface LeadCard {
@@ -126,6 +274,17 @@ export function parseLeadData(metadata: string | Record<string, unknown>): LeadD
     source: typeof parsed.source === "string" ? parsed.source : undefined,
     customer_org_id:
       typeof parsed.customer_org_id === "string" ? parsed.customer_org_id : undefined,
+    deal_amount: typeof parsed.deal_amount === "number" ? parsed.deal_amount : undefined,
+    weighted_forecast:
+      typeof parsed.weighted_forecast === "number" ? parsed.weighted_forecast : undefined,
+    expected_close_date:
+      typeof parsed.expected_close_date === "string" ? parsed.expected_close_date : undefined,
+    probability_override:
+      typeof parsed.probability_override === "number" ? parsed.probability_override : undefined,
+    opportunity_type:
+      typeof parsed.opportunity_type === "string" ? parsed.opportunity_type : undefined,
+    lead_source: typeof parsed.lead_source === "string" ? parsed.lead_source : undefined,
+    crm_type: typeof parsed.crm_type === "string" ? parsed.crm_type : undefined,
   };
 }
 

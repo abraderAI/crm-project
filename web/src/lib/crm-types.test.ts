@@ -4,6 +4,7 @@ import {
   PIPELINE_STAGES,
   STAGE_LABELS,
   STAGE_COLORS,
+  STAGE_PROBABILITIES,
   parseLeadData,
   resolveStage,
   threadsToLeadCards,
@@ -16,6 +17,16 @@ import {
   filterLeadsByMinScore,
   getUniqueAssignees,
   isCrmActivityMessage,
+  calculateWeightedForecast,
+  getEffectiveProbability,
+  isOverdue,
+  daysBetween,
+  OPPORTUNITY_TYPES,
+  OPPORTUNITY_TYPE_LABELS,
+  LEAD_SOURCES,
+  LEAD_SOURCE_LABELS,
+  COMPANY_STATUSES,
+  COMPANY_STATUS_LABELS,
 } from "./crm-types";
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
@@ -398,5 +409,146 @@ describe("isCrmActivityMessage", () => {
 
   it("returns false for non-CRM message types", () => {
     expect(isCrmActivityMessage(makeMsg("comment"))).toBe(false);
+  });
+});
+
+describe("STAGE_PROBABILITIES", () => {
+  it("has probabilities for all stages", () => {
+    for (const stage of PIPELINE_STAGES) {
+      expect(STAGE_PROBABILITIES[stage]).toBeDefined();
+    }
+  });
+
+  it("has correct values for key stages", () => {
+    expect(STAGE_PROBABILITIES.new_lead).toBe(5);
+    expect(STAGE_PROBABILITIES.closed_won).toBe(100);
+    expect(STAGE_PROBABILITIES.closed_lost).toBe(0);
+    expect(STAGE_PROBABILITIES.negotiation).toBe(75);
+  });
+});
+
+describe("calculateWeightedForecast", () => {
+  it("calculates correctly", () => {
+    expect(calculateWeightedForecast(100000, 50)).toBe(50000);
+  });
+
+  it("returns 0 for 0%", () => {
+    expect(calculateWeightedForecast(100000, 0)).toBe(0);
+  });
+
+  it("returns full amount for 100%", () => {
+    expect(calculateWeightedForecast(50000, 100)).toBe(50000);
+  });
+
+  it("rounds to integer", () => {
+    expect(calculateWeightedForecast(33333, 33)).toBe(11000);
+  });
+
+  it("handles zero amount", () => {
+    expect(calculateWeightedForecast(0, 50)).toBe(0);
+  });
+});
+
+describe("getEffectiveProbability", () => {
+  it("returns override when set", () => {
+    expect(getEffectiveProbability("new_lead", 80)).toBe(80);
+  });
+
+  it("returns stage default when override is undefined", () => {
+    expect(getEffectiveProbability("new_lead")).toBe(5);
+    expect(getEffectiveProbability("negotiation")).toBe(75);
+  });
+
+  it("returns stage default when override is negative", () => {
+    expect(getEffectiveProbability("proposal", -1)).toBe(50);
+  });
+
+  it("returns stage default when override is above 100", () => {
+    expect(getEffectiveProbability("proposal", 101)).toBe(50);
+  });
+
+  it("returns 0 for override of 0", () => {
+    expect(getEffectiveProbability("new_lead", 0)).toBe(0);
+  });
+
+  it("returns 100 for override of 100", () => {
+    expect(getEffectiveProbability("new_lead", 100)).toBe(100);
+  });
+});
+
+describe("isOverdue", () => {
+  it("returns true for past dates", () => {
+    expect(isOverdue("2020-01-01")).toBe(true);
+  });
+
+  it("returns false for future dates", () => {
+    expect(isOverdue("2099-12-31")).toBe(false);
+  });
+
+  it("returns false for undefined", () => {
+    expect(isOverdue(undefined)).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isOverdue("")).toBe(false);
+  });
+});
+
+describe("daysBetween", () => {
+  it("calculates positive days", () => {
+    expect(daysBetween("2025-01-01", "2025-01-10")).toBe(9);
+  });
+
+  it("returns 0 for same day", () => {
+    expect(daysBetween("2025-01-01", "2025-01-01")).toBe(0);
+  });
+
+  it("returns negative for future start", () => {
+    expect(daysBetween("2025-01-10", "2025-01-01")).toBe(-9);
+  });
+});
+
+describe("parseLeadData — extended fields", () => {
+  it("parses deal_amount and weighted_forecast", () => {
+    const data = parseLeadData({ deal_amount: 50000, weighted_forecast: 25000 });
+    expect(data.deal_amount).toBe(50000);
+    expect(data.weighted_forecast).toBe(25000);
+  });
+
+  it("parses expected_close_date and probability_override", () => {
+    const data = parseLeadData({ expected_close_date: "2025-06-01", probability_override: 75 });
+    expect(data.expected_close_date).toBe("2025-06-01");
+    expect(data.probability_override).toBe(75);
+  });
+
+  it("parses opportunity_type and lead_source", () => {
+    const data = parseLeadData({ opportunity_type: "new_business", lead_source: "website" });
+    expect(data.opportunity_type).toBe("new_business");
+    expect(data.lead_source).toBe("website");
+  });
+
+  it("parses crm_type", () => {
+    const data = parseLeadData({ crm_type: "company" });
+    expect(data.crm_type).toBe("company");
+  });
+});
+
+describe("Enum constants", () => {
+  it("OPPORTUNITY_TYPES has labels for all types", () => {
+    for (const t of OPPORTUNITY_TYPES) {
+      expect(OPPORTUNITY_TYPE_LABELS[t]).toBeDefined();
+    }
+  });
+
+  it("LEAD_SOURCES has labels for all sources", () => {
+    for (const s of LEAD_SOURCES) {
+      expect(LEAD_SOURCE_LABELS[s]).toBeDefined();
+    }
+  });
+
+  it("COMPANY_STATUSES has labels for all statuses", () => {
+    for (const s of COMPANY_STATUSES) {
+      expect(COMPANY_STATUS_LABELS[s]).toBeDefined();
+    }
   });
 });

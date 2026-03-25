@@ -103,8 +103,15 @@ describe("getNavItemsForTier", () => {
       expect(hasItem(4, "reports")).toBe(true);
     });
 
-    it("has CRM sub-menu with Pipeline and Leads", () => {
-      expect(childIds(4, "crm")).toEqual(["crm-pipeline", "crm-leads"]);
+    it("has CRM sub-menu with Companies, Contacts, Pipeline, Inbox, Import, Leads", () => {
+      expect(childIds(4, "crm")).toEqual([
+        "crm-companies",
+        "crm-contacts",
+        "crm-pipeline",
+        "crm-inbox",
+        "crm-import",
+        "crm-leads",
+      ]);
     });
 
     it("has Reports sub-menu", () => {

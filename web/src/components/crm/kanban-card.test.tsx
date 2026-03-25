@@ -165,6 +165,39 @@ describe("KanbanCard", () => {
     render(<KanbanCard card={makeCard()} />);
     expect(screen.getByTestId("kanban-card-t-1")).not.toHaveAttribute("role");
   });
+
+  it("renders deal_amount when present", () => {
+    render(<KanbanCard card={makeCard({}, { deal_amount: 100000, value: 50000 })} />);
+    expect(screen.getByTestId("kanban-card-deal-t-1")).toHaveTextContent("$100,000");
+    // value should not render when deal_amount is present
+    expect(screen.queryByTestId("kanban-card-value-t-1")).not.toBeInTheDocument();
+  });
+
+  it("renders weighted_forecast when present", () => {
+    render(<KanbanCard card={makeCard({}, { weighted_forecast: 50000 })} />);
+    expect(screen.getByTestId("kanban-card-forecast-t-1")).toHaveTextContent("$50,000");
+  });
+
+  it("renders expected close date", () => {
+    render(<KanbanCard card={makeCard({}, { expected_close_date: "2099-12-31" })} />);
+    expect(screen.getByTestId("kanban-card-close-date-t-1")).toBeInTheDocument();
+  });
+
+  it("renders overdue badge for past close dates", () => {
+    render(<KanbanCard card={makeCard({}, { expected_close_date: "2020-01-01" })} />);
+    expect(screen.getByTestId("kanban-card-overdue-t-1")).toHaveTextContent("Overdue");
+  });
+
+  it("does not render overdue badge for future close dates", () => {
+    render(<KanbanCard card={makeCard({}, { expected_close_date: "2099-12-31" })} />);
+    expect(screen.queryByTestId("kanban-card-overdue-t-1")).not.toBeInTheDocument();
+  });
+
+  it("uses formatUser for assignee display when provided", () => {
+    const formatUser = (id: string): string => `User: ${id}`;
+    render(<KanbanCard card={makeCard()} formatUser={formatUser} />);
+    expect(screen.getByTestId("kanban-card-assignee-t-1")).toHaveTextContent("User: alice");
+  });
 });
 
 describe("StageBadge", () => {

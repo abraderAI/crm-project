@@ -46,6 +46,9 @@ export function KanbanBoard({
     assignee: "all",
     minScore: 0,
     search: "",
+    stage: "all",
+    opportunityType: "all",
+    leadSource: "all",
   });
   const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null);
 

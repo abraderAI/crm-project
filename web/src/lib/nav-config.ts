@@ -121,10 +121,38 @@ export const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     minTier: 4,
     children: [
       {
+        id: "crm-companies",
+        label: "Companies",
+        href: "/crm/companies",
+        icon: Building2,
+        minTier: 4,
+      },
+      {
+        id: "crm-contacts",
+        label: "Contacts",
+        href: "/crm/contacts",
+        icon: Users,
+        minTier: 4,
+      },
+      {
         id: "crm-pipeline",
         label: "Pipeline",
-        href: "/crm",
+        href: "/crm/pipeline",
         icon: BarChart3,
+        minTier: 4,
+      },
+      {
+        id: "crm-inbox",
+        label: "Inbox",
+        href: "/crm/inbox",
+        icon: MessageSquare,
+        minTier: 4,
+      },
+      {
+        id: "crm-import",
+        label: "Import",
+        href: "/crm/import",
+        icon: FileDown,
         minTier: 4,
       },
       {
