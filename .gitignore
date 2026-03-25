@@ -55,3 +55,4 @@ uploads/
 # Logs
 *.log
 crm-project/
+api/llm_coverage.out

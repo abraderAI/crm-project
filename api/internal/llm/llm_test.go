@@ -21,6 +21,9 @@ import (
 	"github.com/abraderAI/crm-project/api/internal/models"
 )
 
+// Ensure models is used (test helpers reference it).
+var _ = models.Thread{}
+
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dir := t.TempDir()
@@ -78,6 +81,26 @@ func (m *mockProvider) SuggestNextAction(_ context.Context, _ SuggestInput) (*Su
 		return m.suggestResp, nil
 	}
 	return &Suggestion{Action: "Test action", Reasoning: "Test reasoning"}, nil
+}
+
+func (m *mockProvider) Briefing(_ context.Context, _ string, _ []models.Thread, _ []CRMTask, _ []models.Message) (string, error) {
+	return "test briefing", nil
+}
+
+func (m *mockProvider) EmailSummary(_ context.Context, _ models.Message, _ models.Thread) (string, error) {
+	return "test email summary", nil
+}
+
+func (m *mockProvider) PipelineStrategy(_ context.Context, _ []models.Thread) (string, error) {
+	return "test pipeline strategy", nil
+}
+
+func (m *mockProvider) DealStrategy(_ context.Context, _ models.Thread, _ []models.Message, _ []CRMTask) (string, error) {
+	return "test deal strategy", nil
+}
+
+func (m *mockProvider) QualityMessage(_ context.Context, _ []QualityViolation, _ models.Thread) (string, error) {
+	return "test quality message", nil
 }
 
 // --- GrokProvider Tests ---

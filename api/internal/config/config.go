@@ -41,6 +41,9 @@ type Config struct {
 
 	// Admin: bootstrap platform admin user ID.
 	PlatformAdminUserID string
+
+	// CRM: DEFT CEO user ID for pipeline strategy access control.
+	DeftCEOUserID string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -60,6 +63,7 @@ func Load() (*Config, error) {
 		OTelEnabled:         getEnvBool("OTEL_ENABLED", false),
 		RBACPolicyPath:      getEnv("RBAC_POLICY_PATH", "config/rbac-policy.yaml"),
 		PlatformAdminUserID: getEnv("PLATFORM_ADMIN_USER_ID", ""),
+		DeftCEOUserID:       getEnv("DEFT_CEO_USER_ID", ""),
 	}
 
 	if err := cfg.Validate(); err != nil {

@@ -37,6 +37,7 @@ type Config struct {
 	PlatformAdminUserID string // Bootstrap platform admin user ID.
 	LiveKitWebhookToken string // Auth token for LiveKit webhook verification.
 	InternalAPIKey      string // API key for internal bridge endpoints.
+	DeftCEOUserID       string // DEFT CEO user ID for pipeline strategy access control.
 }
 
 // NewRouter creates and configures the Chi router with all middleware and routes.
@@ -355,6 +356,11 @@ func NewRouter(cfg Config) http.Handler {
 				rpt.Get("/sales", h.reportHandler.GetSalesMetrics)
 				rpt.Get("/sales/export", h.reportHandler.GetSalesExport)
 			})
+
+			// CRM AI routes.
+			authed.Post("/orgs/{org}/crm/ai/brief", h.crmAIHandler.Brief)
+			authed.Post("/orgs/{org}/crm/ai/pipeline-strategy", h.crmAIHandler.PipelineStrategy)
+			authed.Post("/orgs/{org}/crm/opportunities/{id}/strategy", h.crmAIHandler.DealStrategy)
 
 			// Pipeline stages route.
 			authed.Get("/orgs/{org}/pipeline/stages", h.pipelineHandler.GetStages)

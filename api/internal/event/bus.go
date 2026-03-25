@@ -33,6 +33,9 @@ const (
 	LeadScoreUpdated     Type = "lead.score_updated"
 	LeadEnriched         Type = "lead.enriched"
 	CustomerProvisioned  Type = "customer.provisioned"
+
+	// CRM email events.
+	EmailReceived Type = "email.received"
 )
 
 // Event represents a domain event published to the bus.

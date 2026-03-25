@@ -84,6 +84,7 @@ type serverHandlers struct {
 	voiceLKPhone       *voicelk.PhoneHandler
 	globalSpaceHandler *globalspace.Handler
 	supportHandler     *support.Handler
+	crmAIHandler       *llm.CRMHandler
 }
 
 // newHandlers initialises all domain services and HTTP handlers from cfg,
@@ -205,6 +206,21 @@ func newHandlers(cfg Config) serverHandlers {
 	llmProvider := llm.NewGrokProvider()
 	llmHandler := llm.NewHandler(llmProvider, cfg.DB, eventBus)
 
+	// CRM AI handler (Phase 5: LLM features).
+	crmAIHandler := llm.NewCRMHandler(llmProvider, cfg.DB, cfg.DeftCEOUserID)
+
+	// Email summary subscriber (Phase 5: async email AI summary).
+	emailSumSub := llm.NewEmailSummarySubscriber(llmProvider, cfg.DB, notifRepo, cfg.Logger)
+	emailSumSub.Subscribe(eventBus)
+
+	// Daily briefing background job (Phase 5: 08:00 UTC briefing).
+	llm.StartDailyBriefing(llm.DailyBriefingConfig{
+		Provider:  llmProvider,
+		DB:        cfg.DB,
+		NotifRepo: notifRepo,
+		Logger:    cfg.Logger,
+	})
+
 	provisionService := provision.NewService(cfg.DB, billingProvider, eventBus)
 	provisionHandler := provision.NewHandler(provisionService)
 	// Subscribe provisioning to pipeline stage changes (auto-provision on closed_won).
@@ -303,6 +319,7 @@ func newHandlers(cfg Config) serverHandlers {
 		revisionHandler:    revisionHandler,
 		pipelineHandler:    pipelineHandler,
 		llmHandler:         llmHandler,
+		crmAIHandler:       crmAIHandler,
 		provisionHandler:   provisionHandler,
 		reportHandler:      reportHandler,
 		tierHandler:        tierHandler,
